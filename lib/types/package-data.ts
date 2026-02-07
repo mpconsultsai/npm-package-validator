@@ -158,33 +158,6 @@ export interface NpmsIoData {
   score: NpmsIoScore;
 }
 
-export interface SnykVulnerability {
-  id: string;
-  title: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  url: string;
-  description?: string;
-  identifiers?: {
-    CVE?: string[];
-    CWE?: string[];
-  };
-  semver?: {
-    vulnerable: string[];
-  };
-  patches?: any[];
-  publicationTime?: string;
-  modificationTime?: string;
-}
-
-export interface SnykTestResult {
-  ok: boolean;
-  issues: {
-    vulnerabilities: SnykVulnerability[];
-  };
-  dependencyCount: number;
-  packageManager: string;
-}
-
 export interface PackageAnalysisResult {
   packageName: string;
   npm?: NpmPackageData;
@@ -192,14 +165,12 @@ export interface PackageAnalysisResult {
   github?: GitHubRepoData;
   releases?: GitHubReleaseData[];
   npmsio?: NpmsIoData;
-  snyk?: SnykTestResult;
   security?: SecuritySummary;
   readme?: string | null;
   errors?: {
     npm?: string;
     github?: string;
     npmsio?: string;
-    snyk?: string;
     security?: string;
     ai?: string;
   };
