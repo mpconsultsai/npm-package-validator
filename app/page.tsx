@@ -178,7 +178,7 @@ export default function Home() {
                     </svg>
                     Metrics
                   </h2>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                       <p className="text-sm text-gray-600 dark:text-gray-400">Downloads (month)</p>
                       <p className="text-2xl font-bold">{analysisData.metrics.downloads.toLocaleString()}</p>
@@ -195,7 +195,13 @@ export default function Home() {
                       <p className="text-sm text-gray-600 dark:text-gray-400">Quality Score</p>
                       <p className="text-2xl font-bold">{analysisData.metrics.qualityScore}/100</p>
                     </div>
-                    <div className="md:col-span-2">
+                    {analysisData.metrics.aiScore !== undefined && (
+                      <div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">AI Score</p>
+                        <p className="text-2xl font-bold text-purple-600">{analysisData.metrics.aiScore}/100</p>
+                      </div>
+                    )}
+                    <div className="col-span-2 md:col-span-4">
                       <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Security Issues</p>
                       {analysisData.metrics.securityIssues === 0 ? (
                         <p className="text-2xl font-bold text-green-500">None</p>
@@ -269,12 +275,6 @@ export default function Home() {
                         </a>
                       )}
                     </div>
-                    {analysisData.metrics.aiScore !== undefined && (
-                      <div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">AI Score</p>
-                        <p className="text-2xl font-bold text-purple-600">{analysisData.metrics.aiScore}/100</p>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
