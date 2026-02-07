@@ -7,7 +7,7 @@ A full-stack application that validates npm packages based on security, quality,
 - 🔒 **Security Analysis** - GitHub Advisory Database for vulnerability scanning
 - 📊 **Quality Metrics** - Evaluates maintenance status, popularity, and code quality
 - 🤖 **AI-Powered** - Uses Google Gemini 2.5 Flash for intelligent package analysis
-- 📈 **GitHub Integration** - Analyzes stars, releases, and repository activity
+- 📈 **GitHub Integration** - Analyses stars, releases, and repository activity
 - 📦 **npm Registry** - Fetches download stats and package metadata
 - 📝 **README Analysis** - Detects deprecation notices and maintenance warnings
 - ⏰ **Release Tracking** - Shows days since last release
@@ -85,7 +85,7 @@ npm-package-validator/
 
 ## Usage
 
-Simply enter any npm package name (e.g., `react`, `express`, `lodash`) and click **Analyze Package** to get:
+Simply enter any npm package name (e.g., `react`, `express`, `lodash`) and click **Analyse Package** to get:
 
 - **Package Information**: Latest version, release date, license
 - **Metrics**: Downloads, GitHub stars, quality score, security issues

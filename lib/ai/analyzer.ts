@@ -37,7 +37,7 @@ function getAIModel(modelName: string = 'gemini-2.5-flash') {
 function createAnalysisPrompt(data: PackageAnalysisResult): string {
   const { packageName, npm, downloads, github, npmsio, security, readme } = data;
 
-  let prompt = `Analyze this npm package and provide a detailed assessment:\n\n`;
+  let prompt = `Analyse this npm package and provide a detailed assessment:\n\n`;
   
   // Package basics
   prompt += `Package: ${packageName}\n`;
@@ -50,9 +50,16 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
   if (npm?.time && npm.version) {
     const lastPublished = npm.time[npm.version];
     if (lastPublished) {
-      prompt += `Last Published: ${new Date(lastPublished).toLocaleDateString()}\n`;
-      const daysSincePublish = Math.floor((Date.now() - new Date(lastPublished).getTime()) / (1000 * 60 * 60 * 24));
-      prompt += `Days Since Last Publish: ${daysSincePublish}\n`;
+      const publishDate = new Date(lastPublished);
+      const now = Date.now();
+      const daysSincePublish = Math.floor((now - publishDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // Only include if the date is valid (not in the future)
+      if (daysSincePublish >= 0) {
+        prompt += `Days Since Last Publish: ${daysSincePublish} days ago\n`;
+      } else {
+        prompt += `Package recently published (within the last day)\n`;
+      }
     }
   }
   prompt += `\n`;
@@ -68,9 +75,18 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
     prompt += `- Stars: ${github.stars.toLocaleString()}\n`;
     prompt += `- Forks: ${github.forks.toLocaleString()}\n`;
     prompt += `- Open Issues: ${github.open_issues.toLocaleString()}\n`;
-    prompt += `- Last Code Commit (pushed_at): ${new Date(github.pushed_at).toLocaleDateString()}\n`;
-    const daysSinceCommit = Math.floor((Date.now() - new Date(github.pushed_at).getTime()) / (1000 * 60 * 60 * 24));
-    prompt += `- Days Since Last Commit: ${daysSinceCommit}\n`;
+    
+    const commitDate = new Date(github.pushed_at);
+    const now = Date.now();
+    const daysSinceCommit = Math.floor((now - commitDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    // Only include if the date is valid (not in the future)
+    if (daysSinceCommit >= 0) {
+      prompt += `- Days Since Last Commit: ${daysSinceCommit} days ago\n`;
+    } else {
+      prompt += `- Recently committed (within the last day)\n`;
+    }
+    
     prompt += `- Language: ${github.language || 'Unknown'}\n\n`;
   }
 
@@ -213,8 +229,8 @@ export async function analyzePackageWithAI(
 ): Promise<AIPackageAnalysis> {
   const prompt = createAnalysisPrompt(data);
 
-  const systemPrompt = 'You are an expert software engineer specializing in npm package evaluation. ' +
-    'You analyze packages based on security, quality, maintenance, and popularity metrics. ' +
+  const systemPrompt = 'You are an expert software engineer specialising in npm package evaluation. ' +
+    'You analyse packages based on security, quality, maintenance, and popularity metrics. ' +
     'Provide honest, balanced assessments that help developers make informed decisions. ' +
     'Always respond in valid JSON format.';
 

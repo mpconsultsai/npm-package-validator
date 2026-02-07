@@ -7,7 +7,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [analysisData, setAnalysisData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showSecurityDetails, setShowSecurityDetails] = useState(false);
+  const [securityFilter, setSecurityFilter] = useState<string | null>(null); // 'critical', 'high', 'moderate', 'low', or null for all
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,12 +22,12 @@ export default function Home() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to analyze package');
+        throw new Error(data.error || 'Failed to analyse package');
       }
 
       setAnalysisData(data);
     } catch (err: any) {
-      setError(err.message || 'An error occurred while analyzing the package');
+      setError(err.message || 'An error occurred while analysing the package');
     } finally {
       setLoading(false);
     }
@@ -43,7 +43,7 @@ export default function Home() {
               NPM Package Validator
             </h1>
             <p className="text-xl text-gray-600 dark:text-gray-300">
-              Analyze npm packages for security, quality, and reliability with AI-powered insights
+              Analyse npm packages for security, quality, and reliability with AI-powered insights
             </p>
           </div>
 
@@ -70,7 +70,7 @@ export default function Home() {
                 disabled={loading || !packageName.trim()}
                 className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 ease-in-out transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               >
-                {loading ? 'Analyzing...' : 'Analyze Package'}
+                {loading ? 'Analysing...' : 'Analyse Package'}
               </button>
             </form>
           </div>
@@ -132,21 +132,66 @@ export default function Home() {
                       <p className="text-sm text-gray-600 dark:text-gray-400">Quality Score</p>
                       <p className="text-2xl font-bold">{analysisData.metrics.qualityScore}/100</p>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Security Issues</p>
-                      <div className="flex items-center gap-2">
-                        <p className={`text-2xl font-bold ${analysisData.metrics.securityIssues === 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {analysisData.metrics.securityIssues === 0 ? 'None' : analysisData.metrics.securityIssues}
-                        </p>
-                        {analysisData.security && analysisData.security.vulnerabilities && analysisData.security.vulnerabilities.length > 0 && (
-                          <button
-                            onClick={() => setShowSecurityDetails(!showSecurityDetails)}
-                            className="text-sm px-2 py-1 bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-800 dark:text-red-200 rounded transition-colors"
-                          >
-                            {showSecurityDetails ? 'Hide' : 'View'} Details
-                          </button>
-                        )}
-                      </div>
+                    <div className="md:col-span-2">
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Security Issues</p>
+                      {analysisData.metrics.securityIssues === 0 ? (
+                        <p className="text-2xl font-bold text-green-500">None</p>
+                      ) : (
+                        <div className="flex gap-2 flex-wrap">
+                          {analysisData.security?.critical > 0 && (
+                            <button
+                              onClick={() => setSecurityFilter(securityFilter === 'critical' ? null : 'critical')}
+                              className={`flex items-center gap-1 px-3 py-1 rounded-lg transition-all ${
+                                securityFilter === 'critical'
+                                  ? 'bg-purple-500 ring-2 ring-purple-400'
+                                  : 'bg-purple-400 hover:bg-purple-500'
+                              }`}
+                            >
+                              <span className="text-xs font-medium text-white">Critical</span>
+                              <span className="text-lg font-bold text-white">{analysisData.security.critical}</span>
+                            </button>
+                          )}
+                          {analysisData.security?.high > 0 && (
+                            <button
+                              onClick={() => setSecurityFilter(securityFilter === 'high' ? null : 'high')}
+                              className={`flex items-center gap-1 px-3 py-1 rounded-lg transition-all ${
+                                securityFilter === 'high'
+                                  ? 'bg-red-500 ring-2 ring-red-400'
+                                  : 'bg-red-400 hover:bg-red-500'
+                              }`}
+                            >
+                              <span className="text-xs font-medium text-white">High</span>
+                              <span className="text-lg font-bold text-white">{analysisData.security.high}</span>
+                            </button>
+                          )}
+                          {analysisData.security?.moderate > 0 && (
+                            <button
+                              onClick={() => setSecurityFilter(securityFilter === 'moderate' ? null : 'moderate')}
+                              className={`flex items-center gap-1 px-3 py-1 rounded-lg transition-all ${
+                                securityFilter === 'moderate'
+                                  ? 'bg-orange-500 ring-2 ring-orange-400'
+                                  : 'bg-orange-400 hover:bg-orange-500'
+                              }`}
+                            >
+                              <span className="text-xs font-medium text-white">Moderate</span>
+                              <span className="text-lg font-bold text-white">{analysisData.security.moderate}</span>
+                            </button>
+                          )}
+                          {analysisData.security?.low > 0 && (
+                            <button
+                              onClick={() => setSecurityFilter(securityFilter === 'low' ? null : 'low')}
+                              className={`flex items-center gap-1 px-3 py-1 rounded-lg transition-all ${
+                                securityFilter === 'low'
+                                  ? 'bg-yellow-500 ring-2 ring-yellow-400'
+                                  : 'bg-yellow-400 hover:bg-yellow-500'
+                              }`}
+                            >
+                              <span className="text-xs font-medium text-white">Low</span>
+                              <span className="text-lg font-bold text-white">{analysisData.security.low}</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                     {analysisData.metrics.aiScore !== undefined && (
                       <div>
@@ -159,21 +204,28 @@ export default function Home() {
               )}
 
               {/* Security Vulnerabilities Details */}
-              {showSecurityDetails && analysisData.security && analysisData.security.vulnerabilities && (
+              {analysisData.security && analysisData.security.vulnerabilities && analysisData.security.vulnerabilities.length > 0 && (
                 <div className="bg-red-50 dark:bg-red-900/20 rounded-lg shadow-lg p-6 border-2 border-red-200 dark:border-red-800">
                   <h2 className="font-bold text-2xl mb-4 flex items-center gap-2 text-red-800 dark:text-red-200">
-                    <span>🔒</span> Security Vulnerabilities ({analysisData.security.totalCount})
+                    <span>🔒</span> Security Vulnerabilities 
+                    {securityFilter && (
+                      <span className="text-base font-normal">
+                        (showing {securityFilter} - click badge again to show all)
+                      </span>
+                    )}
                   </h2>
                   <div className="space-y-4">
-                    {analysisData.security.vulnerabilities.map((vuln: any, idx: number) => (
+                    {analysisData.security.vulnerabilities
+                      .filter((vuln: any) => !securityFilter || vuln.severity === securityFilter)
+                      .map((vuln: any, idx: number) => (
                       <div key={idx} className="bg-white dark:bg-gray-800 rounded-lg p-4 border-l-4 border-red-500">
                         <div className="flex items-start justify-between mb-2">
                           <h3 className="font-semibold text-lg">{vuln.title}</h3>
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                            vuln.severity === 'critical' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' :
-                            vuln.severity === 'high' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                            vuln.severity === 'moderate' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' :
-                            'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold text-white ${
+                            vuln.severity === 'critical' ? 'bg-purple-500' :
+                            vuln.severity === 'high' ? 'bg-red-500' :
+                            vuln.severity === 'moderate' ? 'bg-orange-500' :
+                            'bg-yellow-500'
                           }`}>
                             {vuln.severity.toUpperCase()}
                           </span>
@@ -185,7 +237,7 @@ export default function Home() {
                             <span><strong>Vulnerable:</strong> {vuln.vulnerableVersionRange}</span>
                           )}
                           {vuln.patchedVersions && vuln.patchedVersions !== 'none' && (
-                            <span className="text-green-600 dark:text-green-400"><strong>Fixed in:</strong> {vuln.patchedVersions}</span>
+                            <span className="text-green-500 dark:text-green-400 font-semibold"><strong>Fixed in:</strong> {vuln.patchedVersions}</span>
                           )}
                         </div>
                         {vuln.url && (
