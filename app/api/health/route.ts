@@ -8,7 +8,6 @@ export async function GET() {
   const apiKeys = {
     google: !!process.env.GOOGLE_API_KEY,
     github: !!process.env.GITHUB_TOKEN,
-    snyk: !!process.env.SNYK_TOKEN,
   };
 
   return NextResponse.json({

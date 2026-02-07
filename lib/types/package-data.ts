@@ -191,10 +191,13 @@ export interface PackageAnalysisResult {
   releases?: GitHubReleaseData[];
   npmsio?: NpmsIoData;
   snyk?: SnykTestResult;
+  readme?: string | null;
   errors?: {
     npm?: string;
     github?: string;
     npmsio?: string;
     snyk?: string;
+    security?: string;
+    ai?: string;
   };
 }

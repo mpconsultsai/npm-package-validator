@@ -31,7 +31,8 @@ export interface SecuritySummary {
  * This is a reliable alternative to Snyk
  */
 export async function checkPackageSecurity(
-  packageName: string
+  packageName: string,
+  latestVersion?: string
 ): Promise<SecuritySummary> {
   const summary: SecuritySummary = {
     hasVulnerabilities: false,
@@ -95,6 +96,15 @@ export async function checkPackageSecurity(
       // Skip withdrawn advisories
       if (advisory.withdrawnAt) continue;
 
+      // Skip if vulnerability is already patched in latest version
+      if (latestVersion && vuln.firstPatchedVersion?.identifier) {
+        const patchedVersion = vuln.firstPatchedVersion.identifier;
+        if (isVersionGreaterOrEqual(latestVersion, patchedVersion)) {
+          console.log(`Skipping ${advisory.id} - already fixed in ${latestVersion} (patched in ${patchedVersion})`);
+          continue;
+        }
+      }
+
       const severity = advisory.severity.toLowerCase() as 'low' | 'moderate' | 'high' | 'critical';
       
       summary.vulnerabilities.push({
@@ -120,6 +130,29 @@ export async function checkPackageSecurity(
   } catch (error: any) {
     console.warn(`Security check failed for ${packageName}:`, error.message);
     return summary;
+  }
+}
+
+/**
+ * Compare two semantic versions (simple comparison)
+ * Returns true if version1 >= version2
+ */
+function isVersionGreaterOrEqual(version1: string, version2: string): boolean {
+  try {
+    const v1Parts = version1.split('.').map(Number);
+    const v2Parts = version2.split('.').map(Number);
+    
+    for (let i = 0; i < Math.max(v1Parts.length, v2Parts.length); i++) {
+      const v1 = v1Parts[i] || 0;
+      const v2 = v2Parts[i] || 0;
+      
+      if (v1 > v2) return true;
+      if (v1 < v2) return false;
+    }
+    
+    return true; // versions are equal
+  } catch (error) {
+    return false;
   }
 }
 

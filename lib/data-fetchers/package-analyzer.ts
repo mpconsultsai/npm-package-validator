@@ -1,8 +1,7 @@
 import type { PackageAnalysisResult } from '../types/package-data';
-import { fetchNpmPackageData, fetchNpmDownloadStats } from './npm-registry';
+import { fetchNpmPackageData, fetchNpmDownloadStats, fetchNpmReadme } from './npm-registry';
 import { fetchGitHubDataFromUrl, parseGitHubUrl } from './github';
 import { fetchNpmsIoData } from './npmsio';
-import { testPackageWithSnyk } from './snyk';
 import { checkPackageSecurity } from './security';
 
 /**
@@ -30,6 +29,14 @@ export async function analyzePackage(packageName: string): Promise<PackageAnalys
     result.errors!.npm = `${result.errors!.npm || ''} ${error.message}`.trim();
   }
 
+  // Fetch README (for deprecation notices and maintenance status)
+  try {
+    result.readme = await fetchNpmReadme(packageName);
+  } catch (error: any) {
+    // README is optional, don't add to errors
+    console.warn(`Could not fetch README for ${packageName}`);
+  }
+
   // Fetch GitHub data (if repository URL is available)
   if (result.npm?.repository?.url) {
     const repoUrl = result.npm.repository.url;
@@ -54,20 +61,13 @@ export async function analyzePackage(packageName: string): Promise<PackageAnalys
   }
 
   // Fetch security vulnerabilities from GitHub Advisory Database (free, no API key required)
+  // Pass the latest version to filter out already-patched vulnerabilities
   try {
-    const securityData = await checkPackageSecurity(packageName);
+    const latestVersion = result.npm?.version;
+    const securityData = await checkPackageSecurity(packageName, latestVersion);
     (result as any).security = securityData;
   } catch (error: any) {
     result.errors!.security = error.message;
-  }
-
-  // Fetch Snyk vulnerability data (optional - requires paid API key)
-  if (process.env.SNYK_TOKEN && result.npm?.version) {
-    try {
-      result.snyk = await testPackageWithSnyk(packageName, result.npm.version);
-    } catch (error: any) {
-      result.errors!.snyk = error.message;
-    }
   }
 
   return result;

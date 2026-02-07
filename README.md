@@ -4,19 +4,21 @@ A full-stack application that validates npm packages based on security, quality,
 
 ## Features
 
-- 🔒 **Security Analysis** - Checks for vulnerabilities using Snyk and other sources
+- 🔒 **Security Analysis** - GitHub Advisory Database for vulnerability scanning
 - 📊 **Quality Metrics** - Evaluates maintenance status, popularity, and code quality
-- 🤖 **AI-Powered** - Uses Google Gemini and LangChain for intelligent analysis
+- 🤖 **AI-Powered** - Uses Google Gemini 2.5 Flash for intelligent package analysis
 - 📈 **GitHub Integration** - Analyzes stars, releases, and repository activity
 - 📦 **npm Registry** - Fetches download stats and package metadata
+- 📝 **README Analysis** - Detects deprecation notices and maintenance warnings
+- ⏰ **Release Tracking** - Shows days since last release
 
 ## Tech Stack
 
-- **Framework**: Next.js 14 (App Router)
+- **Framework**: Next.js 15 (App Router)
 - **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **AI**: Google Gemini + LangChain
-- **APIs**: npm Registry, GitHub, Snyk/npms.io, Libraries.io
+- **Styling**: Tailwind CSS 4.0
+- **AI**: Google Gemini 2.5 Flash
+- **APIs**: npm Registry, GitHub GraphQL, npms.io, GitHub Advisory Database
 
 ## Getting Started
 
@@ -65,20 +67,31 @@ npm-package-validator/
 └── types/                # TypeScript type definitions
 ```
 
-## Development Roadmap
+## Development Status
 
-- [x] Step 1: Next.js setup with TypeScript and Tailwind
-- [x] Step 2: API data fetching layer ✅
-- [ ] Step 3: LangChain + Gemini integration
-- [ ] Step 4: Results page and scoring system
-- [ ] Step 5: Enhanced UI and error handling
+- ✅ Next.js setup with TypeScript and Tailwind CSS 4.0
+- ✅ API data fetching layer (npm, GitHub, npms.io, security)
+- ✅ Google Gemini 2.5 Flash AI integration
+- ✅ README parsing for deprecation detection
+- ✅ Results page with comprehensive scoring system
+- ✅ Enhanced UI with gradient design and responsive layout
+- ✅ Error handling and graceful degradation
 
 ## API Endpoints
 
-- `GET/POST /api/analyze?package=<name>` - Analyze an npm package
+- `GET /api/analyze-ai?package=<name>` - Comprehensive package analysis with AI insights
+- `GET /api/analyze?package=<name>` - Standard package analysis (no AI)
 - `GET /api/health` - Check API status and configured keys
 
-See [API_SETUP_GUIDE.md](./API_SETUP_GUIDE.md) for detailed setup instructions.
+## Usage
+
+Simply enter any npm package name (e.g., `react`, `express`, `lodash`) and click **Analyze Package** to get:
+
+- **Package Information**: Latest version, release date, license
+- **Metrics**: Downloads, GitHub stars, quality score, security issues
+- **AI Analysis**: Intelligent recommendations, strengths, concerns, and ratings
+- **Security**: Vulnerability scanning from GitHub Advisory Database
+- **Maintenance**: README parsing for deprecation notices
 
 ## License
 

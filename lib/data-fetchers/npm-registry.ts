@@ -65,3 +65,24 @@ export async function fetchNpmDownloadTrends(packageName: string): Promise<any> 
     throw new Error(`Failed to fetch download trends: ${error.message}`);
   }
 }
+
+/**
+ * Fetch package README content (first 3000 characters for AI analysis)
+ */
+export async function fetchNpmReadme(packageName: string): Promise<string | null> {
+  try {
+    const response = await axios.get(`${NPM_REGISTRY_URL}/${packageName}`);
+    const readme = response.data.readme;
+    
+    if (!readme) {
+      return null;
+    }
+    
+    // Return first 3000 characters to keep AI prompt reasonable
+    // Focus on the top section where deprecation notices usually appear
+    return readme.substring(0, 3000);
+  } catch (error: any) {
+    console.error(`Failed to fetch README for ${packageName}:`, error.message);
+    return null;
+  }
+}

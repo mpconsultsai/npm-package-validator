@@ -10,7 +10,7 @@ This directory contains modules for fetching package data from various sources.
 - Fetches download statistics
 
 ### 2. GitHub (`github.ts`)
-- **Optional**: `GITHUB_TOKEN` for higher rate limits
+- **Recommended**: `GITHUB_TOKEN` for higher rate limits and security scanning
 - Fetches repository stats (stars, forks, issues)
 - Fetches release information
 - Rate limits: 60/hour (unauthenticated), 5000/hour (authenticated)
@@ -20,10 +20,11 @@ This directory contains modules for fetching package data from various sources.
 - Provides quality, popularity, and maintenance scores
 - Rate limits: 200 requests/10 seconds
 
-### 4. Snyk (`snyk.ts`)
-- **Optional**: `SNYK_TOKEN` for vulnerability scanning
-- Tests packages for security vulnerabilities
-- Categorizes vulnerabilities by severity
+### 4. GitHub Advisory Database (`security.ts`)
+- **Requires**: `GITHUB_TOKEN` for authentication
+- Security vulnerability scanning for npm packages
+- Free alternative to paid services like Snyk
+- Comprehensive vulnerability database maintained by GitHub
 
 ## Usage
 
