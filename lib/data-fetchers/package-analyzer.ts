@@ -1,0 +1,90 @@
+import type { PackageAnalysisResult } from '../types/package-data';
+import { fetchNpmPackageData, fetchNpmDownloadStats } from './npm-registry';
+import { fetchGitHubDataFromUrl, parseGitHubUrl } from './github';
+import { fetchNpmsIoData } from './npmsio';
+import { testPackageWithSnyk } from './snyk';
+import { checkPackageSecurity } from './security';
+
+/**
+ * Analyze a package by fetching data from multiple sources
+ * This is the main entry point for package analysis
+ */
+export async function analyzePackage(packageName: string): Promise<PackageAnalysisResult> {
+  const result: PackageAnalysisResult = {
+    packageName,
+    errors: {},
+  };
+
+  // Fetch npm registry data (required)
+  try {
+    result.npm = await fetchNpmPackageData(packageName);
+  } catch (error: any) {
+    result.errors!.npm = error.message;
+    throw new Error(`Failed to fetch package data: ${error.message}`);
+  }
+
+  // Fetch download stats
+  try {
+    result.downloads = await fetchNpmDownloadStats(packageName);
+  } catch (error: any) {
+    result.errors!.npm = `${result.errors!.npm || ''} ${error.message}`.trim();
+  }
+
+  // Fetch GitHub data (if repository URL is available)
+  if (result.npm?.repository?.url) {
+    const repoUrl = result.npm.repository.url;
+    const githubInfo = parseGitHubUrl(repoUrl);
+
+    if (githubInfo) {
+      try {
+        const githubData = await fetchGitHubDataFromUrl(repoUrl);
+        result.github = githubData.repoData;
+        result.releases = githubData.releases;
+      } catch (error: any) {
+        result.errors!.github = error.message;
+      }
+    }
+  }
+
+  // Fetch npms.io data (quality scores)
+  try {
+    result.npmsio = await fetchNpmsIoData(packageName);
+  } catch (error: any) {
+    result.errors!.npmsio = error.message;
+  }
+
+  // Fetch security vulnerabilities from GitHub Advisory Database (free, no API key required)
+  try {
+    const securityData = await checkPackageSecurity(packageName);
+    (result as any).security = securityData;
+  } catch (error: any) {
+    result.errors!.security = error.message;
+  }
+
+  // Fetch Snyk vulnerability data (optional - requires paid API key)
+  if (process.env.SNYK_TOKEN && result.npm?.version) {
+    try {
+      result.snyk = await testPackageWithSnyk(packageName, result.npm.version);
+    } catch (error: any) {
+      result.errors!.snyk = error.message;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Analyze multiple packages in parallel
+ */
+export async function analyzeMultiplePackages(
+  packageNames: string[]
+): Promise<PackageAnalysisResult[]> {
+  const promises = packageNames.map((name) => 
+    analyzePackage(name).catch((error) => ({
+      packageName: name,
+      errors: { npm: error.message },
+    }))
+  );
+
+  return Promise.all(promises);
+}
