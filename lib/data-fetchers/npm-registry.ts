@@ -67,6 +67,41 @@ export async function fetchNpmDownloadTrends(packageName: string): Promise<any> 
 }
 
 /**
+ * Fetch package popularity data from npm search API (dependents, npm score)
+ * Used to identify well-known packages like react, lodash
+ */
+export async function fetchNpmPackagePopularity(packageName: string): Promise<{
+  dependents: number;
+  popularityScore: number;
+  qualityScore: number;
+  maintenanceScore: number;
+} | null> {
+  try {
+    // Search by exact package name - first result should match
+    const response = await axios.get(
+      `${NPM_REGISTRY_URL}/-/v1/search`,
+      { params: { text: packageName, size: 1 } }
+    );
+    const objects = response.data?.objects || [];
+    const match = objects[0];
+
+    if (!match || match.package?.name?.toLowerCase() !== packageName.toLowerCase()) {
+      return null;
+    }
+
+    return {
+      dependents: parseInt(match.dependents || '0', 10) || 0,
+      popularityScore: match.score?.detail?.popularity ?? 0,
+      qualityScore: match.score?.detail?.quality ?? 0,
+      maintenanceScore: match.score?.detail?.maintenance ?? 0,
+    };
+  } catch (error: any) {
+    console.warn(`Could not fetch npm popularity for ${packageName}:`, error.message);
+    return null;
+  }
+}
+
+/**
  * Fetch package README content (first 3000 characters for AI analysis)
  */
 export async function fetchNpmReadme(packageName: string): Promise<string | null> {

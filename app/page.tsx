@@ -110,9 +110,21 @@ export default function Home() {
                     Package Info
                   </h2>
                   {analysisData.packageInfo.description && (
-                    <p className="text-gray-700 dark:text-gray-300 mb-6 pb-6 border-b border-gray-200 dark:border-gray-600">
-                      {analysisData.packageInfo.description}
-                    </p>
+                    <div className="mb-6 pb-6 border-b border-gray-200 dark:border-gray-600">
+                      {analysisData.packageInfo.dependents !== undefined && analysisData.packageInfo.dependents >= 1000 && (
+                        <span className="inline-block px-3 py-1 mb-3 rounded-full text-sm font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+                          Popular
+                        </span>
+                      )}
+                      <p className="text-gray-700 dark:text-gray-300">
+                        {analysisData.packageInfo.description}
+                      </p>
+                    </div>
+                  )}
+                  {analysisData.packageInfo.dependents !== undefined && analysisData.packageInfo.dependents >= 1000 && !analysisData.packageInfo.description && (
+                    <span className="inline-block px-3 py-1 mb-6 rounded-full text-sm font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+                      Popular
+                    </span>
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
@@ -156,6 +168,19 @@ export default function Home() {
                       </div>
                       <p className="text-lg font-semibold text-gray-900 dark:text-white">{analysisData.packageInfo.license}</p>
                     </div>
+
+                    {analysisData.packageInfo.dependents !== undefined && (
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <svg className="w-5 h-5 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
+                          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Dependents</span>
+                        </div>
+                        <p className="text-lg font-semibold text-gray-900 dark:text-white">{analysisData.packageInfo.dependents.toLocaleString()}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">packages depend on this</p>
+                      </div>
+                    )}
 
                     <div className="md:col-span-2">
                       <a

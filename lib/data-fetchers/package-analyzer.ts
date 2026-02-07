@@ -1,5 +1,5 @@
 import type { PackageAnalysisResult } from '../types/package-data';
-import { fetchNpmPackageData, fetchNpmDownloadStats, fetchNpmReadme } from './npm-registry';
+import { fetchNpmPackageData, fetchNpmDownloadStats, fetchNpmReadme, fetchNpmPackagePopularity } from './npm-registry';
 import { fetchGitHubDataFromUrl, parseGitHubUrl } from './github';
 import { checkPackageSecurity } from './security';
 
@@ -26,6 +26,17 @@ export async function analyzePackage(packageName: string): Promise<PackageAnalys
     result.downloads = await fetchNpmDownloadStats(packageName);
   } catch (error: any) {
     result.errors!.npm = `${result.errors!.npm || ''} ${error.message}`.trim();
+  }
+
+  // Fetch npm popularity (dependents, scores) - identifies well-known packages
+  try {
+    const popularity = await fetchNpmPackagePopularity(packageName);
+    if (popularity) {
+      (result as any).popularity = popularity;
+    }
+  } catch (error: any) {
+    // Optional - don't add to errors
+    console.warn(`Could not fetch popularity for ${packageName}`);
   }
 
   // Fetch README (for deprecation notices and maintenance status)

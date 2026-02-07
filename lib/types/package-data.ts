@@ -158,6 +158,13 @@ export interface NpmsIoData {
   score: NpmsIoScore;
 }
 
+export interface NpmPackagePopularity {
+  dependents: number;
+  popularityScore: number;
+  qualityScore: number;
+  maintenanceScore: number;
+}
+
 export interface PackageAnalysisResult {
   packageName: string;
   npm?: NpmPackageData;
@@ -165,6 +172,7 @@ export interface PackageAnalysisResult {
   github?: GitHubRepoData;
   releases?: GitHubReleaseData[];
   security?: SecuritySummary;
+  popularity?: NpmPackagePopularity;
   readme?: string | null;
   errors?: {
     npm?: string;

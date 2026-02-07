@@ -10,15 +10,15 @@ function calculateQualityScore(packageData: PackageAnalysisResult): number {
   let score = 0;
   let factors = 0;
 
-  // GitHub stars (0-30 points)
-  if (packageData.github?.stars !== undefined) {
-    const stars = packageData.github.stars;
-    if (stars >= 5000) score += 30;
-    else if (stars >= 1000) score += 25;
-    else if (stars >= 500) score += 20;
-    else if (stars >= 100) score += 15;
-    else if (stars >= 10) score += 10;
-    else score += 5;
+  // GitHub stars (0-25 points) or dependents (0-25 points) - use whichever is higher for popularity
+  const starsScore = packageData.github?.stars !== undefined
+    ? (packageData.github.stars >= 5000 ? 25 : packageData.github.stars >= 1000 ? 22 : packageData.github.stars >= 500 ? 18 : packageData.github.stars >= 100 ? 14 : packageData.github.stars >= 10 ? 10 : 5)
+    : 0;
+  const dependentsScore = packageData.popularity?.dependents
+    ? (packageData.popularity.dependents >= 10000 ? 25 : packageData.popularity.dependents >= 1000 ? 22 : packageData.popularity.dependents >= 100 ? 18 : packageData.popularity.dependents >= 10 ? 14 : 5)
+    : 0;
+  if (starsScore > 0 || dependentsScore > 0) {
+    score += Math.max(starsScore, dependentsScore);
     factors++;
   }
 
@@ -128,6 +128,8 @@ export async function GET(request: NextRequest) {
         homepage: packageData.npm?.homepage,
         repository: packageData.npm?.repository?.url,
         daysSinceLastRelease,
+        dependents: packageData.popularity?.dependents,
+        popularityScore: packageData.popularity?.popularityScore,
       },
       metrics: {
         downloads: packageData.downloads?.downloads || 0,
@@ -211,6 +213,8 @@ export async function POST(request: NextRequest) {
         homepage: packageData.npm?.homepage,
         repository: packageData.npm?.repository?.url,
         daysSinceLastRelease,
+        dependents: packageData.popularity?.dependents,
+        popularityScore: packageData.popularity?.popularityScore,
       },
       metrics: {
         downloads: packageData.downloads?.downloads || 0,
