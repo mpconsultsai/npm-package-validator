@@ -1,5 +1,7 @@
 // Type definitions for package data from various sources
 
+import type { SecuritySummary } from '../data-fetchers/security';
+
 export interface NpmPackageData {
   name: string;
   version: string;
@@ -191,6 +193,7 @@ export interface PackageAnalysisResult {
   releases?: GitHubReleaseData[];
   npmsio?: NpmsIoData;
   snyk?: SnykTestResult;
+  security?: SecuritySummary;
   readme?: string | null;
   errors?: {
     npm?: string;
