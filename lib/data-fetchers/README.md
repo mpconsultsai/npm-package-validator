@@ -15,16 +15,19 @@ This directory contains modules for fetching package data from various sources.
 - Fetches release information
 - Rate limits: 60/hour (unauthenticated), 5000/hour (authenticated)
 
-### 3. npms.io (`npmsio.ts`)
-- **No API key required**
-- Provides quality, popularity, and maintenance scores
-- Rate limits: 200 requests/10 seconds
-
-### 4. GitHub Advisory Database (`security.ts`)
+### 3. GitHub Advisory Database (`security.ts`)
 - **Requires**: `GITHUB_TOKEN` for authentication
 - Security vulnerability scanning for npm packages
 - Free alternative to paid services like Snyk
 - Comprehensive vulnerability database maintained by GitHub
+
+### 4. Custom Quality Score
+- **No API key required**
+- Calculates quality score based on:
+  - GitHub stars
+  - Download statistics
+  - Maintenance activity (days since last release)
+  - Security posture
 
 ## Usage
 
@@ -42,10 +45,10 @@ console.log(result);
 ```typescript
 import { fetchNpmPackageData } from '@/lib/data-fetchers/npm-registry';
 import { fetchGitHubDataFromUrl } from '@/lib/data-fetchers/github';
-import { fetchNpmsIoData } from '@/lib/data-fetchers/npmsio';
+import { checkPackageSecurity } from '@/lib/data-fetchers/security';
 
 const npmData = await fetchNpmPackageData('lodash');
-const npmsData = await fetchNpmsIoData('lodash');
+const securityData = await checkPackageSecurity('lodash', '4.17.21');
 ```
 
 ## API Routes
@@ -88,5 +91,4 @@ All fetchers handle errors gracefully:
 Be aware of rate limits:
 - **npm Registry**: Very generous, no key needed
 - **GitHub**: 60/hour without token, 5000/hour with token
-- **npms.io**: 200 requests per 10 seconds
-- **Snyk**: Depends on your plan
+- **GitHub Advisory Database**: Uses GitHub API rate limits

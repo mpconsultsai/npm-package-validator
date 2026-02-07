@@ -96,11 +96,20 @@ export async function checkPackageSecurity(
       // Skip withdrawn advisories
       if (advisory.withdrawnAt) continue;
 
-      // Skip if vulnerability is already patched in latest version
-      if (latestVersion && vuln.firstPatchedVersion?.identifier) {
-        const patchedVersion = vuln.firstPatchedVersion.identifier;
-        if (isVersionGreaterOrEqual(latestVersion, patchedVersion)) {
-          console.log(`Skipping ${advisory.id} - already fixed in ${latestVersion} (patched in ${patchedVersion})`);
+      // Skip if latest version is not affected by this vulnerability
+      if (latestVersion) {
+        // Check if patched version exists and latest is >= patched
+        if (vuln.firstPatchedVersion?.identifier) {
+          const patchedVersion = vuln.firstPatchedVersion.identifier;
+          if (isVersionGreaterOrEqual(latestVersion, patchedVersion)) {
+            console.log(`Skipping ${advisory.id} - already fixed in ${latestVersion} (patched in ${patchedVersion})`);
+            continue;
+          }
+        }
+        
+        // Also check if latest version falls outside the vulnerable range
+        if (vuln.vulnerableVersionRange && !isVersionInRange(latestVersion, vuln.vulnerableVersionRange)) {
+          console.log(`Skipping ${advisory.id} - ${latestVersion} not in vulnerable range ${vuln.vulnerableVersionRange}`);
           continue;
         }
       }
@@ -151,6 +160,84 @@ function isVersionGreaterOrEqual(version1: string, version2: string): boolean {
     }
     
     return true; // versions are equal
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Check if a version is within a vulnerable version range
+ * Examples: "<8.3.5", "<=8.3.4", ">=1.0.0, <2.0.0"
+ * Returns true if the version IS vulnerable (within the range)
+ */
+function isVersionInRange(version: string, range: string): boolean {
+  try {
+    // Clean version string
+    const cleanVersion = version.replace(/[^0-9.]/g, '');
+    
+    // Handle common range patterns
+    // Pattern: <X.Y.Z (less than)
+    if (range.startsWith('<') && !range.startsWith('<=')) {
+      const targetVersion = range.substring(1).trim();
+      return !isVersionGreaterOrEqual(cleanVersion, targetVersion);
+    }
+    
+    // Pattern: <=X.Y.Z (less than or equal)
+    if (range.startsWith('<=')) {
+      const targetVersion = range.substring(2).trim();
+      return !isVersionGreaterOrEqual(cleanVersion, targetVersion) || compareVersionsEqual(cleanVersion, targetVersion);
+    }
+    
+    // Pattern: >X.Y.Z (greater than)
+    if (range.startsWith('>') && !range.startsWith('>=')) {
+      const targetVersion = range.substring(1).trim();
+      return isVersionGreaterOrEqual(cleanVersion, targetVersion) && !compareVersionsEqual(cleanVersion, targetVersion);
+    }
+    
+    // Pattern: >=X.Y.Z (greater than or equal)
+    if (range.startsWith('>=')) {
+      const targetVersion = range.substring(2).trim();
+      return isVersionGreaterOrEqual(cleanVersion, targetVersion);
+    }
+    
+    // Pattern: =X.Y.Z or X.Y.Z (exact match)
+    if (range.startsWith('=')) {
+      const targetVersion = range.substring(1).trim();
+      return compareVersionsEqual(cleanVersion, targetVersion);
+    }
+    
+    // If range contains comma (multiple conditions like ">=1.0.0, <2.0.0")
+    if (range.includes(',')) {
+      const conditions = range.split(',').map(s => s.trim());
+      return conditions.every(condition => isVersionInRange(version, condition));
+    }
+    
+    // Default: assume it's an exact version match
+    return compareVersionsEqual(cleanVersion, range.replace(/[^0-9.]/g, ''));
+  } catch (error) {
+    console.warn(`Error checking version range: ${version} in ${range}`, error);
+    // If we can't parse, assume it's vulnerable to be safe
+    return true;
+  }
+}
+
+/**
+ * Check if two versions are equal
+ */
+function compareVersionsEqual(version1: string, version2: string): boolean {
+  try {
+    const v1Parts = version1.split('.').map(Number);
+    const v2Parts = version2.split('.').map(Number);
+    
+    const maxLength = Math.max(v1Parts.length, v2Parts.length);
+    for (let i = 0; i < maxLength; i++) {
+      const v1 = v1Parts[i] || 0;
+      const v2 = v2Parts[i] || 0;
+      
+      if (v1 !== v2) return false;
+    }
+    
+    return true;
   } catch (error) {
     return false;
   }

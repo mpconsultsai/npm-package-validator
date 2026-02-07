@@ -1,7 +1,6 @@
 import type { PackageAnalysisResult } from '../types/package-data';
 import { fetchNpmPackageData, fetchNpmDownloadStats, fetchNpmReadme } from './npm-registry';
 import { fetchGitHubDataFromUrl, parseGitHubUrl } from './github';
-import { fetchNpmsIoData } from './npmsio';
 import { checkPackageSecurity } from './security';
 
 /**
@@ -51,13 +50,6 @@ export async function analyzePackage(packageName: string): Promise<PackageAnalys
         result.errors!.github = error.message;
       }
     }
-  }
-
-  // Fetch npms.io data (quality scores)
-  try {
-    result.npmsio = await fetchNpmsIoData(packageName);
-  } catch (error: any) {
-    result.errors!.npmsio = error.message;
   }
 
   // Fetch security vulnerabilities from GitHub Advisory Database (free, no API key required)

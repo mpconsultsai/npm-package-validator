@@ -1,6 +1,65 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzePackage } from '@/lib/data-fetchers/package-analyzer';
 import { analyzePackageWithAI } from '@/lib/ai/analyzer';
+import type { PackageAnalysisResult } from '@/lib/types/package-data';
+
+/**
+ * Calculate a custom quality score based on multiple factors
+ */
+function calculateQualityScore(packageData: PackageAnalysisResult): number {
+  let score = 0;
+  let factors = 0;
+
+  // GitHub stars (0-30 points)
+  if (packageData.github?.stars !== undefined) {
+    const stars = packageData.github.stars;
+    if (stars >= 5000) score += 30;
+    else if (stars >= 1000) score += 25;
+    else if (stars >= 500) score += 20;
+    else if (stars >= 100) score += 15;
+    else if (stars >= 10) score += 10;
+    else score += 5;
+    factors++;
+  }
+
+  // Downloads (0-25 points)
+  if (packageData.downloads?.downloads) {
+    const downloads = packageData.downloads.downloads;
+    if (downloads >= 10000000) score += 25;
+    else if (downloads >= 1000000) score += 20;
+    else if (downloads >= 100000) score += 15;
+    else if (downloads >= 10000) score += 10;
+    else score += 5;
+    factors++;
+  }
+
+  // Maintenance - days since last release (0-25 points)
+  if (packageData.npm?.time && packageData.npm.version) {
+    const lastPublished = packageData.npm.time[packageData.npm.version];
+    if (lastPublished) {
+      const daysSince = Math.floor((Date.now() - new Date(lastPublished).getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSince < 90) score += 25;
+      else if (daysSince < 180) score += 20;
+      else if (daysSince < 365) score += 15;
+      else if (daysSince < 730) score += 10;
+      else score += 5;
+      factors++;
+    }
+  }
+
+  // Security (0-20 points) - deduct for issues
+  if (packageData.security) {
+    const issues = packageData.security.totalCount || 0;
+    if (issues === 0) score += 20;
+    else if (issues <= 2) score += 15;
+    else if (issues <= 5) score += 10;
+    else score += 5;
+    factors++;
+  }
+
+  // Calculate final score as percentage
+  return factors > 0 ? Math.round((score / (factors * 25)) * 100) : 0;
+}
 
 /**
  * Enhanced package analysis with AI insights
@@ -73,9 +132,8 @@ export async function GET(request: NextRequest) {
       metrics: {
         downloads: packageData.downloads?.downloads || 0,
         stars: packageData.github?.stars || 0,
-        qualityScore: packageData.npmsio?.score?.final 
-          ? Math.round(packageData.npmsio.score.final * 100) 
-          : 0,
+        openIssues: packageData.github?.open_issues || 0,
+        qualityScore: calculateQualityScore(packageData),
         securityIssues: packageData.security?.totalCount || 0,
         ...(aiAnalysis?.overallScore ? { aiScore: aiAnalysis.overallScore } : {}),
       },
@@ -157,9 +215,8 @@ export async function POST(request: NextRequest) {
       metrics: {
         downloads: packageData.downloads?.downloads || 0,
         stars: packageData.github?.stars || 0,
-        qualityScore: packageData.npmsio?.score?.final 
-          ? Math.round(packageData.npmsio.score.final * 100) 
-          : 0,
+        openIssues: packageData.github?.open_issues || 0,
+        qualityScore: calculateQualityScore(packageData),
         securityIssues: packageData.security?.totalCount || 0,
         ...(aiAnalysis?.overallScore ? { aiScore: aiAnalysis.overallScore } : {}),
       },
