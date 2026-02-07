@@ -9,6 +9,20 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [securityFilter, setSecurityFilter] = useState<string | null>(null); // 'critical', 'high', 'moderate', 'low', or null for all
 
+  const formatDaysSinceRelease = (days: number): string => {
+    if (days >= 365) {
+      const years = Math.floor(days / 365);
+      const remainingDays = days % 365;
+      if (remainingDays === 0) {
+        return years === 1 ? '1yr' : `${years}yrs`;
+      }
+      return years === 1 
+        ? `1yr ${remainingDays} ${remainingDays === 1 ? 'day' : 'days'}`
+        : `${years}yrs ${remainingDays} ${remainingDays === 1 ? 'day' : 'days'}`;
+    }
+    return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!packageName.trim()) return;
@@ -16,6 +30,7 @@ export default function Home() {
     setLoading(true);
     setError(null);
     setAnalysisData(null);
+    setSecurityFilter(null);
 
     try {
       const response = await fetch(`/api/analyze-ai?package=${encodeURIComponent(packageName)}`);
@@ -88,27 +103,68 @@ export default function Home() {
               {/* Package Info */}
               {analysisData.packageInfo && (
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-                  <h2 className="font-bold text-2xl mb-4 flex items-center gap-2">
-                    <span>📦</span> Package Info
+                  <h2 className="font-bold text-2xl mb-6 flex items-center gap-2">
+                    <svg className="w-7 h-7 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    Package Info
                   </h2>
-                  <div className="space-y-2">
-                    <p><strong>Name:</strong> {analysisData.packageInfo.name}</p>
-                    <p><strong>Latest Version:</strong> {analysisData.packageInfo.latestVersion || analysisData.packageInfo.version}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                        </svg>
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Name</span>
+                      </div>
+                      <p className="text-lg font-semibold text-gray-900 dark:text-white">{analysisData.packageInfo.name}</p>
+                    </div>
+
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                        </svg>
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Latest Version</span>
+                      </div>
+                      <p className="text-lg font-semibold text-gray-900 dark:text-white">{analysisData.packageInfo.latestVersion || analysisData.packageInfo.version}</p>
+                    </div>
+
                     {analysisData.packageInfo.daysSinceLastRelease !== null && analysisData.packageInfo.daysSinceLastRelease !== undefined && (
-                      <p><strong>Days Since Last Release:</strong> {analysisData.packageInfo.daysSinceLastRelease} days ago</p>
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Last Release</span>
+                        </div>
+                        <p className="text-lg font-semibold text-gray-900 dark:text-white">{formatDaysSinceRelease(analysisData.packageInfo.daysSinceLastRelease)}</p>
+                      </div>
                     )}
-                    <p><strong>License:</strong> {analysisData.packageInfo.license}</p>
-                    <p>
-                      <strong>URL:</strong>{' '}
+
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <svg className="w-5 h-5 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">License</span>
+                      </div>
+                      <p className="text-lg font-semibold text-gray-900 dark:text-white">{analysisData.packageInfo.license}</p>
+                    </div>
+
+                    <div className="md:col-span-2">
                       <a
                         href={analysisData.packageInfo.npmUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline"
+                        className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline"
                       >
-                        {analysisData.packageInfo.npmUrl}
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                        View on npm
                       </a>
-                    </p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -117,7 +173,10 @@ export default function Home() {
               {analysisData.metrics && (
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
                   <h2 className="font-bold text-2xl mb-4 flex items-center gap-2">
-                    <span>📊</span> Metrics
+                    <svg className="w-7 h-7 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    Metrics
                   </h2>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     <div>
@@ -140,7 +199,7 @@ export default function Home() {
                         <div className="flex gap-2 flex-wrap">
                           {analysisData.security?.critical > 0 && (
                             <button
-                              onClick={() => setSecurityFilter(securityFilter === 'critical' ? null : 'critical')}
+                              onClick={() => setSecurityFilter('critical')}
                               className={`flex items-center gap-1 px-3 py-1 rounded-lg transition-all ${
                                 securityFilter === 'critical'
                                   ? 'bg-purple-500 ring-2 ring-purple-400'
@@ -153,7 +212,7 @@ export default function Home() {
                           )}
                           {analysisData.security?.high > 0 && (
                             <button
-                              onClick={() => setSecurityFilter(securityFilter === 'high' ? null : 'high')}
+                              onClick={() => setSecurityFilter('high')}
                               className={`flex items-center gap-1 px-3 py-1 rounded-lg transition-all ${
                                 securityFilter === 'high'
                                   ? 'bg-red-500 ring-2 ring-red-400'
@@ -166,7 +225,7 @@ export default function Home() {
                           )}
                           {analysisData.security?.moderate > 0 && (
                             <button
-                              onClick={() => setSecurityFilter(securityFilter === 'moderate' ? null : 'moderate')}
+                              onClick={() => setSecurityFilter('moderate')}
                               className={`flex items-center gap-1 px-3 py-1 rounded-lg transition-all ${
                                 securityFilter === 'moderate'
                                   ? 'bg-orange-500 ring-2 ring-orange-400'
@@ -179,7 +238,7 @@ export default function Home() {
                           )}
                           {analysisData.security?.low > 0 && (
                             <button
-                              onClick={() => setSecurityFilter(securityFilter === 'low' ? null : 'low')}
+                              onClick={() => setSecurityFilter('low')}
                               className={`flex items-center gap-1 px-3 py-1 rounded-lg transition-all ${
                                 securityFilter === 'low'
                                   ? 'bg-yellow-500 ring-2 ring-yellow-400'
@@ -191,6 +250,19 @@ export default function Home() {
                             </button>
                           )}
                         </div>
+                      )}
+                      {analysisData.packageInfo && (
+                        <a
+                          href={`https://snyk.io/advisor/npm-package/${analysisData.packageInfo.name}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                          View Snyk Advisor
+                        </a>
                       )}
                     </div>
                     {analysisData.metrics.aiScore !== undefined && (
@@ -204,16 +276,28 @@ export default function Home() {
               )}
 
               {/* Security Vulnerabilities Details */}
-              {analysisData.security && analysisData.security.vulnerabilities && analysisData.security.vulnerabilities.length > 0 && (
-                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg shadow-lg p-6 border-2 border-red-200 dark:border-red-800">
-                  <h2 className="font-bold text-2xl mb-4 flex items-center gap-2 text-red-800 dark:text-red-200">
-                    <span>🔒</span> Security Vulnerabilities 
-                    {securityFilter && (
+              {analysisData.security && analysisData.security.vulnerabilities && analysisData.security.vulnerabilities.length > 0 && securityFilter && (
+                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg shadow-lg p-6 border-2 border-red-200 dark:border-red-800 relative">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="font-bold text-2xl flex items-center gap-2 text-red-800 dark:text-red-200">
+                      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      Security Vulnerabilities
                       <span className="text-base font-normal">
-                        (showing {securityFilter} - click badge again to show all)
+                        (showing {securityFilter})
                       </span>
-                    )}
-                  </h2>
+                    </h2>
+                    <button
+                      onClick={() => setSecurityFilter(null)}
+                      className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-200 transition-colors"
+                      aria-label="Close vulnerabilities"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
                   <div className="space-y-4">
                     {analysisData.security.vulnerabilities
                       .filter((vuln: any) => !securityFilter || vuln.severity === securityFilter)
@@ -260,7 +344,10 @@ export default function Home() {
               {analysisData.ai && (
                 <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg shadow-lg p-6">
                   <h2 className="font-bold text-2xl mb-4 flex items-center gap-2">
-                    <span>🤖</span> AI Analysis
+                    <svg className="w-7 h-7 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    AI Analysis
                   </h2>
                   
                   <div className="space-y-4">
@@ -312,7 +399,12 @@ export default function Home() {
 
                     {analysisData.ai.strengths && analysisData.ai.strengths.length > 0 && (
                       <div>
-                        <h3 className="font-semibold text-lg mb-2">✅ Strengths</h3>
+                        <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
+                          <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Strengths
+                        </h3>
                         <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
                           {analysisData.ai.strengths.map((strength: string, idx: number) => (
                             <li key={idx}>{strength}</li>
@@ -323,7 +415,12 @@ export default function Home() {
 
                     {analysisData.ai.concerns && analysisData.ai.concerns.length > 0 && (
                       <div>
-                        <h3 className="font-semibold text-lg mb-2">⚠️ Concerns</h3>
+                        <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
+                          <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                          Concerns
+                        </h3>
                         <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
                           {analysisData.ai.concerns.map((concern: string, idx: number) => (
                             <li key={idx}>{concern}</li>

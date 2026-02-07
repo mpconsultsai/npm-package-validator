@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 import type { PackageAnalysisResult } from '../types/package-data';
 
 /**
@@ -32,10 +33,23 @@ function getAIModel(modelName: string = 'gemini-2.5-flash') {
 }
 
 /**
+ * Initialize Groq AI client (fallback option)
+ */
+function getGroqClient() {
+  const apiKey = process.env.GROQ_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error('GROQ_API_KEY is not configured');
+  }
+
+  return new Groq({ apiKey });
+}
+
+/**
  * Create a prompt for package analysis
  */
 function createAnalysisPrompt(data: PackageAnalysisResult): string {
-  const { packageName, npm, downloads, github, npmsio, security, readme } = data;
+  const { packageName, npm, downloads, github, security, readme } = data;
 
   let prompt = `Analyse this npm package and provide a detailed assessment:\n\n`;
   
@@ -88,15 +102,6 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
     }
     
     prompt += `- Language: ${github.language || 'Unknown'}\n\n`;
-  }
-
-  // Quality scores from npms.io
-  if (npmsio?.score) {
-    prompt += `Quality Metrics (0-1 scale):\n`;
-    prompt += `- Overall Score: ${npmsio.score.final.toFixed(3)}\n`;
-    prompt += `- Quality: ${npmsio.score.detail.quality.toFixed(3)}\n`;
-    prompt += `- Popularity: ${npmsio.score.detail.popularity.toFixed(3)}\n`;
-    prompt += `- Maintenance: ${npmsio.score.detail.maintenance.toFixed(3)}\n\n`;
   }
 
   // Security vulnerabilities
@@ -256,7 +261,7 @@ export async function analyzePackageWithAI(
     if (isRateLimitError) {
       console.warn('⚠ Rate limit hit on Flash, falling back to Flash-Lite...');
       
-      // Fallback to Gemini 2.5 Flash-Lite (higher rate limits: 15 RPM, 1000 RPD)
+      // Fallback to Gemini 2.5 Flash-Lite
       try {
         const fallbackModel = getAIModel('gemini-2.5-flash-lite');
         const result = await fallbackModel.generateContent(fullPrompt);
@@ -266,9 +271,39 @@ export async function analyzePackageWithAI(
         const aiAnalysis = parseAIResponse(text);
         console.log('✓ Analysis completed with Gemini 2.5 Flash-Lite');
         return aiAnalysis;
-      } catch (fallbackError: any) {
-        console.error('Flash-Lite also failed:', fallbackError);
-        throw new Error(`Failed to analyze package with AI (both models): ${fallbackError.message}`);
+      } catch (flashLiteError: any) {
+        const isFlashLiteRateLimit = flashLiteError.message?.includes('429') || 
+                                      flashLiteError.message?.includes('quota') || 
+                                      flashLiteError.message?.includes('rate limit');
+        
+        if (isFlashLiteRateLimit) {
+          console.warn('⚠ Flash-Lite also rate limited, falling back to Groq...');
+          
+          // Final fallback to Groq (14,400 requests/day)
+          try {
+            const groqClient = getGroqClient();
+            const chatCompletion = await groqClient.chat.completions.create({
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: prompt }
+              ],
+              model: 'llama-3.3-70b-versatile', // Groq's best free production model (updated from 3.1)
+              temperature: 0.7,
+              max_tokens: 2048,
+            });
+            
+            const text = chatCompletion.choices[0]?.message?.content || '';
+            const aiAnalysis = parseAIResponse(text);
+            console.log('✓ Analysis completed with Groq (Llama 3.3 70B)');
+            return aiAnalysis;
+          } catch (groqError: any) {
+            console.error('Groq also failed:', groqError);
+            throw new Error(`Failed to analyze package with AI (all providers): ${groqError.message}`);
+          }
+        } else {
+          console.error('Flash-Lite failed (non-rate-limit):', flashLiteError);
+          throw new Error(`Failed to analyze package with AI: ${flashLiteError.message}`);
+        }
       }
     } else {
       // Non-rate-limit error, throw immediately
@@ -313,7 +348,25 @@ Generate a single concise sentence (max 20 words) summarizing if this package is
         const result = await fallbackModel.generateContent(prompt);
         const response = result.response;
         return response.text();
-      } catch (fallbackError) {
+      } catch (flashLiteError: any) {
+        const isFlashLiteRateLimit = flashLiteError.message?.includes('429') || 
+                                      flashLiteError.message?.includes('quota') || 
+                                      flashLiteError.message?.includes('rate limit');
+        
+        if (isFlashLiteRateLimit) {
+          try {
+            const groqClient = getGroqClient();
+            const chatCompletion = await groqClient.chat.completions.create({
+              messages: [{ role: 'user', content: prompt }],
+              model: 'llama-3.3-70b-versatile',
+              temperature: 0.7,
+              max_tokens: 100,
+            });
+            return chatCompletion.choices[0]?.message?.content || `${packageName} v${version} - Quality score: ${score}/100`;
+          } catch (groqError) {
+            return `${packageName} v${version} - Quality score: ${score}/100`;
+          }
+        }
         return `${packageName} v${version} - Quality score: ${score}/100`;
       }
     }

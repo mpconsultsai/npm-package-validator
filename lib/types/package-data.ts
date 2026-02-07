@@ -164,13 +164,11 @@ export interface PackageAnalysisResult {
   downloads?: NpmDownloadStats;
   github?: GitHubRepoData;
   releases?: GitHubReleaseData[];
-  npmsio?: NpmsIoData;
   security?: SecuritySummary;
   readme?: string | null;
   errors?: {
     npm?: string;
     github?: string;
-    npmsio?: string;
     security?: string;
     ai?: string;
   };
