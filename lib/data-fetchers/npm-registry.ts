@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { sanitizeDescription } from '../sanitize';
 import type { NpmPackageData, NpmDownloadStats } from '../types/package-data';
 
 const NPM_REGISTRY_URL = 'https://registry.npmjs.org';
@@ -18,7 +19,7 @@ export async function fetchNpmPackageData(packageName: string): Promise<NpmPacka
     return {
       name: data.name,
       version: latestVersion,
-      description: latestVersionData.description || data.description,
+      description: sanitizeDescription(latestVersionData.description || data.description),
       author: latestVersionData.author,
       license: latestVersionData.license,
       repository: latestVersionData.repository,

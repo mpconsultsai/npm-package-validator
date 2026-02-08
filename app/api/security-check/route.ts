@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkPackageSecurity } from '@/lib/data-fetchers/security';
+import { validatePackageName, extractPackageName } from '@/lib/validation';
 
 /**
  * Check security advisories for a specific package version
@@ -9,8 +10,8 @@ import { checkPackageSecurity } from '@/lib/data-fetchers/security';
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const packageName = searchParams.get('package');
-    const version = searchParams.get('version');
+    const packageName = extractPackageName(searchParams.get('package') || '');
+    const version = searchParams.get('version')?.trim();
 
     if (!packageName) {
       return NextResponse.json(
@@ -26,10 +27,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const validPackageNameRegex = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
-    if (!validPackageNameRegex.test(packageName)) {
+    const validation = validatePackageName(packageName);
+    if (!validation.valid) {
       return NextResponse.json(
-        { error: 'Invalid package name format' },
+        { error: validation.error },
         { status: 400 }
       );
     }
@@ -53,7 +54,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { packageName, version } = body;
+    const packageName = extractPackageName(body.packageName || '');
+    const version = (body.version || '').toString().trim();
 
     if (!packageName) {
       return NextResponse.json(
@@ -69,10 +71,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const validPackageNameRegex = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
-    if (!validPackageNameRegex.test(packageName)) {
+    const validation = validatePackageName(packageName);
+    if (!validation.valid) {
       return NextResponse.json(
-        { error: 'Invalid package name format' },
+        { error: validation.error },
         { status: 400 }
       );
     }
