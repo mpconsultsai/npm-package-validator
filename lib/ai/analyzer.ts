@@ -15,6 +15,7 @@ export interface AIPackageAnalysis {
   qualityRating: 'excellent' | 'good' | 'fair' | 'poor';
   maintenanceRating: 'excellent' | 'good' | 'fair' | 'poor';
   reasoning: string;
+  model?: string; // e.g. "Gemini 2.5 Flash", "Llama 3.3 70B (Groq)"
 }
 
 /**
@@ -250,6 +251,7 @@ export async function analyzePackageWithAI(
     const text = response.text();
     
     const aiAnalysis = parseAIResponse(text);
+    aiAnalysis.model = 'Gemini 2.5 Flash';
     console.log('✓ Analysis completed with Gemini 2.5 Flash');
     return aiAnalysis;
   } catch (error: any) {
@@ -269,6 +271,7 @@ export async function analyzePackageWithAI(
         const text = response.text();
         
         const aiAnalysis = parseAIResponse(text);
+        aiAnalysis.model = 'Gemini 2.5 Flash Lite';
         console.log('✓ Analysis completed with Gemini 2.5 Flash-Lite');
         return aiAnalysis;
       } catch (flashLiteError: any) {
@@ -294,6 +297,7 @@ export async function analyzePackageWithAI(
             
             const text = chatCompletion.choices[0]?.message?.content || '';
             const aiAnalysis = parseAIResponse(text);
+            aiAnalysis.model = 'Llama 3.3 70B (Groq)';
             console.log('✓ Analysis completed with Groq (Llama 3.3 70B)');
             return aiAnalysis;
           } catch (groqError: any) {

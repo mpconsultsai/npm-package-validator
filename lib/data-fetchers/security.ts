@@ -97,15 +97,31 @@ export async function checkPackageSecurity(
       // Skip withdrawn advisories
       if (advisory.withdrawnAt) continue;
 
-      // Only skip when we have definitive evidence: firstPatchedVersion exists and latest >= patched.
-      // We do NOT filter by vulnerableVersionRange - different databases (GitHub vs Snyk) use different
-      // range formats, and over-filtering can hide valid vulnerabilities that Snyk would show.
-      if (latestVersion && vuln.firstPatchedVersion?.identifier) {
+      // Skip when latest version is not affected
+      if (latestVersion) {
         const coalesced = semver.coerce(latestVersion);
-        const patchedCoalesced = semver.coerce(vuln.firstPatchedVersion.identifier);
-        if (coalesced && patchedCoalesced && semver.gte(coalesced, patchedCoalesced)) {
-          console.log(`Skipping ${advisory.id} - already fixed in ${latestVersion} (patched in ${vuln.firstPatchedVersion.identifier})`);
-          continue;
+        if (!coalesced) continue;
+
+        // 1. If firstPatchedVersion exists and latest >= patched, skip
+        if (vuln.firstPatchedVersion?.identifier) {
+          const patchedCoalesced = semver.coerce(vuln.firstPatchedVersion.identifier);
+          if (patchedCoalesced && semver.gte(coalesced, patchedCoalesced)) {
+            console.log(`Skipping ${advisory.id} - already fixed in ${latestVersion} (patched in ${vuln.firstPatchedVersion.identifier})`);
+            continue;
+          }
+        }
+
+        // 2. If vulnerableVersionRange exists and version does NOT satisfy it, skip (version not in range = not vulnerable)
+        if (vuln.vulnerableVersionRange) {
+          try {
+            const inRange = semver.satisfies(coalesced, vuln.vulnerableVersionRange);
+            if (!inRange) {
+              console.log(`Skipping ${advisory.id} - ${latestVersion} not in vulnerable range ${vuln.vulnerableVersionRange}`);
+              continue;
+            }
+          } catch {
+            // Invalid range format - keep vulnerability to be safe
+          }
         }
       }
 
