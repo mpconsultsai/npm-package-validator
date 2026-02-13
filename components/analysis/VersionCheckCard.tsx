@@ -67,7 +67,7 @@ export function VersionCheckCard({
         <div className="flex-1 min-w-[140px]">
           <label
             htmlFor="versionSelect"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            className="sr-only block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
           >
             Version
           </label>
