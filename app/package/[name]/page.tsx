@@ -13,6 +13,7 @@ import {
   SecurityVulnerabilitiesCard,
   VersionCheckCard,
   AIAnalysisCard,
+  SimilarPackagesCard,
 } from "@/components/analysis";
 
 export default function PackagePage() {
@@ -154,6 +155,11 @@ export default function PackagePage() {
               {analysisData.ai && (
                 <AIAnalysisCard ai={analysisData.ai} />
               )}
+
+              <SimilarPackagesCard
+                packageName={analysisData.packageInfo?.name ?? nameFromPath}
+                keywords={analysisData.npm?.keywords}
+              />
             </div>
           )}
 

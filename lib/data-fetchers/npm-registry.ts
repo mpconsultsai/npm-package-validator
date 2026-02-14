@@ -103,6 +103,42 @@ export async function fetchNpmPackagePopularity(packageName: string): Promise<{
 }
 
 /**
+ * Fetch similar/recommended packages by searching npm with the package's keywords or name.
+ * Returns packages in the same "category" (e.g. other react-related or testing libs).
+ */
+export async function fetchSimilarPackages(
+  packageName: string,
+  keywords?: string[] | null,
+  limit: number = 6
+): Promise<Array<{ name: string; description: string; version: string }>> {
+  try {
+    const searchTerm =
+      keywords?.length && keywords[0]
+        ? keywords.slice(0, 2).join(' ')
+        : packageName;
+    const response = await axios.get(
+      `${NPM_REGISTRY_URL}/-/v1/search`,
+      { params: { text: searchTerm, size: limit + 10 } }
+    );
+    const objects = response.data?.objects || [];
+    const currentLower = packageName.toLowerCase();
+    const similar = objects
+      .filter((p: any) => p.package?.name?.toLowerCase() !== currentLower)
+      .slice(0, limit)
+      .map((p: any) => ({
+        name: p.package?.name ?? '',
+        description: sanitizeDescription(p.package?.description) || 'No description',
+        version: p.package?.version ?? '',
+      }))
+      .filter((p) => p.name);
+    return similar;
+  } catch (error: any) {
+    console.warn('Could not fetch similar packages:', error.message);
+    return [];
+  }
+}
+
+/**
  * Fetch package README content (first 3000 characters for AI analysis)
  */
 export async function fetchNpmReadme(packageName: string): Promise<string | null> {
