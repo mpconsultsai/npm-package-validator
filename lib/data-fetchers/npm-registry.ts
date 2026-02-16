@@ -130,7 +130,7 @@ export async function fetchSimilarPackages(
         description: sanitizeDescription(p.package?.description) || 'No description',
         version: p.package?.version ?? '',
       }))
-      .filter((p) => p.name);
+      .filter((p: any) => p.name);
     return similar;
   } catch (error: any) {
     console.warn('Could not fetch similar packages:', error.message);
