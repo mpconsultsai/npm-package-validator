@@ -6,7 +6,7 @@ A full-stack application that validates npm packages based on security, quality,
 
 - 🔒 **Security Analysis** - GitHub Advisory Database with intelligent filtering (excludes patched vulnerabilities)
 - 📊 **Quality Metrics** - Custom quality score based on stars, downloads, maintenance, and security
-- 🤖 **AI-Powered** - Triple-layer fallback (Gemini Flash → Flash-Lite → Groq) for maximum reliability
+- 🤖 **AI-Powered** - Triple-layer fallback (Gemini Flash → Flash-Lite → Grok) for maximum reliability
 - 📈 **GitHub Integration** - Analyses stars, forks, issues, and repository activity
 - 📦 **npm Registry** - Fetches download stats, package metadata, and README content
 - 📝 **README Analysis** - Detects deprecation notices and maintenance warnings
@@ -17,7 +17,7 @@ A full-stack application that validates npm packages based on security, quality,
 - **Framework**: Next.js 15 (App Router)
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS 4.0
-- **AI**: Google Gemini 2.5 (Flash + Flash-Lite) + Groq (GPT-OSS 120B)
+- **AI**: Google Gemini 2.5 (Flash + Flash-Lite) + Grok (GPT-OSS 120B)
 - **APIs**: npm Registry, GitHub GraphQL, GitHub Advisory Database
 
 ## Key Improvements
@@ -29,7 +29,7 @@ Only displays vulnerabilities that affect the **latest version** of a package. H
 Triple-layer automatic fallback system ensures maximum uptime:
 1. **Gemini Flash**: 20 requests/day (primary)
 2. **Gemini Flash-Lite**: 20 requests/day (first fallback)
-3. **Groq (GPT-OSS 120B)**: 14,400 requests/day (final fallback - 720x capacity!)
+3. **Grok (GPT-OSS 120B)**: 14,400 requests/day (final fallback - 720x capacity!)
 
 This provides effectively unlimited AI analysis for most users.
 
@@ -47,7 +47,7 @@ Replaced outdated npms.io (last updated 2023) with a real-time quality algorithm
 - Node.js 20+ 
 - npm or yarn
 - Google API Key (for Gemini - primary AI provider)
-- Groq API Key (optional but recommended - provides 14,400 AI requests/day as fallback)
+- Grok API Key (optional but recommended - provides 14,400 AI requests/day as fallback)
 - GitHub Personal Access Token (optional, for higher rate limits on security scanning)
 
 ### Installation
@@ -88,7 +88,7 @@ npm-package-validator/
 │   └── globals.css        # Global styles
 ├── lib/
 │   ├── ai/
-│   │   └── analyzer.ts    # AI integration (Gemini + Groq) with triple-layer fallback
+│   │   └── analyzer.ts    # AI integration (Gemini + Grok) with triple-layer fallback
 │   ├── data-fetchers/
 │   │   ├── npm-registry.ts   # npm package & download data
 │   │   ├── github.ts         # GitHub repository data
