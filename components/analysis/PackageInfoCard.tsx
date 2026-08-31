@@ -18,22 +18,6 @@ interface PackageInfoCardProps {
 export function PackageInfoCard({ packageInfo }: PackageInfoCardProps) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-      <h2 className="font-bold text-2xl mb-6 flex items-center gap-2">
-        <svg
-          className="w-7 h-7 text-blue-600 dark:text-blue-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-          />
-        </svg>
-        Package Info
-      </h2>
       {packageInfo.description && (
         <div className="mb-6 pb-6 border-b border-gray-200 dark:border-gray-600">
           {packageInfo.dependents !== undefined &&

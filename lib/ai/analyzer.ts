@@ -2,6 +2,10 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import Groq from 'groq-sdk';
 import type { PackageAnalysisResult } from '../types/package-data';
 
+/** Groq retired llama-3.3-70b-versatile on 16 Aug 2026; gpt-oss-120b is the documented replacement. */
+const GROQ_MODEL = 'openai/gpt-oss-120b';
+const GROQ_MODEL_LABEL = 'GPT-OSS 120B (Groq)';
+
 /**
  * AI-generated package analysis and recommendations
  */
@@ -15,7 +19,7 @@ export interface AIPackageAnalysis {
   qualityRating: 'excellent' | 'good' | 'fair' | 'poor';
   maintenanceRating: 'excellent' | 'good' | 'fair' | 'poor';
   reasoning: string;
-  model?: string; // e.g. "Gemini 2.5 Flash", "Llama 3.3 70B (Groq)"
+  model?: string; // e.g. "Gemini 2.5 Flash", "GPT-OSS 120B (Groq)"
 }
 
 /**
@@ -46,11 +50,92 @@ function getGroqClient() {
   return new Groq({ apiKey });
 }
 
+function daysSince(iso?: string | null): number | null {
+  if (!iso) return null;
+  const ms = Date.now() - new Date(iso).getTime();
+  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+  return Number.isFinite(days) ? days : null;
+}
+
+function adoptionLevel(
+  monthlyDownloads?: number,
+  stars?: number,
+  dependents?: number
+): 'widely-adopted' | 'moderate' | 'niche' {
+  if (
+    (monthlyDownloads ?? 0) >= 1_000_000 ||
+    (stars ?? 0) >= 5_000 ||
+    (dependents ?? 0) >= 1_000
+  ) {
+    return 'widely-adopted';
+  }
+  if (
+    (monthlyDownloads ?? 0) >= 50_000 ||
+    (stars ?? 0) >= 200 ||
+    (dependents ?? 0) >= 50
+  ) {
+    return 'moderate';
+  }
+  return 'niche';
+}
+
+function maintenanceContext(
+  daysSincePublish: number | null,
+  daysSinceCommit: number | null,
+  adoption: ReturnType<typeof adoptionLevel>
+): string {
+  const publish = daysSincePublish;
+  const commit = daysSinceCommit;
+  const popular = adoption === 'widely-adopted';
+
+  if (publish === null) {
+    return 'unknown — no publish date; do not infer abandonment from missing data';
+  }
+  if (publish < 90) {
+    return `healthy (${publish} days since last publish). A gap of weeks or a few months is a normal release cadence. Do not call this stale. Do not use it to justify use-with-caution.`;
+  }
+  if (publish < 180) {
+    if (popular) {
+      return `normal for a mature, widely used package (${publish} days). This is not stale. Recommendation must not drop to use-with-caution on cadence alone.`;
+    }
+    return `acceptable (${publish} days). Not stale. Only mention as a mild note if there are other real risks.`;
+  }
+  if (publish < 365) {
+    if (popular && (commit === null || commit < 180)) {
+      return `mature/stable (${publish} days since publish). Widely adopted packages often go months between releases. Treat as maintained unless README says otherwise.`;
+    }
+    return `slow (${publish} days). May note slower releases, but use-with-caution only if there are also vulnerabilities, deprecation, or no commits.`;
+  }
+  if (popular && commit !== null && commit < 90) {
+    return `long gap since npm publish (${publish} days) but recent git activity. For a widely adopted package this is often a stable major version, not abandonment.`;
+  }
+  if (publish >= 365 && (commit === null || commit >= 180) && !popular) {
+    return `likely unmaintained (${publish} days since publish). This can justify use-with-caution or not-recommended.`;
+  }
+  return `long gap since last publish (${publish} days). Weigh adoption and security: a popular, vulnerability-free package may still be recommended with a maintenance note.`;
+}
+
 /**
  * Create a prompt for package analysis
  */
 function createAnalysisPrompt(data: PackageAnalysisResult): string {
-  const { packageName, npm, downloads, github, security, readme } = data;
+  const { packageName, npm, downloads, github, security, readme, popularity } = data;
+
+  const lastPublished =
+    npm?.time && npm.version ? npm.time[npm.version] : null;
+  const daysSincePublish = daysSince(lastPublished);
+  const daysSinceCommit = daysSince(github?.pushed_at);
+  const monthlyDownloads = downloads?.downloads;
+  const adoption = adoptionLevel(
+    monthlyDownloads,
+    github?.stars,
+    popularity?.dependents,
+  );
+  const cadenceNote = maintenanceContext(
+    daysSincePublish,
+    daysSinceCommit,
+    adoption,
+  );
 
   let prompt = `Analyse this npm package and provide a detailed assessment:\n\n`;
   
@@ -60,29 +145,28 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
   prompt += `License: ${npm?.license || 'Unknown'}\n`;
   prompt += `Description: ${npm?.description || 'No description'}\n`;
   prompt += `npm URL: https://www.npmjs.com/package/${packageName}\n`;
-  
-  // Add publish date and maintenance info
-  if (npm?.time && npm.version) {
-    const lastPublished = npm.time[npm.version];
-    if (lastPublished) {
-      const publishDate = new Date(lastPublished);
-      const now = Date.now();
-      const daysSincePublish = Math.floor((now - publishDate.getTime()) / (1000 * 60 * 60 * 24));
-      
-      // Only include if the date is valid (not in the future)
-      if (daysSincePublish >= 0) {
-        prompt += `Days Since Last Publish: ${daysSincePublish} days ago\n`;
-      } else {
-        prompt += `Package recently published (within the last day)\n`;
-      }
-    }
+
+  if (daysSincePublish !== null && daysSincePublish >= 0) {
+    prompt += `Days Since Last Publish: ${daysSincePublish}\n`;
+  } else if (daysSincePublish !== null && daysSincePublish < 0) {
+    prompt += `Package recently published (within the last day)\n`;
   }
   prompt += `\n`;
 
-  // Downloads
-  if (downloads) {
-    prompt += `Downloads (last month): ${downloads.downloads.toLocaleString()}\n\n`;
+  prompt += `Adoption:\n`;
+  prompt += `- Level: ${adoption}\n`;
+  if (monthlyDownloads !== undefined) {
+    prompt += `- Downloads (last month): ${monthlyDownloads.toLocaleString()}\n`;
   }
+  if (popularity?.dependents !== undefined) {
+    prompt += `- npm dependents: ${popularity.dependents.toLocaleString()}\n`;
+  }
+  if (popularity) {
+    prompt += `- npm popularity score: ${popularity.popularityScore}\n`;
+    prompt += `- npm quality score: ${popularity.qualityScore}\n`;
+    prompt += `- npm maintenance score: ${popularity.maintenanceScore}\n`;
+  }
+  prompt += `\n`;
 
   // GitHub stats
   if (github) {
@@ -90,20 +174,17 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
     prompt += `- Stars: ${github.stars.toLocaleString()}\n`;
     prompt += `- Forks: ${github.forks.toLocaleString()}\n`;
     prompt += `- Open Issues: ${github.open_issues.toLocaleString()}\n`;
-    
-    const commitDate = new Date(github.pushed_at);
-    const now = Date.now();
-    const daysSinceCommit = Math.floor((now - commitDate.getTime()) / (1000 * 60 * 60 * 24));
-    
-    // Only include if the date is valid (not in the future)
-    if (daysSinceCommit >= 0) {
-      prompt += `- Days Since Last Commit: ${daysSinceCommit} days ago\n`;
-    } else {
+
+    if (daysSinceCommit !== null && daysSinceCommit >= 0) {
+      prompt += `- Days Since Last Commit: ${daysSinceCommit}\n`;
+    } else if (daysSinceCommit !== null && daysSinceCommit < 0) {
       prompt += `- Recently committed (within the last day)\n`;
     }
     
     prompt += `- Language: ${github.language || 'Unknown'}\n\n`;
   }
+
+  prompt += `Maintenance interpretation (authoritative — follow this):\n${cadenceNote}\n\n`;
 
   // Security vulnerabilities
   if (security) {
@@ -120,30 +201,33 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
     prompt += `README Content (first 3000 characters):\n`;
     prompt += `${readme}\n\n`;
     prompt += `⚠️ CRITICAL: Check the README above for:\n`;
-    prompt += `- Deprecation notices (e.g., "no longer maintained", "deprecated", "unmaintained")\n`;
-    prompt += `- Migration warnings (e.g., "please use X instead", "consider switching to Y")\n`;
-    prompt += `- Abandonment notices (e.g., "this project is archived", "not actively developed")\n`;
+    prompt += `- Deprecation notices (e.g. "no longer maintained", "deprecated", "unmaintained")\n`;
+    prompt += `- Migration warnings (e.g. "please use X instead", "consider switching to Y")\n`;
+    prompt += `- Abandonment notices (e.g. "this project is archived", "not actively developed")\n`;
     prompt += `- Security warnings or end-of-life announcements\n`;
     prompt += `If ANY of these are present, the package MUST be rated as "not-recommended" or "use-with-caution" at best!\n\n`;
   }
 
-  prompt += `IMPORTANT MAINTENANCE GUIDELINES:\n`;
-  prompt += `- If "Days Since Last Publish" > 365 days (1 year), the package is likely UNMAINTAINED\n`;
-  prompt += `- If "Days Since Last Publish" > 180 days (6 months), consider it STALE and rate maintenance as "fair" or "poor"\n`;
-  prompt += `- If "Days Since Last Commit" > 180 days AND "Days Since Last Publish" > 180 days, it's likely ABANDONED\n`;
-  prompt += `- High open issues count (>100) combined with no recent updates is a RED FLAG\n`;
-  prompt += `- UNMAINTAINED packages should be "not-recommended" or "use-with-caution" at best\n\n`;
+  prompt += `RECOMMENDATION RULES:\n`;
+  prompt += `- Weigh security, adoption, quality, and true abandonment — not how recently a popular package happened to publish.\n`;
+  prompt += `- Fewer than 90 days since last publish is healthy. Never call it stale. Never choose use-with-caution for that reason.\n`;
+  prompt += `- Widely adopted packages (React, lodash, TypeScript, and similar) often go weeks or months between releases. That is expected for a stable major version.\n`;
+  prompt += `- use-with-caution requires a concrete risk: unpatched high/critical vulnerabilities, README deprecation or archive notice, likely malware/typosquat, or a niche package that looks abandoned (roughly 1+ year silent with little usage).\n`;
+  prompt += `- not-recommended is for deprecated, archived, malicious, or clearly abandoned packages with real risk.\n`;
+  prompt += `- High open-issue counts on huge repos are not a red flag by themselves (they often include PRs or a large backlog).\n`;
+  prompt += `- Do not pad concerns with release-cadence commentary when cadence is healthy. Use ["None"] if there are no real concerns.\n`;
+  prompt += `- Maintenance rating: excellent if published within ~90 days or widely adopted with recent commits; good up to ~6 months (or longer if widely adopted and secure); fair/poor only for genuine inactivity.\n\n`;
   
   prompt += `Based on this data, provide:\n`;
-  prompt += `1. A brief summary (2-3 sentences) - MUST mention if package appears unmaintained/stale\n`;
+  prompt += `1. A brief summary (2-3 sentences). Only mention staleness or abandonment if the maintenance interpretation above says so.\n`;
   prompt += `2. Overall recommendation: "recommended", "use-with-caution", or "not-recommended"\n`;
   prompt += `3. Key strengths (array of 3-5 strings)\n`;
-  prompt += `4. Any concerns (array of 2-4 strings, or ["None"] if no concerns) - MUST flag lack of maintenance if applicable\n`;
-  prompt += `5. Overall score (0-100) - Deduct significant points for unmaintained packages\n`;
+  prompt += `4. Any concerns (array of 2-4 strings, or ["None"] if no real concerns)\n`;
+  prompt += `5. Overall score (0-100). Do not deduct points for a normal release cadence on a widely adopted package.\n`;
   prompt += `6. Security rating: "excellent", "good", "fair", or "poor"\n`;
   prompt += `7. Quality rating: "excellent", "good", "fair", or "poor"\n`;
-  prompt += `8. Maintenance rating: "excellent", "good", "fair", or "poor" - Base this on actual dates, not just the score\n`;
-  prompt += `9. Reasoning for your recommendation (2-3 sentences) - Explain maintenance concerns if present\n\n`;
+  prompt += `8. Maintenance rating: "excellent", "good", "fair", or "poor"\n`;
+  prompt += `9. Reasoning for your recommendation (2-3 sentences)\n\n`;
   prompt += `Respond ONLY with valid JSON in this exact format:\n`;
   prompt += `{\n`;
   prompt += `  "summary": "string",\n`;
@@ -167,7 +251,7 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
 function parseAIResponse(response: string): AIPackageAnalysis {
   try {
     // Remove markdown code blocks if present
-    let cleanedResponse = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const cleanedResponse = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     
     // Try to extract JSON from the response
     const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
@@ -236,9 +320,9 @@ export async function analyzePackageWithAI(
   const prompt = createAnalysisPrompt(data);
 
   const systemPrompt = 'You are an expert software engineer specialising in npm package evaluation. ' +
-    'You analyse packages based on security, quality, maintenance, and popularity metrics. ' +
-    'Provide honest, balanced assessments that help developers make informed decisions. ' +
-    'Always respond in valid JSON format.';
+    'You analyse packages based on security, quality, adoption, and true maintenance risk. ' +
+    'A few weeks or months since the last npm publish is normal — especially for widely used libraries — and is not a reason to recommend caution. ' +
+    'Provide honest, balanced assessments. Always respond in valid JSON format.';
 
   const fullPrompt = `${systemPrompt}\n\n${prompt}`;
 
@@ -290,15 +374,15 @@ export async function analyzePackageWithAI(
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: prompt }
               ],
-              model: 'llama-3.3-70b-versatile', // Groq's best free production model (updated from 3.1)
+              model: GROQ_MODEL,
               temperature: 0.7,
               max_tokens: 2048,
             });
             
             const text = chatCompletion.choices[0]?.message?.content || '';
             const aiAnalysis = parseAIResponse(text);
-            aiAnalysis.model = 'Llama 3.3 70B (Groq)';
-            console.log('✓ Analysis completed with Groq (Llama 3.3 70B)');
+            aiAnalysis.model = GROQ_MODEL_LABEL;
+            console.log(`✓ Analysis completed with Groq (${GROQ_MODEL_LABEL})`);
             return aiAnalysis;
           } catch (groqError: any) {
             console.error('Groq also failed:', groqError);
@@ -362,12 +446,12 @@ Generate a single concise sentence (max 20 words) summarizing if this package is
             const groqClient = getGroqClient();
             const chatCompletion = await groqClient.chat.completions.create({
               messages: [{ role: 'user', content: prompt }],
-              model: 'llama-3.3-70b-versatile',
+              model: GROQ_MODEL,
               temperature: 0.7,
-              max_tokens: 100,
+              max_tokens: 256,
             });
             return chatCompletion.choices[0]?.message?.content || `${packageName} v${version} - Quality score: ${score}/100`;
-          } catch (groqError) {
+          } catch {
             return `${packageName} v${version} - Quality score: ${score}/100`;
           }
         }

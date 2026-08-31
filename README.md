@@ -17,7 +17,7 @@ A full-stack application that validates npm packages based on security, quality,
 - **Framework**: Next.js 15 (App Router)
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS 4.0
-- **AI**: Google Gemini 2.5 (Flash + Flash-Lite) + Groq (Llama 3.3 70B)
+- **AI**: Google Gemini 2.5 (Flash + Flash-Lite) + Groq (GPT-OSS 120B)
 - **APIs**: npm Registry, GitHub GraphQL, GitHub Advisory Database
 
 ## Key Improvements
@@ -29,7 +29,7 @@ Only displays vulnerabilities that affect the **latest version** of a package. H
 Triple-layer automatic fallback system ensures maximum uptime:
 1. **Gemini Flash**: 20 requests/day (primary)
 2. **Gemini Flash-Lite**: 20 requests/day (first fallback)
-3. **Groq (Llama 3.3 70B)**: 14,400 requests/day (final fallback - 720x capacity!)
+3. **Groq (GPT-OSS 120B)**: 14,400 requests/day (final fallback - 720x capacity!)
 
 This provides effectively unlimited AI analysis for most users.
 
@@ -44,7 +44,7 @@ Replaced outdated npms.io (last updated 2023) with a real-time quality algorithm
 
 ### Prerequisites
 
-- Node.js 18+ 
+- Node.js 20+ 
 - npm or yarn
 - Google API Key (for Gemini - primary AI provider)
 - Groq API Key (optional but recommended - provides 14,400 AI requests/day as fallback)
@@ -149,7 +149,7 @@ curl -X POST http://localhost:3000/api/security-check \
 
 ## Usage
 
-Simply enter any npm package name (e.g., `react`, `express`, `lodash`) and click **Analyse Package** to get:
+Simply enter any npm package name (e.g. `react`, `express`, `lodash`) and click **Analyse Package** to get:
 
 - **Package Information**: Name, latest version, license, days since last release
 - **Metrics**: 

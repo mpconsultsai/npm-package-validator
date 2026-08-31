@@ -1,3 +1,10 @@
+export function formatCompactNumber(n: number): string {
+  return new Intl.NumberFormat("en", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(n);
+}
+
 export function formatDaysSinceRelease(days: number): string {
   if (days >= 365) {
     const years = Math.floor(days / 365);

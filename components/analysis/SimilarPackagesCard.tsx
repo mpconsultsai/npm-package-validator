@@ -15,71 +15,78 @@ interface SimilarPackagesCardProps {
   keywords?: string[] | null;
 }
 
+function RelatedPackagesSkeleton() {
+  return (
+    <div
+      className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <span className="sr-only">Loading related packages</span>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {Array.from({ length: 6 }, (_, i) => (
+          <div
+            key={i}
+            className="p-4 rounded-lg border border-gray-200 dark:border-gray-600"
+          >
+            <div className="h-5 w-3/4 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+            <div className="mt-2 h-3 w-14 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+            <div className="mt-3 h-3 w-full rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+            <div className="mt-2 h-3 w-5/6 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function SimilarPackagesCard({ packageName, keywords }: SimilarPackagesCardProps) {
+  const keywordsKey = (keywords ?? []).join(",");
   const [packages, setPackages] = useState<SimilarPackage[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(packageName));
 
   useEffect(() => {
     if (!packageName) return;
-    setLoading(true);
+
+    const controller = new AbortController();
     const params = new URLSearchParams({ package: packageName });
-    if (keywords?.length) params.set('keywords', keywords.join(','));
-    fetch(`/api/similar-packages?${params}`)
+    if (keywordsKey) params.set("keywords", keywordsKey);
+
+    fetch(`/api/similar-packages?${params}`, { signal: controller.signal })
       .then((res) => res.json())
       .then((data) => {
-        if (data.packages) setPackages(data.packages);
-        else setPackages([]);
+        if (controller.signal.aborted) return;
+        setPackages(data.packages ?? []);
       })
-      .catch(() => setPackages([]))
-      .finally(() => setLoading(false));
-  }, [packageName, keywords?.join(',')]);
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setPackages([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [packageName, keywordsKey]);
 
   if (loading) {
+    return <RelatedPackagesSkeleton />;
+  }
+
+  if (packages.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-        <h2 className="font-bold text-2xl mb-4 flex items-center gap-2">
-          <svg
-            className="w-7 h-7 text-indigo-600 dark:text-indigo-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012 2M6.5 9a2.5 2.5 0 115 0M6.5 9a2.5 2.5 0 105 0"
-            />
-          </svg>
-          You might also like
-        </h2>
         <p className="text-gray-500 dark:text-gray-400 text-sm">
-          Loading similar packages…
+          No related packages found.
         </p>
       </div>
     );
   }
 
-  if (packages.length === 0) return null;
-
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-      <h2 className="font-bold text-2xl mb-4 flex items-center gap-2">
-        <svg
-          className="w-7 h-7 text-indigo-600 dark:text-indigo-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012 2M6.5 9a2.5 2.5 0 115 0M6.5 9a2.5 2.5 0 105 0"
-          />
-        </svg>
-        You might also like
-      </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {packages.map((pkg) => (
           <Link

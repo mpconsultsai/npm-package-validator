@@ -1,8 +1,14 @@
+import { AdvisoryLinks } from "./AdvisoryLinks";
+import { AdvisoryDescription } from "./AdvisoryDescription";
+
 interface VersionVuln {
+  id?: string;
   title: string;
   severity: string;
   description: string;
   url?: string;
+  vulnerableVersionRange?: string;
+  patchedVersions?: string;
 }
 
 interface VersionSecurityResult {
@@ -44,22 +50,6 @@ export function VersionCheckCard({
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-      <h2 className="font-bold text-2xl mb-4 flex items-center gap-2">
-        <svg
-          className="w-7 h-7 text-blue-600 dark:text-blue-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-          />
-        </svg>
-        Version check
-      </h2>
       <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
         Check security advisories for a specific version
       </p>
@@ -109,8 +99,10 @@ export function VersionCheckCard({
           {versionSecurityData.security!.hasVulnerabilities ? (
             <div className="space-y-2">
               <p className="text-red-600 dark:text-red-400 font-medium">
-                {versionSecurityData.security!.totalCount} vulnerability
-                {versionSecurityData.security!.totalCount !== 1 ? "ies" : ""}{" "}
+                {versionSecurityData.security!.totalCount}{" "}
+                {versionSecurityData.security!.totalCount === 1
+                  ? "vulnerability"
+                  : "vulnerabilities"}{" "}
                 found
               </p>
               <div className="flex gap-2 flex-wrap">
@@ -158,19 +150,31 @@ export function VersionCheckCard({
                           {vuln.severity}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        {vuln.description}
-                      </p>
-                      {vuln.url && (
-                        <a
-                          href={vuln.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-blue-600 dark:text-blue-400 hover:underline mt-2 inline-block"
-                        >
-                          View advisory →
-                        </a>
-                      )}
+                      <AdvisoryDescription markdown={vuln.description} />
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-gray-600 dark:text-gray-400 mt-2">
+                        {vuln.id && (
+                          <span>
+                            <strong>ID:</strong> {vuln.id}
+                          </span>
+                        )}
+                        {vuln.vulnerableVersionRange && (
+                          <span>
+                            <strong>Vulnerable:</strong>{" "}
+                            {vuln.vulnerableVersionRange}
+                          </span>
+                        )}
+                        {vuln.patchedVersions &&
+                          vuln.patchedVersions !== "none" && (
+                            <span className="text-green-600 dark:text-green-400">
+                              <strong>Fixed in:</strong> {vuln.patchedVersions}
+                            </span>
+                          )}
+                      </div>
+                      <AdvisoryLinks
+                        githubUrl={vuln.url}
+                        packageName={packageName}
+                        version={versionToCheck}
+                      />
                     </div>
                   ),
                 )}

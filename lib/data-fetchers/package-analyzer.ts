@@ -34,7 +34,7 @@ export async function analyzePackage(packageName: string): Promise<PackageAnalys
     if (popularity) {
       (result as any).popularity = popularity;
     }
-  } catch (error: any) {
+  } catch {
     // Optional - don't add to errors
     console.warn(`Could not fetch popularity for ${packageName}`);
   }
@@ -42,7 +42,7 @@ export async function analyzePackage(packageName: string): Promise<PackageAnalys
   // Fetch README (for deprecation notices and maintenance status)
   try {
     result.readme = await fetchNpmReadme(packageName);
-  } catch (error: any) {
+  } catch {
     // README is optional, don't add to errors
     console.warn(`Could not fetch README for ${packageName}`);
   }
@@ -63,12 +63,12 @@ export async function analyzePackage(packageName: string): Promise<PackageAnalys
     }
   }
 
-  // Fetch security vulnerabilities from GitHub Advisory Database (free, no API key required)
-  // Pass the latest version to filter out already-patched vulnerabilities
+  // Fetch security vulnerabilities from GitHub Advisory Database
+  // Pass the latest version so only unpatched issues for that version are shown
   try {
     const latestVersion = result.npm?.version;
     const securityData = await checkPackageSecurity(packageName, latestVersion);
-    (result as any).security = securityData;
+    result.security = securityData;
   } catch (error: any) {
     result.errors!.security = error.message;
   }

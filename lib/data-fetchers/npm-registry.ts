@@ -56,15 +56,41 @@ export async function fetchNpmDownloadStats(packageName: string): Promise<NpmDow
 /**
  * Fetch weekly download statistics for the last year (for trends)
  */
-export async function fetchNpmDownloadTrends(packageName: string): Promise<any> {
+export interface NpmDownloadDay {
+  day: string;
+  downloads: number;
+}
+
+export async function fetchNpmDownloadTrends(packageName: string): Promise<{
+  downloads: NpmDownloadDay[];
+}> {
   try {
     const response = await axios.get(
-      `${NPM_DOWNLOADS_URL}/range/last-year/${packageName}`
+      `${NPM_DOWNLOADS_URL}/range/last-year/${encodeURIComponent(packageName)}`
     );
     return response.data;
   } catch (error: any) {
     throw new Error(`Failed to fetch download trends: ${error.message}`);
   }
+}
+
+export function toWeeklyDownloads(days: NpmDownloadDay[]): ChartPointLike[] {
+  const today = new Date().toISOString().slice(0, 10);
+  const complete = days.filter((d) => d.day < today);
+  const weeks: ChartPointLike[] = [];
+  for (let i = 0; i + 7 <= complete.length; i += 7) {
+    const slice = complete.slice(i, i + 7);
+    weeks.push({
+      date: slice[0].day,
+      value: slice.reduce((sum, d) => sum + (d.downloads || 0), 0),
+    });
+  }
+  return weeks;
+}
+
+interface ChartPointLike {
+  date: string;
+  value: number;
 }
 
 /**

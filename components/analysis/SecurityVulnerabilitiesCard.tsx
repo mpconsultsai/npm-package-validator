@@ -1,3 +1,6 @@
+import { AdvisoryLinks } from "./AdvisoryLinks";
+import { AdvisoryDescription } from "./AdvisoryDescription";
+
 interface Vulnerability {
   title: string;
   severity: string;
@@ -12,12 +15,16 @@ interface SecurityVulnerabilitiesCardProps {
   vulnerabilities: Vulnerability[];
   securityFilter: string | null;
   onClose: () => void;
+  packageName?: string;
+  version?: string;
 }
 
 export function SecurityVulnerabilitiesCard({
   vulnerabilities,
   securityFilter,
   onClose,
+  packageName,
+  version,
 }: SecurityVulnerabilitiesCardProps) {
   const filtered = securityFilter
     ? vulnerabilities.filter((v) => v.severity === securityFilter)
@@ -85,10 +92,8 @@ export function SecurityVulnerabilitiesCard({
                 {vuln.severity.toUpperCase()}
               </span>
             </div>
-            <p className="text-gray-700 dark:text-gray-300 text-sm mb-3">
-              {vuln.description}
-            </p>
-            <div className="flex flex-wrap gap-2 text-sm text-gray-600 dark:text-gray-400">
+            <AdvisoryDescription markdown={vuln.description} />
+            <div className="flex flex-wrap gap-2 text-sm text-gray-600 dark:text-gray-400 mt-2">
               <span>
                 <strong>ID:</strong> {vuln.id}
               </span>
@@ -103,16 +108,13 @@ export function SecurityVulnerabilitiesCard({
                 </span>
               )}
             </div>
-            {vuln.url && (
-              <a
-                href={vuln.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block mt-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-sm underline"
-              >
-                View Advisory →
-              </a>
-            )}
+            {vuln.url || packageName ? (
+              <AdvisoryLinks
+                githubUrl={vuln.url}
+                packageName={packageName}
+                version={version}
+              />
+            ) : null}
           </div>
         ))}
       </div>

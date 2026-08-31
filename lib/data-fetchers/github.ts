@@ -117,6 +117,194 @@ export async function fetchGitHubReleases(
   }
 }
 
+export interface ChartPoint {
+  date: string;
+  value: number;
+}
+
+function utcToday(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function utcYesterday(): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+class GitHubSearchRateLimitError extends Error {
+  constructor() {
+    super("GITHUB_SEARCH_RATE_LIMIT");
+    this.name = "GitHubSearchRateLimitError";
+  }
+}
+
+async function searchIssueCount(q: string): Promise<number | null> {
+  try {
+    const response = await axios.get(`${GITHUB_API_URL}/search/issues`, {
+      headers: getGitHubHeaders(),
+      params: { q, per_page: 1 },
+      timeout: 8000,
+    });
+    const count = response.data?.total_count;
+    return typeof count === "number" ? count : 0;
+  } catch (error: unknown) {
+    const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+    if (status === 403 || status === 429) {
+      throw new GitHubSearchRateLimitError();
+    }
+    return null;
+  }
+}
+
+const openIssueCache = new Map<string, { expires: number; points: ChartPoint[] }>();
+const openIssueInflight = new Map<string, Promise<ChartPoint[]>>();
+const OPEN_ISSUE_CACHE_MS = 30 * 60 * 1000;
+const OPEN_ISSUE_CACHE_MAX = 50;
+const GITHUB_GRAPHQL_URL = "https://api.github.com/graphql";
+
+function pruneOpenIssueCache() {
+  const now = Date.now();
+  for (const [key, entry] of openIssueCache) {
+    if (entry.expires <= now) openIssueCache.delete(key);
+  }
+  while (openIssueCache.size > OPEN_ISSUE_CACHE_MAX) {
+    const oldest = openIssueCache.keys().next().value;
+    if (!oldest) break;
+    openIssueCache.delete(oldest);
+  }
+}
+
+function isSafeGitHubName(value: string): boolean {
+  return /^[A-Za-z0-9._-]+$/.test(value);
+}
+
+function issueSnapshotDates(): string[] {
+  const today = utcToday();
+  const yesterday = utcYesterday();
+  const now = new Date();
+  const asOfDates: string[] = [];
+
+  for (let i = 11; i >= 0; i--) {
+    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i + 1, 0));
+    const endIso = end.toISOString().slice(0, 10);
+    asOfDates.push(endIso < today ? endIso : yesterday);
+  }
+
+  return [...new Set(asOfDates)].sort((a, b) => a.localeCompare(b));
+}
+
+async function fetchOpenIssueCountsGraphQL(
+  owner: string,
+  repo: string,
+  dates: string[]
+): Promise<ChartPoint[] | null> {
+  const fields = dates.flatMap((date, i) => [
+    `c${i}: search(query: ${JSON.stringify(`repo:${owner}/${repo} is:issue created:<=${date}`)}, type: ISSUE, first: 1) { issueCount }`,
+    `x${i}: search(query: ${JSON.stringify(`repo:${owner}/${repo} is:issue is:closed closed:<=${date}`)}, type: ISSUE, first: 1) { issueCount }`,
+  ]);
+
+  try {
+    const response = await axios.post(
+      GITHUB_GRAPHQL_URL,
+      { query: `query { ${fields.join("\n")} }` },
+      {
+        headers: {
+          ...getGitHubHeaders(),
+          Accept: "application/json",
+        },
+        timeout: 15000,
+      },
+    );
+
+    if (response.data?.errors?.length) {
+      return null;
+    }
+
+    const data = response.data?.data;
+    if (!data) return null;
+
+    return dates.map((date, i) => {
+      const created = data[`c${i}`]?.issueCount;
+      const closed = data[`x${i}`]?.issueCount;
+      return {
+        date,
+        value: Math.max(0, (created ?? 0) - (closed ?? 0)),
+      };
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function fetchOpenIssuesUncached(
+  owner: string,
+  repo: string
+): Promise<ChartPoint[]> {
+  const dates = issueSnapshotDates();
+  const fromGraphql = await fetchOpenIssueCountsGraphQL(owner, repo, dates);
+  if (fromGraphql?.length) return fromGraphql;
+
+  const points: ChartPoint[] = [];
+  try {
+    for (const asOf of [...dates].reverse()) {
+      const [created, closed] = await Promise.all([
+        searchIssueCount(`repo:${owner}/${repo} is:issue created:<=${asOf}`),
+        searchIssueCount(
+          `repo:${owner}/${repo} is:issue is:closed closed:<=${asOf}`,
+        ),
+      ]);
+      if (created === null || closed === null) continue;
+      points.push({ date: asOf, value: Math.max(0, created - closed) });
+    }
+  } catch (error) {
+    if (!(error instanceof GitHubSearchRateLimitError)) {
+      throw error;
+    }
+  }
+
+  return points.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * Open issue count at the end of each of the last 12 months.
+ * Current month is as-of yesterday (today's counts are incomplete).
+ */
+export async function fetchOpenIssuesByMonth(
+  owner: string,
+  repo: string
+): Promise<ChartPoint[]> {
+  if (!isSafeGitHubName(owner) || !isSafeGitHubName(repo)) return [];
+
+  const cacheKey = `v3:${owner}/${repo}`.toLowerCase();
+  pruneOpenIssueCache();
+  const cached = openIssueCache.get(cacheKey);
+  if (cached && cached.expires > Date.now()) {
+    return cached.points;
+  }
+
+  const inflight = openIssueInflight.get(cacheKey);
+  if (inflight) return inflight;
+
+  const pending = fetchOpenIssuesUncached(owner, repo)
+    .then((points) => {
+      if (points.length) {
+        pruneOpenIssueCache();
+        openIssueCache.set(cacheKey, {
+          expires: Date.now() + OPEN_ISSUE_CACHE_MS,
+          points,
+        });
+      }
+      return points;
+    })
+    .finally(() => {
+      openIssueInflight.delete(cacheKey);
+    });
+
+  openIssueInflight.set(cacheKey, pending);
+  return pending;
+}
+
 /**
  * Get GitHub data from repository URL
  */

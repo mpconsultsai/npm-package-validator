@@ -1,5 +1,11 @@
+export { AnalysisTabs } from "./AnalysisTabs";
+export type { AnalysisTabId } from "./AnalysisTabs";
+export { OverviewTabs } from "./OverviewTabs";
+export type { OverviewTabId } from "./OverviewTabs";
+export { AdvisoryLinks } from "./AdvisoryLinks";
 export { PackageInfoCard } from "./PackageInfoCard";
 export { MetricsCard } from "./MetricsCard";
+export { MetricsChartsCard } from "./MetricsChartsCard";
 export { SecurityVulnerabilitiesCard } from "./SecurityVulnerabilitiesCard";
 export { VersionCheckCard } from "./VersionCheckCard";
 export { AIAnalysisCard } from "./AIAnalysisCard";

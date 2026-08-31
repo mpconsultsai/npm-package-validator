@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import semver from "semver";
 import { extractPackageName } from "@/lib/validation";
@@ -10,56 +10,109 @@ import { InfoCards } from "@/components/InfoCards";
 import {
   PackageInfoCard,
   MetricsCard,
+  MetricsChartsCard,
   SecurityVulnerabilitiesCard,
   VersionCheckCard,
   AIAnalysisCard,
   SimilarPackagesCard,
+  AnalysisTabs,
+  OverviewTabs,
+  type AnalysisTabId,
+  type OverviewTabId,
 } from "@/components/analysis";
 
 export default function PackagePage() {
   const params = useParams();
-  const router = useRouter();
   const nameFromPath = params.name
     ? decodeURIComponent(String(params.name))
     : "";
 
-  const [packageName, setPackageName] = useState("");
-  const [loading, setLoading] = useState(false);
+  return (
+    <PackagePageContent key={nameFromPath} nameFromPath={nameFromPath} />
+  );
+}
+
+function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
+  const router = useRouter();
+  const [packageName, setPackageName] = useState(nameFromPath);
+  const [loading, setLoading] = useState(Boolean(nameFromPath));
   const [analysisData, setAnalysisData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [securityFilter, setSecurityFilter] = useState<string | null>(null);
   const [versionToCheck, setVersionToCheck] = useState("");
   const [versionSecurityData, setVersionSecurityData] = useState<any>(null);
   const [versionSecurityLoading, setVersionSecurityLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<AnalysisTabId>("ai");
+  const [overviewTab, setOverviewTab] = useState<OverviewTabId>("info");
+  const [chartsOpened, setChartsOpened] = useState(false);
+  const [relatedOpened, setRelatedOpened] = useState(false);
+  const [versionPanelKey, setVersionPanelKey] = useState(0);
+  const versionCheckRequestId = useRef(0);
+  const versionCheckAbort = useRef<AbortController | null>(null);
+
+  const resetVersionCheck = () => {
+    versionCheckRequestId.current += 1;
+    versionCheckAbort.current?.abort();
+    setVersionToCheck("");
+    setVersionSecurityData(null);
+    setVersionSecurityLoading(false);
+    setVersionPanelKey((key) => key + 1);
+  };
+
+  const handleTabChange = (tab: AnalysisTabId) => {
+    if (tab === "related") setRelatedOpened(true);
+    resetVersionCheck();
+    setActiveTab(tab);
+  };
+
+  useEffect(() => {
+    return () => {
+      versionCheckAbort.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     if (!nameFromPath) return;
-    setPackageName(nameFromPath);
-    setLoading(true);
-    setError(null);
-    setAnalysisData(null);
-    setSecurityFilter(null);
-    setVersionSecurityData(null);
-    setVersionToCheck("");
+
+    const controller = new AbortController();
 
     async function run() {
       try {
         const res = await fetch(
           `/api/analyze-ai?package=${encodeURIComponent(nameFromPath)}`,
+          { signal: controller.signal },
         );
         const data = await res.json();
+        if (controller.signal.aborted) return;
         if (res.ok) setAnalysisData(data);
         else setError(data.error || "Failed to analyse package");
-      } catch (err: any) {
-        setError(
-          err.message || "An error occurred while analysing the package",
-        );
+      } catch (err: unknown) {
+        if (controller.signal.aborted) return;
+        const message =
+          err instanceof Error
+            ? err.message
+            : "An error occurred while analysing the package";
+        setError(message);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
     run();
+    return () => {
+      controller.abort();
+    };
   }, [nameFromPath]);
+
+  useEffect(() => {
+    const name = analysisData?.packageInfo?.name;
+    if (!name) return;
+    const controller = new AbortController();
+    fetch(
+      `/api/package-charts?package=${encodeURIComponent(name)}&series=issues`,
+      { signal: controller.signal },
+    ).catch(() => {});
+    return () => controller.abort();
+  }, [analysisData?.packageInfo?.name]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,20 +123,32 @@ export default function PackagePage() {
 
   const handleVersionSecurityCheck = async () => {
     if (!analysisData?.packageInfo?.name || !versionToCheck.trim()) return;
+    const requestId = ++versionCheckRequestId.current;
+    versionCheckAbort.current?.abort();
+    const controller = new AbortController();
+    versionCheckAbort.current = controller;
     setVersionSecurityLoading(true);
     setVersionSecurityData(null);
     try {
       const response = await fetch(
         `/api/security-check?package=${encodeURIComponent(analysisData.packageInfo.name)}&version=${encodeURIComponent(versionToCheck.trim())}`,
+        { signal: controller.signal },
       );
       const data = await response.json();
+      if (requestId !== versionCheckRequestId.current) return;
       if (!response.ok)
         throw new Error(data.error || "Failed to check security");
       setVersionSecurityData(data);
-    } catch (err: any) {
-      setVersionSecurityData({ error: err.message });
+    } catch (err: unknown) {
+      if (controller.signal.aborted) return;
+      if (requestId !== versionCheckRequestId.current) return;
+      const message =
+        err instanceof Error ? err.message : "Failed to check security";
+      setVersionSecurityData({ error: message });
     } finally {
-      setVersionSecurityLoading(false);
+      if (requestId === versionCheckRequestId.current) {
+        setVersionSecurityLoading(false);
+      }
     }
   };
 
@@ -115,32 +180,76 @@ export default function PackagePage() {
 
           {analysisData && (
             <div className="space-y-6 mb-8">
-              {analysisData.packageInfo && (
+              <OverviewTabs
+                active={overviewTab}
+                onChange={(tab) => {
+                  if (tab === "charts") setChartsOpened(true);
+                  setOverviewTab(tab);
+                }}
+              />
+
+              {overviewTab === "info" && analysisData.packageInfo && (
                 <PackageInfoCard packageInfo={analysisData.packageInfo} />
               )}
 
-              {analysisData.metrics && (
+              {overviewTab === "metrics" && analysisData.metrics && (
                 <MetricsCard
                   metrics={analysisData.metrics}
                   security={analysisData.security}
                   securityFilter={securityFilter}
-                  onSecurityFilterChange={setSecurityFilter}
+                  onSecurityFilterChange={(filter) => {
+                    setSecurityFilter(filter);
+                    if (filter) setActiveTab("ai");
+                  }}
                   packageName={analysisData.packageInfo?.name}
                 />
               )}
 
-              {analysisData.security?.vulnerabilities?.length > 0 &&
-                securityFilter && (
-                  <SecurityVulnerabilitiesCard
-                    vulnerabilities={analysisData.security.vulnerabilities}
-                    securityFilter={securityFilter}
-                    onClose={() => setSecurityFilter(null)}
+              {chartsOpened && analysisData.packageInfo && (
+                <div hidden={overviewTab !== "charts"}>
+                  <MetricsChartsCard
+                    packageName={analysisData.packageInfo.name}
                   />
-                )}
+                </div>
+              )}
 
-              {analysisData.packageInfo &&
+              <AnalysisTabs
+                active={activeTab}
+                onChange={handleTabChange}
+                versionAvailable={availableVersions.length > 0}
+                aiModel={analysisData.ai?.model}
+              />
+
+              {activeTab === "ai" && (
+                <div className="space-y-6">
+                  {analysisData.security?.vulnerabilities?.length > 0 &&
+                    securityFilter && (
+                      <SecurityVulnerabilitiesCard
+                        vulnerabilities={analysisData.security.vulnerabilities}
+                        securityFilter={securityFilter}
+                        onClose={() => setSecurityFilter(null)}
+                        packageName={analysisData.packageInfo?.name}
+                        version={analysisData.packageInfo?.latestVersion}
+                      />
+                    )}
+
+                  {analysisData.ai ? (
+                    <AIAnalysisCard ai={analysisData.ai} />
+                  ) : (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+                      <p className="text-gray-600 dark:text-gray-400">
+                        AI analysis is not available for this package.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === "version" &&
+                analysisData.packageInfo &&
                 availableVersions.length > 0 && (
                   <VersionCheckCard
+                    key={versionPanelKey}
                     packageName={analysisData.packageInfo.name}
                     latestVersion={analysisData.packageInfo.latestVersion}
                     availableVersions={availableVersions}
@@ -152,14 +261,14 @@ export default function PackagePage() {
                   />
                 )}
 
-              {analysisData.ai && (
-                <AIAnalysisCard ai={analysisData.ai} />
+              {relatedOpened && (
+                <div hidden={activeTab !== "related"}>
+                  <SimilarPackagesCard
+                    packageName={analysisData.packageInfo?.name ?? nameFromPath}
+                    keywords={analysisData.npm?.keywords}
+                  />
+                </div>
               )}
-
-              <SimilarPackagesCard
-                packageName={analysisData.packageInfo?.name ?? nameFromPath}
-                keywords={analysisData.npm?.keywords}
-              />
             </div>
           )}
 
