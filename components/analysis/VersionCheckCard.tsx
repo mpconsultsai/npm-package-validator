@@ -1,5 +1,10 @@
 import { AdvisoryLinks } from "./AdvisoryLinks";
 import { AdvisoryDescription } from "./AdvisoryDescription";
+import {
+  severityBadgeClass,
+  severityBorderClass,
+  sortBySeverity,
+} from "@/lib/utils/severity";
 
 interface VersionVuln {
   id?: string;
@@ -47,6 +52,9 @@ export function VersionCheckCard({
   versionSecurityData,
 }: VersionCheckCardProps) {
   const hasSecurity = versionSecurityData?.security && !versionSecurityData?.error;
+  const sortedVulns = hasSecurity
+    ? sortBySeverity(versionSecurityData.security!.vulnerabilities)
+    : [];
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
@@ -128,24 +136,15 @@ export function VersionCheckCard({
                 )}
               </div>
               <div className="space-y-3 mt-4">
-                {versionSecurityData.security!.vulnerabilities.map(
-                  (vuln: VersionVuln, idx: number) => (
+                {sortedVulns.map((vuln, idx) => (
                     <div
-                      key={idx}
-                      className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border-l-4 border-red-500"
+                      key={vuln.id ?? idx}
+                      className={`bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border-l-4 ${severityBorderClass(vuln.severity)}`}
                     >
                       <div className="flex items-start justify-between">
                         <h4 className="font-semibold">{vuln.title}</h4>
                         <span
-                          className={`px-2 py-0.5 rounded text-xs font-medium text-white ${
-                            vuln.severity === "critical"
-                              ? "bg-purple-500"
-                              : vuln.severity === "high"
-                                ? "bg-red-500"
-                                : vuln.severity === "moderate"
-                                  ? "bg-orange-500"
-                                  : "bg-yellow-500"
-                          }`}
+                          className={`px-2 py-0.5 rounded text-xs font-medium text-white ${severityBadgeClass(vuln.severity)}`}
                         >
                           {vuln.severity}
                         </span>
@@ -176,8 +175,7 @@ export function VersionCheckCard({
                         version={versionToCheck}
                       />
                     </div>
-                  ),
-                )}
+                ))}
               </div>
             </div>
           ) : (

@@ -1,5 +1,10 @@
 import { AdvisoryLinks } from "./AdvisoryLinks";
 import { AdvisoryDescription } from "./AdvisoryDescription";
+import {
+  severityBadgeClass,
+  severityBorderClass,
+  sortBySeverity,
+} from "@/lib/utils/severity";
 
 interface Vulnerability {
   title: string;
@@ -26,9 +31,11 @@ export function SecurityVulnerabilitiesCard({
   packageName,
   version,
 }: SecurityVulnerabilitiesCardProps) {
-  const filtered = securityFilter
-    ? vulnerabilities.filter((v) => v.severity === securityFilter)
-    : vulnerabilities;
+  const filtered = sortBySeverity(
+    securityFilter
+      ? vulnerabilities.filter((v) => v.severity === securityFilter)
+      : vulnerabilities,
+  );
 
   return (
     <div className="bg-red-50 dark:bg-red-900/20 rounded-lg shadow-lg p-6 border-2 border-red-200 dark:border-red-800 relative">
@@ -73,21 +80,13 @@ export function SecurityVulnerabilitiesCard({
       <div className="space-y-4">
         {filtered.map((vuln, idx) => (
           <div
-            key={idx}
-            className="bg-white dark:bg-gray-800 rounded-lg p-4 border-l-4 border-red-500"
+            key={vuln.id || idx}
+            className={`bg-white dark:bg-gray-800 rounded-lg p-4 border-l-4 ${severityBorderClass(vuln.severity)}`}
           >
             <div className="flex items-start justify-between mb-2">
               <h3 className="font-semibold text-lg">{vuln.title}</h3>
               <span
-                className={`px-3 py-1 rounded-full text-xs font-semibold text-white ${
-                  vuln.severity === "critical"
-                    ? "bg-purple-500"
-                    : vuln.severity === "high"
-                      ? "bg-red-500"
-                      : vuln.severity === "moderate"
-                        ? "bg-orange-500"
-                        : "bg-yellow-500"
-                }`}
+                className={`px-3 py-1 rounded-full text-xs font-semibold text-white ${severityBadgeClass(vuln.severity)}`}
               >
                 {vuln.severity.toUpperCase()}
               </span>
