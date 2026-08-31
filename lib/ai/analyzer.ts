@@ -144,6 +144,9 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
   prompt += `Version: ${npm?.version || 'Unknown'}\n`;
   prompt += `License: ${npm?.license || 'Unknown'}\n`;
   prompt += `Description: ${npm?.description || 'No description'}\n`;
+  if (npm?.keywords?.length) {
+    prompt += `Keywords: ${npm.keywords.slice(0, 12).join(', ')}\n`;
+  }
   prompt += `npm URL: https://www.npmjs.com/package/${packageName}\n`;
 
   if (daysSincePublish !== null && daysSincePublish >= 0) {
@@ -201,6 +204,7 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
     prompt += `README Content (first 3000 characters):\n`;
     prompt += `${readme}\n\n`;
     prompt += `⚠️ CRITICAL: Check the README above for:\n`;
+    prompt += `- What the package is, who it is for, and how it is typically used\n`;
     prompt += `- Deprecation notices (e.g. "no longer maintained", "deprecated", "unmaintained")\n`;
     prompt += `- Migration warnings (e.g. "please use X instead", "consider switching to Y")\n`;
     prompt += `- Abandonment notices (e.g. "this project is archived", "not actively developed")\n`;
@@ -219,7 +223,12 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
   prompt += `- Maintenance rating: excellent if published within ~90 days or widely adopted with recent commits; good up to ~6 months (or longer if widely adopted and secure); fair/poor only for genuine inactivity.\n\n`;
   
   prompt += `Based on this data, provide:\n`;
-  prompt += `1. A brief summary (2-3 sentences). Only mention staleness or abandonment if the maintenance interpretation above says so.\n`;
+  prompt += `1. A summary (3-4 sentences) that explains the package itself, not a scorecard.\n`;
+  prompt += `   Sentence 1: what it is (library, CLI, plugin, framework) and the problem it solves.\n`;
+  prompt += `   Sentence 2: who it is for and how you would use it (e.g. import React icon components, tree-shake icons in a UI).\n`;
+  prompt += `   Remaining sentences: notable capabilities or how it fits the ecosystem. Draw this from the description, keywords, and README.\n`;
+  prompt += `   Do not lead with popularity, download counts, "zero vulnerabilities", npm scores, or how recently it was published. Those belong in strengths, scores, or reasoning.\n`;
+  prompt += `   Only mention staleness or abandonment if the maintenance interpretation above says so.\n`;
   prompt += `2. Overall recommendation: "recommended", "use-with-caution", or "not-recommended"\n`;
   prompt += `3. Key strengths (array of 3-5 strings)\n`;
   prompt += `4. Any concerns (array of 2-4 strings, or ["None"] if no real concerns)\n`;
@@ -336,9 +345,10 @@ export async function analyzePackageWithAI(
 ): Promise<AIPackageAnalysis> {
   const prompt = createAnalysisPrompt(data);
 
-  const systemPrompt = 'You are an expert software engineer specialising in npm package evaluation. ' +
-    'You analyse packages based on security, quality, adoption, and true maintenance risk. ' +
-    'A few weeks or months since the last npm publish is normal — especially for widely used libraries — and is not a reason to recommend caution. ' +
+  const systemPrompt = 'You are an expert software engineer helping another developer decide whether to use an npm package. ' +
+    'The summary must explain what the package is and what it is for, using the description and README, before any quality judgement. ' +
+    'Do not write a metrics recap in the summary (downloads, stars, "zero vulnerabilities", publish recency). ' +
+    'A few weeks or months since the last npm publish is normal for widely used libraries and is not a reason to recommend caution. ' +
     'Provide honest, balanced assessments. Always respond in valid JSON format.';
 
   const fullPrompt = `${systemPrompt}\n\n${prompt}`;
