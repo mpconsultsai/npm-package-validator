@@ -240,9 +240,25 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
   prompt += `  "maintenanceRating": "excellent|good|fair|poor",\n`;
   prompt += `  "reasoning": "string"\n`;
   prompt += `}\n\n`;
-  prompt += `Do not include any text outside the JSON object.`;
+  prompt += `Do not include any text outside the JSON object. Use normal ASCII spaces and hyphens (e.g. "well-maintained"), never join words.`;
 
   return prompt;
+}
+
+function normalizeAiPunctuation(text: string): string {
+  return text
+    .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\s*[\u2013\u2014\u2015]\s*/g, ' - ')
+    .replace(/[\u2010\u2011\u2212\uFE58\uFE63\uFF0D]/g, '-')
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+    .replace(/\u2026/g, '...')
+    .replace(/ {2,}/g, ' ');
+}
+
+function normalizeAiString(value: unknown): string {
+  return typeof value === 'string' ? normalizeAiPunctuation(value).trim() : '';
 }
 
 /**
@@ -262,28 +278,29 @@ function parseAIResponse(response: string): AIPackageAnalysis {
     let jsonString = jsonMatch[0];
     
     // Clean up common JSON issues from AI responses
-    // Fix trailing commas before closing brackets/braces
     jsonString = jsonString.replace(/,(\s*[\]}])/g, '$1');
-    // Remove invalid characters (non-ASCII punctuation that might slip in)
-    jsonString = jsonString.replace(/[^\x00-\x7F]/g, '');
+    jsonString = normalizeAiPunctuation(jsonString);
     
     const parsed = JSON.parse(jsonString);
     
-    // Ensure arrays are properly formatted
     const strengths = Array.isArray(parsed.strengths) 
-      ? parsed.strengths.filter((s: any) => s && typeof s === 'string')
-      : (parsed.strengths && typeof parsed.strengths === 'string' 
-        ? [parsed.strengths] 
+      ? parsed.strengths
+          .map((s: unknown) => normalizeAiString(s))
+          .filter(Boolean)
+      : (parsed.strengths
+        ? [normalizeAiString(parsed.strengths)].filter(Boolean)
         : []);
     
     const concerns = Array.isArray(parsed.concerns) 
-      ? parsed.concerns.filter((c: any) => c && typeof c === 'string')
-      : (parsed.concerns && typeof parsed.concerns === 'string' 
-        ? [parsed.concerns] 
+      ? parsed.concerns
+          .map((c: unknown) => normalizeAiString(c))
+          .filter(Boolean)
+      : (parsed.concerns
+        ? [normalizeAiString(parsed.concerns)].filter(Boolean)
         : []);
 
     return {
-      summary: parsed.summary || '',
+      summary: normalizeAiString(parsed.summary),
       recommendation: parsed.recommendation || 'use-with-caution',
       strengths: strengths.length > 0 ? strengths : ['Unable to identify specific strengths from data'],
       concerns: concerns.length > 0 ? concerns : ['Unable to identify specific concerns from data'],
@@ -291,7 +308,7 @@ function parseAIResponse(response: string): AIPackageAnalysis {
       securityRating: parsed.securityRating || 'fair',
       qualityRating: parsed.qualityRating || 'fair',
       maintenanceRating: parsed.maintenanceRating || 'fair',
-      reasoning: parsed.reasoning || parsed.summary || 'Analysis based on package metrics',
+      reasoning: normalizeAiString(parsed.reasoning) || normalizeAiString(parsed.summary) || 'Analysis based on package metrics',
     };
   } catch (error) {
     console.error('Failed to parse AI response:', error);
