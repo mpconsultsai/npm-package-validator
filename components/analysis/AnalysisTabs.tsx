@@ -1,4 +1,9 @@
 import type { ReactNode } from "react";
+import {
+  SecuritySeverityBadges,
+  hasHighRiskSecurityIssues,
+  type SecurityCountSummary,
+} from "./SecuritySeverityBadges";
 
 export type AnalysisTabId = "ai" | "version" | "related";
 
@@ -7,6 +12,7 @@ interface AnalysisTabsProps {
   onChange: (tab: AnalysisTabId) => void;
   versionAvailable: boolean;
   aiModel?: string;
+  security?: SecurityCountSummary | null;
 }
 
 function TabIconSpark() {
@@ -71,6 +77,7 @@ export function AnalysisTabs({
   onChange,
   versionAvailable,
   aiModel,
+  security,
 }: AnalysisTabsProps) {
   const tabs: {
     id: AnalysisTabId;
@@ -102,6 +109,8 @@ export function AnalysisTabs({
     >
       {tabs.map((tab) => {
         const selected = active === tab.id;
+        const showSecurity = tab.id === "ai";
+        const highRisk = showSecurity && hasHighRiskSecurityIssues(security);
         return (
           <button
             key={tab.id}
@@ -110,21 +119,26 @@ export function AnalysisTabs({
             aria-selected={selected}
             disabled={tab.disabled}
             onClick={() => onChange(tab.id)}
-            className={`flex-1 min-w-0 inline-flex items-center justify-center gap-2 px-2 sm:px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+            className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 px-2 sm:px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
               selected
                 ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-            } disabled:opacity-40 disabled:cursor-not-allowed`}
+            } disabled:opacity-40 disabled:cursor-not-allowed ${
+              highRisk && !selected ? "ring-2 ring-red-400/70 dark:ring-red-500/60" : ""
+            }`}
           >
             {tab.icon}
-            <span className="truncate">
+            <span className="min-w-0 truncate">
               {tab.label}
               {tab.detail && (
-                <span className="font-normal text-xs opacity-70 ml-1.5 hidden md:inline">
+                <span className="font-normal text-xs opacity-70 ml-1.5 hidden lg:inline">
                   {tab.detail}
                 </span>
               )}
             </span>
+            {showSecurity && (
+              <SecuritySeverityBadges security={security} size="tab" />
+            )}
           </button>
         );
       })}

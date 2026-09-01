@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { extractPackageName } from "@/lib/validation";
 import { PageHeader } from "@/components/PageHeader";
 import { PackageSearchForm } from "@/components/PackageSearchForm";
 import { InfoCards } from "@/components/InfoCards";
@@ -11,10 +10,7 @@ export default function Home() {
   const [packageName, setPackageName] = useState("");
   const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const name = extractPackageName(packageName);
-    if (!name) return;
+  const handleSearch = (name: string) => {
     router.push("/package/" + encodeURIComponent(name));
   };
 
@@ -26,7 +22,7 @@ export default function Home() {
           <PackageSearchForm
             value={packageName}
             onChange={setPackageName}
-            onSubmit={handleSubmit}
+            onSearch={handleSearch}
           />
           <InfoCards />
         </div>

@@ -23,6 +23,42 @@ interface MetricsCardProps {
   packageName?: string;
 }
 
+const SEVERITY_LEVELS = [
+  {
+    key: "critical" as const,
+    label: "Critical",
+    activeClass: "bg-purple-500 ring-2 ring-purple-400",
+    inactiveClass: "bg-purple-400 hover:bg-purple-500",
+  },
+  {
+    key: "high" as const,
+    label: "High",
+    activeClass: "bg-red-500 ring-2 ring-red-400",
+    inactiveClass: "bg-red-400 hover:bg-red-500",
+  },
+  {
+    key: "moderate" as const,
+    label: "Moderate",
+    activeClass: "bg-orange-500 ring-2 ring-orange-400",
+    inactiveClass: "bg-orange-400 hover:bg-orange-500",
+  },
+  {
+    key: "low" as const,
+    label: "Low",
+    activeClass: "bg-yellow-500 ring-2 ring-yellow-400",
+    inactiveClass: "bg-yellow-400 hover:bg-yellow-500",
+  },
+];
+
+function severityCount(
+  security: SecuritySummary | null | undefined,
+  key: (typeof SEVERITY_LEVELS)[number]["key"],
+): number {
+  const value = security?.[key];
+  const count = Number(value);
+  return Number.isFinite(count) && count > 0 ? count : 0;
+}
+
 export function MetricsCard({
   metrics,
   security,
@@ -30,6 +66,11 @@ export function MetricsCard({
   onSecurityFilterChange,
   packageName,
 }: MetricsCardProps) {
+  const visibleSeverities = SEVERITY_LEVELS.map((level) => ({
+    ...level,
+    count: severityCount(security, level.key),
+  })).filter((level) => level.count > 0);
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -75,92 +116,45 @@ export function MetricsCard({
             </p>
           </div>
         )}
-        <div className="col-span-2 md:col-span-4">
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-            Security Issues
-          </p>
-          {metrics.securityIssues === 0 ? (
-            <p className="text-2xl font-bold text-green-500">None</p>
-          ) : (
+        {visibleSeverities.length > 0 && (
+          <div className="col-span-2 md:col-span-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              Security Issues
+            </p>
             <div className="flex gap-2 flex-wrap">
-              {security?.critical && security.critical > 0 && (
+              {visibleSeverities.map((level) => (
                 <button
-                  onClick={() => onSecurityFilterChange("critical")}
+                  key={level.key}
+                  type="button"
+                  onClick={() => onSecurityFilterChange(level.key)}
                   className={`flex items-center gap-1 px-3 py-1 rounded-lg transition-all ${
-                    securityFilter === "critical"
-                      ? "bg-purple-500 ring-2 ring-purple-400"
-                      : "bg-purple-400 hover:bg-purple-500"
+                    securityFilter === level.key
+                      ? level.activeClass
+                      : level.inactiveClass
                   }`}
                 >
                   <span className="text-xs font-medium text-white">
-                    Critical
+                    {level.label}
                   </span>
                   <span className="text-lg font-bold text-white">
-                    {security.critical}
+                    {level.count}
                   </span>
                 </button>
-              )}
-              {security?.high && security.high > 0 && (
-                <button
-                  onClick={() => onSecurityFilterChange("high")}
-                  className={`flex items-center gap-1 px-3 py-1 rounded-lg transition-all ${
-                    securityFilter === "high"
-                      ? "bg-red-500 ring-2 ring-red-400"
-                      : "bg-red-400 hover:bg-red-500"
-                  }`}
-                >
-                  <span className="text-xs font-medium text-white">High</span>
-                  <span className="text-lg font-bold text-white">
-                    {security.high}
-                  </span>
-                </button>
-              )}
-              {security?.moderate && security.moderate > 0 && (
-                <button
-                  onClick={() => onSecurityFilterChange("moderate")}
-                  className={`flex items-center gap-1 px-3 py-1 rounded-lg transition-all ${
-                    securityFilter === "moderate"
-                      ? "bg-orange-500 ring-2 ring-orange-400"
-                      : "bg-orange-400 hover:bg-orange-500"
-                  }`}
-                >
-                  <span className="text-xs font-medium text-white">
-                    Moderate
-                  </span>
-                  <span className="text-lg font-bold text-white">
-                    {security.moderate}
-                  </span>
-                </button>
-              )}
-              {security?.low && security.low > 0 && (
-                <button
-                  onClick={() => onSecurityFilterChange("low")}
-                  className={`flex items-center gap-1 px-3 py-1 rounded-lg transition-all ${
-                    securityFilter === "low"
-                      ? "bg-yellow-500 ring-2 ring-yellow-400"
-                      : "bg-yellow-400 hover:bg-yellow-500"
-                  }`}
-                >
-                  <span className="text-xs font-medium text-white">Low</span>
-                  <span className="text-lg font-bold text-white">
-                    {security.low}
-                  </span>
-                </button>
-              )}
+              ))}
             </div>
-          )}
-          {packageName && (
-            <a
-              href={snykPackageUrl(packageName)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 mt-2 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline"
-            >
-              <SnykIcon className="w-5 h-5 shrink-0" />
-              View on Snyk
-            </a>
-          )}
-        </div>
+            {packageName && (
+              <a
+                href={snykPackageUrl(packageName)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 mt-2 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline"
+              >
+                <SnykIcon className="w-5 h-5 shrink-0" />
+                View on Snyk
+              </a>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

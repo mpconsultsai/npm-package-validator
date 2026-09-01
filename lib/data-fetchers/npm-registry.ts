@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { sanitizeDescription } from '../sanitize';
+import { extractPackageName, validatePackageName } from '../validation';
 import type { NpmPackageData, NpmDownloadStats } from '../types/package-data';
 
 const NPM_REGISTRY_URL = 'https://registry.npmjs.org';
@@ -93,8 +94,212 @@ interface ChartPointLike {
   value: number;
 }
 
+export interface NpmSearchResult {
+  name: string;
+  description: string;
+  version: string;
+  score?: number;
+}
+
+/** Well-known packages probed for prefix completion when npm search omits them. */
+const WELL_KNOWN_PACKAGES = [
+  'angular',
+  'react',
+  'react-dom',
+  'vue',
+  'lodash',
+  'express',
+  'next',
+  'typescript',
+  'axios',
+  'webpack',
+  'eslint',
+  'rxjs',
+  'jquery',
+  'prettier',
+  'vite',
+  'tailwindcss',
+  'commander',
+  'chalk',
+  'mongoose',
+  'nodemon',
+  '@angular/core',
+  '@types/node',
+  '@types/react',
+];
+
+async function fetchRegistryLatestPackage(
+  name: string,
+): Promise<NpmSearchResult | null> {
+  try {
+    const response = await axios.get(
+      `${NPM_REGISTRY_URL}/${encodeURIComponent(name)}/latest`,
+      {
+        timeout: 4000,
+        validateStatus: (status) => status === 200 || status === 404,
+      },
+    );
+    if (response.status === 404) return null;
+
+    const data = response.data;
+    return {
+      name: data.name || name,
+      description: sanitizeDescription(data.description) || 'No description',
+      version: data.version || '',
+      score: 1_000_000,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchExactPackageMatch(query: string): Promise<NpmSearchResult | null> {
+  const candidate = extractPackageName(query);
+  if (!validatePackageName(candidate).valid) return null;
+  const pkg = await fetchRegistryLatestPackage(candidate);
+  if (!pkg) return null;
+  return { ...pkg, score: 10_000_000 };
+}
+
+async function fetchWellKnownPrefixMatches(query: string): Promise<NpmSearchResult[]> {
+  const q = query.toLowerCase().trim();
+  if (q.length < 2 || q.startsWith('@')) return [];
+
+  const candidates = WELL_KNOWN_PACKAGES.filter((name) => {
+    const lower = name.toLowerCase();
+    return lower.startsWith(q) && lower !== q;
+  }).slice(0, 6);
+
+  if (candidates.length === 0) return [];
+
+  const results = await Promise.all(
+    candidates.map((name) => fetchRegistryLatestPackage(name)),
+  );
+  return results.filter((r): r is NpmSearchResult => r !== null);
+}
+
+function pinExactNameFirst(
+  results: NpmSearchResult[],
+  query: string,
+): NpmSearchResult[] {
+  const q = query.toLowerCase().trim();
+  const exactIndex = results.findIndex((r) => r.name.toLowerCase() === q);
+  if (exactIndex <= 0) return results;
+  const exact = results[exactIndex];
+  return [
+    exact,
+    ...results.filter((_, index) => index !== exactIndex),
+  ];
+}
+
 /**
- * Fetch package popularity data from npm search API (dependents, npm score)
+ * Sort search results: exact match → unscoped prefix → scoped → contains → npm score.
+ */
+export function sortNpmSearchResults(
+  query: string,
+  results: NpmSearchResult[],
+): NpmSearchResult[] {
+  const q = query.toLowerCase().trim();
+  const queryIsScoped = q.startsWith('@');
+  const qSegment = q.includes('/') ? q.split('/').pop()! : q;
+
+  function rank(name: string): number {
+    const lower = name.toLowerCase();
+    const nameIsScoped = lower.startsWith('@');
+
+    if (lower === q) return 0;
+
+    if (!nameIsScoped && lower.startsWith(q)) return 1;
+
+    if (queryIsScoped) {
+      if (lower.startsWith(q)) return 1;
+      const segment = lower.split('/')[1] ?? '';
+      if (segment.startsWith(qSegment)) return 2;
+    }
+
+    // Unscoped query: rank @angular/* below unscoped "angular" and angular-*
+    if (!queryIsScoped && nameIsScoped) {
+      const [scope, segment] = lower.split('/');
+      if (scope === `@${q}` && segment === q) return 2;
+      if (segment === q) return 3;
+      if (scope === `@${q}`) return 10;
+      if (scope.includes(q)) return 11;
+      return 12;
+    }
+
+    if (nameIsScoped) {
+      const segment = lower.split('/')[1] ?? '';
+      if (segment.startsWith(qSegment)) return 4;
+    }
+
+    if (lower.includes(q)) return 5;
+    return 6;
+  }
+
+  return [...results].sort((a, b) => {
+    const rankDiff = rank(a.name) - rank(b.name);
+    if (rankDiff !== 0) return rankDiff;
+    const scoreDiff = (b.score ?? 0) - (a.score ?? 0);
+    if (Number.isFinite(scoreDiff) && scoreDiff !== 0) return scoreDiff;
+    return a.name.length - b.name.length;
+  });
+}
+
+/**
+ * Search npm registry for packages matching a query (for typeahead).
+ */
+export async function searchNpmPackages(
+  query: string,
+  limit: number = 8,
+): Promise<NpmSearchResult[]> {
+  const text = query.trim();
+  if (text.length < 2) return [];
+
+  try {
+    const [searchResponse, exactMatch, prefixMatches] = await Promise.all([
+      axios.get(`${NPM_REGISTRY_URL}/-/v1/search`, {
+        params: { text, size: Math.max(limit * 3, 30) },
+      }),
+      fetchExactPackageMatch(text),
+      fetchWellKnownPrefixMatches(text),
+    ]);
+    const objects = searchResponse.data?.objects || [];
+    const seen = new Set<string>();
+    const results: NpmSearchResult[] = [];
+
+    for (const match of [exactMatch, ...prefixMatches]) {
+      if (!match) continue;
+      const key = match.name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      results.push(match);
+    }
+
+    for (const entry of objects) {
+      const mapped = {
+        name: entry.package?.name ?? '',
+        description:
+          sanitizeDescription(entry.package?.description) || 'No description',
+        version: entry.package?.version ?? '',
+        score: entry.score?.final ?? 0,
+      };
+      if (!mapped.name || seen.has(mapped.name.toLowerCase())) continue;
+      seen.add(mapped.name.toLowerCase());
+      results.push(mapped);
+    }
+
+    return pinExactNameFirst(
+      sortNpmSearchResults(text, results),
+      text,
+    ).slice(0, limit);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Search failed';
+    console.warn('npm package search failed:', message);
+    return [];
+  }
+}
+
+/**
  * Used to identify well-known packages like react, lodash
  */
 export async function fetchNpmPackagePopularity(packageName: string): Promise<{

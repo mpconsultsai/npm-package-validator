@@ -8,6 +8,7 @@ interface PackageInfo {
   description?: string;
   npmUrl: string;
   daysSinceLastRelease?: number | null;
+  lastReleaseLabel?: string | null;
   dependents?: number;
 }
 
@@ -87,8 +88,9 @@ export function PackageInfoCard({ packageInfo }: PackageInfoCardProps) {
           </p>
         </div>
 
-        {packageInfo.daysSinceLastRelease !== null &&
-          packageInfo.daysSinceLastRelease !== undefined && (
+        {(packageInfo.lastReleaseLabel ||
+          (packageInfo.daysSinceLastRelease !== null &&
+            packageInfo.daysSinceLastRelease !== undefined)) && (
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-2">
                 <svg
@@ -109,7 +111,8 @@ export function PackageInfoCard({ packageInfo }: PackageInfoCardProps) {
                 </span>
               </div>
               <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                {formatDaysSinceRelease(packageInfo.daysSinceLastRelease)}
+                {packageInfo.lastReleaseLabel ??
+                  formatDaysSinceRelease(packageInfo.daysSinceLastRelease!)}
               </p>
             </div>
           )}

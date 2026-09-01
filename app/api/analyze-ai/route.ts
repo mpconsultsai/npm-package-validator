@@ -2,7 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { analyzePackage } from '@/lib/data-fetchers/package-analyzer';
 import { analyzePackageWithAI } from '@/lib/ai/analyzer';
 import { validatePackageName, extractPackageName } from '@/lib/validation';
+import { formatDaysSinceRelease } from '@/lib/utils/format';
 import type { PackageAnalysisResult } from '@/lib/types/package-data';
+
+function getDaysSinceLastRelease(packageData: PackageAnalysisResult): number | null {
+  if (!packageData.npm?.time || !packageData.npm?.version) return null;
+  const lastPublished = packageData.npm.time[packageData.npm.version];
+  if (!lastPublished) return null;
+  return Math.floor(
+    (Date.now() - new Date(lastPublished).getTime()) / (1000 * 60 * 60 * 24),
+  );
+}
 
 /**
  * Calculate a custom quality score based on multiple factors
@@ -105,17 +115,7 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Step 3: Combine results with enhanced package info
-    // Calculate days since last release
-    let daysSinceLastRelease = null;
-    if (packageData.npm?.time && packageData.npm?.version) {
-      const lastPublished = packageData.npm.time[packageData.npm.version];
-      if (lastPublished) {
-        daysSinceLastRelease = Math.floor(
-          (Date.now() - new Date(lastPublished).getTime()) / (1000 * 60 * 60 * 24)
-        );
-      }
-    }
+    const daysSinceLastRelease = getDaysSinceLastRelease(packageData);
 
     const response = {
       ...packageData,
@@ -129,6 +129,10 @@ export async function GET(request: NextRequest) {
         homepage: packageData.npm?.homepage,
         repository: packageData.npm?.repository?.url,
         daysSinceLastRelease,
+        lastReleaseLabel:
+          daysSinceLastRelease !== null
+            ? formatDaysSinceRelease(daysSinceLastRelease)
+            : null,
         dependents: packageData.popularity?.dependents,
         popularityScore: packageData.popularity?.popularityScore,
       },
@@ -190,17 +194,7 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    // Step 3: Combine results with enhanced package info
-    // Calculate days since last release
-    let daysSinceLastRelease = null;
-    if (packageData.npm?.time && packageData.npm?.version) {
-      const lastPublished = packageData.npm.time[packageData.npm.version];
-      if (lastPublished) {
-        daysSinceLastRelease = Math.floor(
-          (Date.now() - new Date(lastPublished).getTime()) / (1000 * 60 * 60 * 24)
-        );
-      }
-    }
+    const daysSinceLastRelease = getDaysSinceLastRelease(packageData);
 
     const response = {
       ...packageData,
@@ -214,6 +208,10 @@ export async function POST(request: NextRequest) {
         homepage: packageData.npm?.homepage,
         repository: packageData.npm?.repository?.url,
         daysSinceLastRelease,
+        lastReleaseLabel:
+          daysSinceLastRelease !== null
+            ? formatDaysSinceRelease(daysSinceLastRelease)
+            : null,
         dependents: packageData.popularity?.dependents,
         popularityScore: packageData.popularity?.popularityScore,
       },

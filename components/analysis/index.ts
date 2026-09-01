@@ -10,3 +10,5 @@ export { SecurityVulnerabilitiesCard } from "./SecurityVulnerabilitiesCard";
 export { VersionCheckCard } from "./VersionCheckCard";
 export { AIAnalysisCard } from "./AIAnalysisCard";
 export { SimilarPackagesCard } from "./SimilarPackagesCard";
+export { SecuritySeverityBadges } from "./SecuritySeverityBadges";
+export type { SecurityCountSummary } from "./SecuritySeverityBadges";

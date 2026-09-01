@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import semver from "semver";
-import { extractPackageName } from "@/lib/validation";
 import { fetchJson, friendlyFetchError } from "@/lib/fetch-client";
 import { PageHeader } from "@/components/PageHeader";
 import { PackageSearchForm } from "@/components/PackageSearchForm";
@@ -124,10 +123,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
     return () => controller.abort();
   }, [analysisData?.packageInfo?.name]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const name = extractPackageName(packageName);
-    if (!name) return;
+  const handleSearch = (name: string) => {
     router.push("/package/" + encodeURIComponent(name));
   };
 
@@ -178,21 +174,9 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
           <PackageSearchForm
             value={packageName}
             onChange={setPackageName}
-            onSubmit={handleSubmit}
+            onSearch={handleSearch}
             loading={loading}
           />
-
-          {loading && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-8">
-              <p className="text-blue-800 dark:text-blue-200 font-medium">
-                Analysing package…
-              </p>
-              <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                If the server was recently restarted, this may take a moment while
-                it comes back online.
-              </p>
-            </div>
-          )}
 
           {error && (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-8">
@@ -217,6 +201,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                   if (tab === "charts") setChartsOpened(true);
                   setOverviewTab(tab);
                 }}
+                security={analysisData.security}
               />
 
               {overviewTab === "info" && analysisData.packageInfo && (
@@ -249,6 +234,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                 onChange={handleTabChange}
                 versionAvailable={availableVersions.length > 0}
                 aiModel={analysisData.ai?.model}
+                security={analysisData.security}
               />
 
               {activeTab === "ai" && (

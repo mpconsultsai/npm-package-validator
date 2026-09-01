@@ -6,15 +6,12 @@ export function formatCompactNumber(n: number): string {
 }
 
 export function formatDaysSinceRelease(days: number): string {
-  if (days >= 365) {
-    const years = Math.floor(days / 365);
-    const remainingDays = days % 365;
-    if (remainingDays === 0) {
-      return years === 1 ? "1yr" : `${years}yrs`;
-    }
-    return years === 1
-      ? `1yr ${remainingDays} ${remainingDays === 1 ? "day" : "days"}`
-      : `${years}yrs ${remainingDays} ${remainingDays === 1 ? "day" : "days"}`;
+  const totalDays = Math.max(0, Math.floor(Number(days)));
+  if (!Number.isFinite(totalDays)) return "Unknown";
+
+  if (totalDays >= 365) {
+    const years = Math.floor(totalDays / 365);
+    return years === 1 ? "Over 1 year" : `Over ${years} years`;
   }
-  return `${days} ${days === 1 ? "day" : "days"} ago`;
+  return `${totalDays} ${totalDays === 1 ? "day" : "days"} ago`;
 }
