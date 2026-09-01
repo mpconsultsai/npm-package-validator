@@ -31,12 +31,12 @@ export function PackageSearchForm({
             onChange={(e) => onChange(e.target.value)}
             placeholder="e.g. react, lodash, @graphql-inspector/core"
             className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-            disabled={disabled || loading}
+            disabled={disabled}
           />
         </div>
         <button
           type="submit"
-          disabled={disabled || loading || !value.trim()}
+          disabled={disabled || !value.trim()}
           className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 ease-in-out transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
         >
           {loading ? "Analysing..." : "Analyse Package"}

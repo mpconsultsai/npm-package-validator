@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server';
 export async function GET() {
   const apiKeys = {
     google: !!process.env.GOOGLE_API_KEY,
+    groq: !!process.env.GROQ_API_KEY,
     github: !!process.env.GITHUB_TOKEN,
   };
 

@@ -11,6 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import { formatCompactNumber } from "@/lib/utils/format";
+import { fetchJson } from "@/lib/fetch-client";
 
 interface ChartPoint {
   date: string;
@@ -141,14 +142,17 @@ export function MetricsChartsCard({ packageName }: { packageName: string }) {
       done: () => void,
     ) => {
       try {
-        const res = await fetch(
+        const { ok, data: payload } = await fetchJson<ChartsPayload & { error?: string }>(
           `/api/package-charts?package=${encodeURIComponent(packageName)}&series=${series}`,
-          { signal: controller.signal },
+          {
+            signal: controller.signal,
+            timeoutMs: 60_000,
+            retries: 3,
+          },
         );
-        const payload = await res.json();
         if (controller.signal.aborted) return;
-        if (payload.error) {
-          setError(payload.error);
+        if (!ok || payload.error) {
+          setError(payload.error || "Failed to load charts");
           return;
         }
         apply(payload);

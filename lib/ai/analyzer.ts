@@ -4,7 +4,7 @@ import type { PackageAnalysisResult } from '../types/package-data';
 
 /** Groq retired llama-3.3-70b-versatile on 16 Aug 2026; gpt-oss-120b is the documented replacement. */
 const GROQ_MODEL = 'openai/gpt-oss-120b';
-const GROQ_MODEL_LABEL = 'GPT-OSS 120B (Grok)';
+const GROQ_MODEL_LABEL = 'GPT-OSS 120B (Groq)';
 
 /**
  * AI-generated package analysis and recommendations
@@ -19,7 +19,7 @@ export interface AIPackageAnalysis {
   qualityRating: 'excellent' | 'good' | 'fair' | 'poor';
   maintenanceRating: 'excellent' | 'good' | 'fair' | 'poor';
   reasoning: string;
-  model?: string; // e.g. "Gemini 2.5 Flash", "GPT-OSS 120B (Grok)"
+  model?: string; // e.g. "Gemini 2.5 Flash", "GPT-OSS 120B (Groq)"
 }
 
 /**
@@ -391,7 +391,7 @@ export async function analyzePackageWithAI(
                                       flashLiteError.message?.includes('rate limit');
         
         if (isFlashLiteRateLimit) {
-          console.warn('⚠ Flash-Lite also rate limited, falling back to Grok...');
+          console.warn('⚠ Flash-Lite also rate limited, falling back to Groq...');
           
           // Final fallback to Groq (14,400 requests/day)
           try {
@@ -409,10 +409,10 @@ export async function analyzePackageWithAI(
             const text = chatCompletion.choices[0]?.message?.content || '';
             const aiAnalysis = parseAIResponse(text);
             aiAnalysis.model = GROQ_MODEL_LABEL;
-            console.log(`✓ Analysis completed with Grok (${GROQ_MODEL_LABEL})`);
+            console.log(`✓ Analysis completed with Groq (${GROQ_MODEL_LABEL})`);
             return aiAnalysis;
           } catch (groqError: any) {
-            console.error('Grok also failed:', groqError);
+            console.error('Groq also failed:', groqError);
             throw new Error(`Failed to analyze package with AI (all providers): ${groqError.message}`);
           }
         } else {

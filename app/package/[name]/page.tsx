@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import semver from "semver";
 import { extractPackageName } from "@/lib/validation";
+import { fetchJson, friendlyFetchError } from "@/lib/fetch-client";
 import { PageHeader } from "@/components/PageHeader";
 import { PackageSearchForm } from "@/components/PackageSearchForm";
 import { InfoCards } from "@/components/InfoCards";
@@ -49,6 +50,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
   const [versionPanelKey, setVersionPanelKey] = useState(0);
   const versionCheckRequestId = useRef(0);
   const versionCheckAbort = useRef<AbortController | null>(null);
+  const analysisAbort = useRef<AbortController | null>(null);
 
   const resetVersionCheck = () => {
     versionCheckRequestId.current += 1;
@@ -59,6 +61,37 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
     setVersionPanelKey((key) => key + 1);
   };
 
+  const loadAnalysis = useCallback(async (name: string) => {
+    analysisAbort.current?.abort();
+    const controller = new AbortController();
+    analysisAbort.current = controller;
+
+    setLoading(true);
+    setError(null);
+    setAnalysisData(null);
+    resetVersionCheck();
+
+    try {
+      const { ok, data } = await fetchJson<any>(
+        `/api/analyze-ai?package=${encodeURIComponent(name)}`,
+        {
+          signal: controller.signal,
+          timeoutMs: 120_000,
+          retries: 4,
+          retryDelayMs: 2000,
+        },
+      );
+      if (controller.signal.aborted) return;
+      if (ok) setAnalysisData(data);
+      else setError(data.error || "Failed to analyse package");
+    } catch (err: unknown) {
+      if (controller.signal.aborted) return;
+      setError(friendlyFetchError(err));
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
+  }, []);
+
   const handleTabChange = (tab: AnalysisTabId) => {
     if (tab === "related") setRelatedOpened(true);
     resetVersionCheck();
@@ -68,40 +101,17 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
   useEffect(() => {
     return () => {
       versionCheckAbort.current?.abort();
+      analysisAbort.current?.abort();
     };
   }, []);
 
   useEffect(() => {
     if (!nameFromPath) return;
-
-    const controller = new AbortController();
-
-    async function run() {
-      try {
-        const res = await fetch(
-          `/api/analyze-ai?package=${encodeURIComponent(nameFromPath)}`,
-          { signal: controller.signal },
-        );
-        const data = await res.json();
-        if (controller.signal.aborted) return;
-        if (res.ok) setAnalysisData(data);
-        else setError(data.error || "Failed to analyse package");
-      } catch (err: unknown) {
-        if (controller.signal.aborted) return;
-        const message =
-          err instanceof Error
-            ? err.message
-            : "An error occurred while analysing the package";
-        setError(message);
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    }
-    run();
+    loadAnalysis(nameFromPath);
     return () => {
-      controller.abort();
+      analysisAbort.current?.abort();
     };
-  }, [nameFromPath]);
+  }, [nameFromPath, loadAnalysis]);
 
   useEffect(() => {
     const name = analysisData?.packageInfo?.name;
@@ -130,21 +140,21 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
     setVersionSecurityLoading(true);
     setVersionSecurityData(null);
     try {
-      const response = await fetch(
+      const { ok, data } = await fetchJson<any>(
         `/api/security-check?package=${encodeURIComponent(analysisData.packageInfo.name)}&version=${encodeURIComponent(versionToCheck.trim())}`,
-        { signal: controller.signal },
+        {
+          signal: controller.signal,
+          timeoutMs: 45_000,
+          retries: 3,
+        },
       );
-      const data = await response.json();
       if (requestId !== versionCheckRequestId.current) return;
-      if (!response.ok)
-        throw new Error(data.error || "Failed to check security");
+      if (!ok) throw new Error(data.error || "Failed to check security");
       setVersionSecurityData(data);
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
       if (requestId !== versionCheckRequestId.current) return;
-      const message =
-        err instanceof Error ? err.message : "Failed to check security";
-      setVersionSecurityData({ error: message });
+      setVersionSecurityData({ error: friendlyFetchError(err) });
     } finally {
       if (requestId === versionCheckRequestId.current) {
         setVersionSecurityLoading(false);
@@ -172,9 +182,30 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
             loading={loading}
           />
 
+          {loading && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-8">
+              <p className="text-blue-800 dark:text-blue-200 font-medium">
+                Analysing package…
+              </p>
+              <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                If the server was recently restarted, this may take a moment while
+                it comes back online.
+              </p>
+            </div>
+          )}
+
           {error && (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-8">
               <p className="text-red-800 dark:text-red-200">{error}</p>
+              {nameFromPath && (
+                <button
+                  type="button"
+                  onClick={() => loadAnalysis(nameFromPath)}
+                  className="mt-3 text-sm font-medium text-red-800 dark:text-red-200 underline hover:no-underline"
+                >
+                  Try again
+                </button>
+              )}
             </div>
           )}
 

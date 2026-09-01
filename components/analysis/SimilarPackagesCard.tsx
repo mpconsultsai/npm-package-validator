@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { fetchJson } from "@/lib/fetch-client";
 
 interface SimilarPackage {
   name: string;
@@ -52,19 +53,23 @@ export function SimilarPackagesCard({ packageName, keywords }: SimilarPackagesCa
     const params = new URLSearchParams({ package: packageName });
     if (keywordsKey) params.set("keywords", keywordsKey);
 
-    fetch(`/api/similar-packages?${params}`, { signal: controller.signal })
-      .then((res) => res.json())
-      .then((data) => {
+    const load = async () => {
+      try {
+        const { ok, data } = await fetchJson<{ packages?: SimilarPackage[] }>(
+          `/api/similar-packages?${params}`,
+          { signal: controller.signal, timeoutMs: 45_000, retries: 3 },
+        );
         if (controller.signal.aborted) return;
-        setPackages(data.packages ?? []);
-      })
-      .catch(() => {
+        setPackages(ok ? (data.packages ?? []) : []);
+      } catch {
         if (controller.signal.aborted) return;
         setPackages([]);
-      })
-      .finally(() => {
+      } finally {
         if (!controller.signal.aborted) setLoading(false);
-      });
+      }
+    };
+
+    void load();
 
     return () => {
       controller.abort();
