@@ -16,9 +16,9 @@ export function PageHeader({ showHomeLink = false }: PageHeaderProps) {
           ← Home
         </Link>
       )}
-      <h1 className="flex items-center justify-center gap-1.5 sm:gap-3 text-xl sm:text-4xl md:text-5xl font-bold mb-1.5 sm:mb-4">
-        <AppLogo className="w-6 h-6 sm:w-10 sm:h-10 md:w-12 md:h-12 shrink-0" />
-        <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600 whitespace-nowrap">
+      <h1 className="flex items-center justify-center gap-2 sm:gap-3 text-2xl sm:text-4xl md:text-5xl font-bold mb-1.5 sm:mb-4">
+        <AppLogo className="w-7 h-7 sm:w-10 sm:h-10 md:w-12 md:h-12 shrink-0" />
+        <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">
           NPM Package Validator
         </span>
       </h1>

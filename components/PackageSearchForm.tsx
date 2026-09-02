@@ -290,7 +290,7 @@ export function PackageSearchForm({
             )}
           </div>
           {!loading && isSearching && value.trim().length >= MIN_QUERY_LENGTH && (
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p className="mt-2.5 text-xs text-gray-500 dark:text-gray-400">
               Searching npm…
             </p>
           )}

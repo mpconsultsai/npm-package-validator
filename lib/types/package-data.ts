@@ -1,6 +1,7 @@
 // Type definitions for package data from various sources
 
 import type { SecuritySummary } from '../data-fetchers/security';
+import type { BundleSizeInfo } from '../data-fetchers/bundlephobia';
 
 export interface NpmPackageData {
   name: string;
@@ -175,11 +176,13 @@ export interface PackageAnalysisResult {
   releases?: GitHubReleaseData[];
   security?: SecuritySummary;
   popularity?: NpmPackagePopularity;
+  bundleSize?: BundleSizeInfo | null;
   readme?: string | null;
   errors?: {
     npm?: string;
     github?: string;
     security?: string;
     ai?: string;
+    bundleSize?: string;
   };
 }

@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Groq from 'groq-sdk';
 import type { PackageAnalysisResult } from '../types/package-data';
+import { formatBytes } from '../utils/format';
 
 /** Groq retired llama-3.3-70b-versatile on 16 Aug 2026; gpt-oss-120b is the documented replacement. */
 const GROQ_MODEL = 'openai/gpt-oss-120b';
@@ -96,8 +97,12 @@ function detectPackageHealthFlags(data: PackageAnalysisResult): PackageHealthFla
       (longSilent && lowMaintenance));
 
   if (unmaintained && !readmeWarning) {
+    const daysPart =
+      daysSincePublish !== null
+        ? ` (${daysSincePublish} days since last publish)`
+        : "";
     reasons.push(
-      "No meaningful maintenance activity for a long time — this package appears unmaintained.",
+      `No meaningful maintenance activity for a long time${daysPart} — this package appears unmaintained.`,
     );
   } else if (unmaintained && readmeWarning && reasons.length === 0) {
     reasons.push(
@@ -111,6 +116,55 @@ function detectPackageHealthFlags(data: PackageAnalysisResult): PackageHealthFla
     unmaintained,
     reasons,
   };
+}
+
+/** Group near-duplicate concern lines (e.g. two unmaintained notes) under one theme. */
+function concernTheme(text: string): string | null {
+  const t = text.toLowerCase();
+  if (
+    /unmaintain|no meaningful maintenance|maintenance activity|days since (?:last )?publish|abandon|not actively maintained|no longer maintained/.test(
+      t,
+    )
+  ) {
+    return "maintenance";
+  }
+  if (/deprecat|end[- ]of[- ]life|migration warning/.test(t)) {
+    return "deprecated";
+  }
+  if (/\barchiv/.test(t)) {
+    return "archived";
+  }
+  if (/bundle|gzip|minified|payload|bundlephobia/.test(t)) {
+    return "bundle";
+  }
+  if (/vulnerab|security advisory|\bcve\b|critical\/high/.test(t)) {
+    return "security";
+  }
+  return null;
+}
+
+function dedupeConcerns(concerns: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const raw of concerns) {
+    const text = raw.trim();
+    if (!text || text.toLowerCase() === "none") continue;
+
+    const theme = concernTheme(text);
+    const key =
+      theme ??
+      text
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(text);
+  }
+
+  return out;
 }
 
 function normalizeRecommendation(
@@ -154,17 +208,10 @@ function applyHealthRecommendationOverrides(
     return analysis;
   }
 
-  const concerns = [
+  const concerns = dedupeConcerns([
     ...flags.reasons,
-    ...analysis.concerns.filter(
-      (c) =>
-        c &&
-        c.toLowerCase() !== "none" &&
-        !flags.reasons.some((reason) =>
-          reason.toLowerCase().includes(c.toLowerCase()),
-        ),
-    ),
-  ].slice(0, 5);
+    ...analysis.concerns,
+  ]).slice(0, 5);
 
   const reasonText = flags.reasons.join(" ");
 
@@ -177,6 +224,105 @@ function applyHealthRecommendationOverrides(
     reasoning:
       `Do not use this package for new projects. ${reasonText} ` +
       (analysis.reasoning ? analysis.reasoning : ""),
+  };
+}
+
+type BundleSizeLevel = "ok" | "notable" | "large" | "very-large";
+
+function assessBundleSize(data: PackageAnalysisResult): {
+  level: BundleSizeLevel | null;
+  note: string | null;
+  gzip: number | null;
+  size: number | null;
+} {
+  const size = data.bundleSize?.size;
+  const gzip = data.bundleSize?.gzip;
+  if (
+    size === undefined ||
+    gzip === undefined ||
+    !Number.isFinite(size) ||
+    !Number.isFinite(gzip)
+  ) {
+    return { level: null, note: null, gzip: null, size: null };
+  }
+
+  if (gzip >= 200_000 || size >= 500_000) {
+    return {
+      level: "very-large",
+      note: `Very large browser bundle (${formatBytes(gzip)} gzip / ${formatBytes(size)} minified) — likely to hurt client-side load performance.`,
+      gzip,
+      size,
+    };
+  }
+  if (gzip >= 100_000 || size >= 250_000) {
+    return {
+      level: "large",
+      note: `Large browser bundle (${formatBytes(gzip)} gzip / ${formatBytes(size)} minified) — may affect page load performance in the browser.`,
+      gzip,
+      size,
+    };
+  }
+  if (gzip >= 50_000) {
+    return {
+      level: "notable",
+      note: `Notable browser bundle size (${formatBytes(gzip)} gzip / ${formatBytes(size)} minified).`,
+      gzip,
+      size,
+    };
+  }
+  return {
+    level: "ok",
+    note: null,
+    gzip,
+    size,
+  };
+}
+
+/**
+ * Ensure large/very-large bundles are called out in AI concerns.
+ */
+function applyBundleSizeNotes(
+  analysis: AIPackageAnalysis,
+  data: PackageAnalysisResult,
+): AIPackageAnalysis {
+  const assessment = assessBundleSize(data);
+  if (
+    !assessment.note ||
+    (assessment.level !== "large" && assessment.level !== "very-large")
+  ) {
+    return analysis;
+  }
+
+  const alreadyNoted = analysis.concerns.some((c) =>
+    /bundle|gzip|minified|payload|bundlephobia/i.test(c),
+  );
+  if (alreadyNoted) {
+    return analysis;
+  }
+
+  const concerns = analysis.concerns.filter(
+    (c) => c && c.toLowerCase() !== "none",
+  );
+  return {
+    ...analysis,
+    concerns: [assessment.note, ...concerns].slice(0, 5),
+    reasoning:
+      `${assessment.note} ${analysis.reasoning || ""}`.trim(),
+  };
+}
+
+function finalizeAiAnalysis(
+  analysis: AIPackageAnalysis,
+  data: PackageAnalysisResult,
+): AIPackageAnalysis {
+  const withHealth = applyHealthRecommendationOverrides(
+    analysis,
+    detectPackageHealthFlags(data),
+  );
+  const withBundle = applyBundleSizeNotes(withHealth, data);
+  return {
+    ...withBundle,
+    concerns: dedupeConcerns(withBundle.concerns).slice(0, 5),
   };
 }
 
@@ -277,7 +423,7 @@ function maintenanceContext(
  * Create a prompt for package analysis
  */
 function createAnalysisPrompt(data: PackageAnalysisResult): string {
-  const { packageName, npm, downloads, github, security, readme, popularity } = data;
+  const { packageName, npm, downloads, github, security, readme, popularity, bundleSize } = data;
 
   const lastPublished =
     npm?.time && npm.version ? npm.time[npm.version] : null;
@@ -363,6 +509,22 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
     prompt += `- Low: ${security.low}\n\n`;
   }
 
+  const bundleAssessment = assessBundleSize(data);
+  if (bundleSize && bundleAssessment.gzip !== null && bundleAssessment.size !== null) {
+    prompt += `Browser bundle size (Bundlephobia):\n`;
+    prompt += `- Minified: ${formatBytes(bundleAssessment.size)} (${bundleAssessment.size} bytes)\n`;
+    prompt += `- Gzip: ${formatBytes(bundleAssessment.gzip)} (${bundleAssessment.gzip} bytes)\n`;
+    prompt += `- Size rating: ${bundleAssessment.level}\n`;
+    if (bundleAssessment.level === "large" || bundleAssessment.level === "very-large") {
+      prompt += `⚠️ This bundle is ${bundleAssessment.level.replace("-", " ")}. You MUST mention it in concerns and weigh it in reasoning for client-side use. Do not treat a large gzip payload as a strength.\n`;
+    } else if (bundleAssessment.level === "notable") {
+      prompt += `Optional: briefly note the non-trivial bundle size if relevant to the use case.\n`;
+    } else {
+      prompt += `Bundle size is modest — may list as a strength for front-end use if relevant.\n`;
+    }
+    prompt += `\n`;
+  }
+
   // README content (first 3000 chars - most important section)
   if (readme) {
     prompt += `README Content (first 3000 characters):\n`;
@@ -391,6 +553,7 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
   prompt += `- Widely adopted packages (React, lodash, TypeScript, and similar) often go weeks or months between releases. That is expected for a stable major version.\n`;
   prompt += `- use-with-caution requires a concrete risk: unpatched high/critical vulnerabilities, likely malware/typosquat, or a niche package with worrying signals that are not yet full abandonment.\n`;
   prompt += `- do-not-use (preferred) or not-recommended: npm-deprecated packages, archived repos, README deprecation/migration notices, or clearly unmaintained packages. Say the package should not be used for new work.\n`;
+  prompt += `- A large or very-large browser bundle (see Bundlephobia section) must appear in concerns when the package is meant for front-end/browser use.\n`;
   prompt += `- High open-issue counts on huge repos are not a red flag by themselves (they often include PRs or a large backlog).\n`;
   prompt += `- Do not pad concerns with release-cadence commentary when cadence is healthy. Use ["None"] if there are no real concerns.\n`;
   prompt += `- Maintenance rating: excellent if published within ~90 days or widely adopted with recent commits; good up to ~6 months (or longer if widely adopted and secure); fair/poor only for genuine inactivity.\n\n`;
@@ -537,10 +700,7 @@ export async function analyzePackageWithAI(
     const aiAnalysis = parseAIResponse(text);
     aiAnalysis.model = 'Gemini 2.5 Flash';
     console.log('✓ Analysis completed with Gemini 2.5 Flash');
-    return applyHealthRecommendationOverrides(
-      aiAnalysis,
-      detectPackageHealthFlags(data),
-    );
+    return finalizeAiAnalysis(aiAnalysis, data);
   } catch (error: any) {
     // Check if it's a rate limit error (429)
     const isRateLimitError = error.message?.includes('429') || 
@@ -560,10 +720,7 @@ export async function analyzePackageWithAI(
         const aiAnalysis = parseAIResponse(text);
         aiAnalysis.model = 'Gemini 2.5 Flash Lite';
         console.log('✓ Analysis completed with Gemini 2.5 Flash-Lite');
-        return applyHealthRecommendationOverrides(
-          aiAnalysis,
-          detectPackageHealthFlags(data),
-        );
+        return finalizeAiAnalysis(aiAnalysis, data);
       } catch (flashLiteError: any) {
         const isFlashLiteRateLimit = flashLiteError.message?.includes('429') || 
                                       flashLiteError.message?.includes('quota') || 
@@ -589,10 +746,7 @@ export async function analyzePackageWithAI(
             const aiAnalysis = parseAIResponse(text);
             aiAnalysis.model = GROQ_MODEL_LABEL;
             console.log(`✓ Analysis completed with Groq (${GROQ_MODEL_LABEL})`);
-            return applyHealthRecommendationOverrides(
-              aiAnalysis,
-              detectPackageHealthFlags(data),
-            );
+            return finalizeAiAnalysis(aiAnalysis, data);
           } catch (groqError: any) {
             console.error('Groq also failed:', groqError);
             throw new Error(`Failed to analyze package with AI (all providers): ${groqError.message}`);

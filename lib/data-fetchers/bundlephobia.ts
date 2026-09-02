@@ -1,0 +1,74 @@
+import axios from "axios";
+
+const BUNDLEPHOBIA_SIZE_URL = "https://bundlephobia.com/api/size";
+
+export interface BundleSizeInfo {
+  size: number;
+  gzip: number;
+  dependencyCount?: number;
+  version?: string;
+}
+
+/**
+ * Fetch browser bundle size (minified + gzip) from Bundlephobia.
+ * Returns null when the package cannot be bundled or the API is unavailable.
+ */
+export async function fetchBundleSize(
+  packageName: string,
+  version?: string,
+): Promise<BundleSizeInfo | null> {
+  const pkg =
+    version && version !== "Unknown"
+      ? `${packageName}@${version}`
+      : packageName;
+
+  try {
+    const response = await axios.get(BUNDLEPHOBIA_SIZE_URL, {
+      params: { package: pkg },
+      timeout: 20_000,
+      headers: {
+        Accept: "application/json",
+        "User-Agent":
+          "Mozilla/5.0 (compatible; npm-package-validator/1.0; +https://github.com)",
+        Origin: "https://bundlephobia.com",
+        Referer: "https://bundlephobia.com/",
+      },
+      validateStatus: (status) => status === 200,
+    });
+
+    const data = response.data;
+    const size = Number(data?.size);
+    const gzip = Number(data?.gzip);
+
+    if (!Number.isFinite(size) || !Number.isFinite(gzip)) {
+      return null;
+    }
+
+    return {
+      size,
+      gzip,
+      dependencyCount: Number.isFinite(Number(data?.dependencyCount))
+        ? Number(data.dependencyCount)
+        : undefined,
+      version: typeof data?.version === "string" ? data.version : version,
+    };
+  } catch (error: unknown) {
+    const message =
+      error && typeof error === "object" && "message" in error
+        ? String((error as { message: unknown }).message)
+        : "unknown error";
+    console.warn(`Bundlephobia unavailable for ${pkg}: ${message}`);
+    return null;
+  }
+}
+
+export function bundlephobiaPackageUrl(
+  packageName: string,
+  version?: string,
+): string {
+  const pkg =
+    version && version !== "Unknown"
+      ? `${packageName}@${version}`
+      : packageName;
+  return `https://bundlephobia.com/package/${encodeURIComponent(pkg)}`;
+}

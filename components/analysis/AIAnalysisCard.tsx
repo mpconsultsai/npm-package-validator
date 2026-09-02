@@ -1,3 +1,12 @@
+"use client";
+
+import {
+  aiScoreBarClass,
+  aiScoreTextClass,
+  isHighQualityAiScore,
+  recommendationBadgeClass,
+} from "@/lib/utils/ai-score";
+
 interface AIAnalysis {
   summary: string;
   recommendation: string;
@@ -16,6 +25,8 @@ interface AIAnalysisCardProps {
 }
 
 export function AIAnalysisCard({ ai }: AIAnalysisCardProps) {
+  const score = ai.overallScore;
+
   return (
     <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg shadow-lg p-4 sm:p-6">
       <div className="space-y-4">
@@ -27,13 +38,7 @@ export function AIAnalysisCard({ ai }: AIAnalysisCardProps) {
         <div>
           <h3 className="font-semibold text-lg mb-2">Recommendation</h3>
           <span
-            className={`inline-block px-4 py-2 rounded-full font-semibold ${
-              ai.recommendation === "recommended"
-                ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                : ai.recommendation === "use-with-caution"
-                  ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                  : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-            }`}
+            className={`inline-block px-4 py-2 rounded-full font-semibold ${recommendationBadgeClass(ai.recommendation)}`}
           >
             {ai.recommendation === "do-not-use" ||
             ai.recommendation === "not-recommended"
@@ -47,11 +52,24 @@ export function AIAnalysisCard({ ai }: AIAnalysisCardProps) {
           <div className="flex items-center gap-4">
             <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-4">
               <div
-                className="bg-gradient-to-r from-blue-500 to-purple-500 h-4 rounded-full transition-all duration-500"
-                style={{ width: `${ai.overallScore}%` }}
+                className={`${aiScoreBarClass(score)} h-4 rounded-full transition-all duration-500`}
+                style={{ width: `${Math.min(100, Math.max(0, score))}%` }}
               />
             </div>
-            <span className="font-bold text-xl">{ai.overallScore}/100</span>
+            <span
+              className={`font-bold text-xl inline-flex items-center gap-1 ${aiScoreTextClass(score)}`}
+            >
+              {score}/100
+              {isHighQualityAiScore(score) && (
+                <span
+                  className="text-amber-400 dark:text-amber-300"
+                  title="High-quality package"
+                  aria-label="High-quality package"
+                >
+                  ★
+                </span>
+              )}
+            </span>
           </div>
         </div>
 

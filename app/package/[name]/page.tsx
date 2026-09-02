@@ -234,7 +234,6 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                 onChange={handleTabChange}
                 versionAvailable={availableVersions.length > 0}
                 aiModel={analysisData.ai?.model}
-                security={analysisData.security}
               />
 
               {activeTab === "ai" && (

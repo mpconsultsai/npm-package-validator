@@ -143,6 +143,12 @@ export async function GET(request: NextRequest) {
         qualityScore: calculateQualityScore(packageData),
         securityIssues: packageData.security?.totalCount || 0,
         ...(aiAnalysis?.overallScore ? { aiScore: aiAnalysis.overallScore } : {}),
+        ...(packageData.bundleSize
+          ? {
+              bundleSize: packageData.bundleSize.size,
+              bundleGzip: packageData.bundleSize.gzip,
+            }
+          : {}),
       },
     };
 
@@ -222,6 +228,12 @@ export async function POST(request: NextRequest) {
         qualityScore: calculateQualityScore(packageData),
         securityIssues: packageData.security?.totalCount || 0,
         ...(aiAnalysis?.overallScore ? { aiScore: aiAnalysis.overallScore } : {}),
+        ...(packageData.bundleSize
+          ? {
+              bundleSize: packageData.bundleSize.size,
+              bundleGzip: packageData.bundleSize.gzip,
+            }
+          : {}),
       },
     };
 

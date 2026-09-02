@@ -1,4 +1,9 @@
 import { snykPackageUrl } from "@/lib/utils/advisory-links";
+import { formatBytes } from "@/lib/utils/format";
+import {
+  aiScoreTextClass,
+  isHighQualityAiScore,
+} from "@/lib/utils/ai-score";
 import { SnykIcon } from "@/components/BrandIcons";
 
 interface SecuritySummary {
@@ -16,6 +21,8 @@ interface MetricsCardProps {
     qualityScore: number;
     securityIssues: number;
     aiScore?: number;
+    bundleSize?: number;
+    bundleGzip?: number;
   };
   security?: SecuritySummary | null;
   securityFilter: string | null;
@@ -71,6 +78,9 @@ export function MetricsCard({
     count: severityCount(security, level.key),
   })).filter((level) => level.count > 0);
 
+  const hasBundleSize =
+    metrics.bundleSize !== undefined && metrics.bundleGzip !== undefined;
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -102,19 +112,46 @@ export function MetricsCard({
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Quality Score
           </p>
-          <p className="text-2xl font-bold">
-            {metrics.qualityScore}/100
-          </p>
+          <p className="text-2xl font-bold">{metrics.qualityScore}/100</p>
         </div>
         {metrics.aiScore !== undefined && (
           <div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              AI Score
-            </p>
-            <p className="text-2xl font-bold text-purple-600">
+            <p className="text-sm text-gray-600 dark:text-gray-400">AI Score</p>
+            <p
+              className={`text-2xl font-bold inline-flex items-center gap-1 ${aiScoreTextClass(metrics.aiScore)}`}
+            >
               {metrics.aiScore}/100
+              {isHighQualityAiScore(metrics.aiScore) && (
+                <span
+                  className="text-amber-400 dark:text-amber-300"
+                  title="High-quality package"
+                  aria-label="High-quality package"
+                >
+                  ★
+                </span>
+              )}
             </p>
           </div>
+        )}
+        {hasBundleSize && (
+          <>
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Bundle (min)
+              </p>
+              <p className="text-2xl font-bold">
+                {formatBytes(metrics.bundleSize!)}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Bundle (gzip)
+              </p>
+              <p className="text-2xl font-bold">
+                {formatBytes(metrics.bundleGzip!)}
+              </p>
+            </div>
+          </>
         )}
         {visibleSeverities.length > 0 && (
           <div className="col-span-2 md:col-span-4">

@@ -1,8 +1,4 @@
 import type { ReactNode } from "react";
-import {
-  SecuritySeverityBadges,
-  type SecurityCountSummary,
-} from "./SecuritySeverityBadges";
 
 export type AnalysisTabId = "ai" | "version" | "related";
 
@@ -11,7 +7,6 @@ interface AnalysisTabsProps {
   onChange: (tab: AnalysisTabId) => void;
   versionAvailable: boolean;
   aiModel?: string;
-  security?: SecurityCountSummary | null;
 }
 
 function TabIconSpark() {
@@ -76,7 +71,6 @@ export function AnalysisTabs({
   onChange,
   versionAvailable,
   aiModel,
-  security,
 }: AnalysisTabsProps) {
   const tabs: {
     id: AnalysisTabId;
@@ -116,7 +110,6 @@ export function AnalysisTabs({
     >
       {tabs.map((tab) => {
         const selected = active === tab.id;
-        const showSecurity = tab.id === "ai";
         return (
           <button
             key={tab.id}
@@ -142,9 +135,6 @@ export function AnalysisTabs({
                 </span>
               )}
             </span>
-            {showSecurity && (
-              <SecuritySeverityBadges security={security} size="tab" />
-            )}
           </button>
         );
       })}
