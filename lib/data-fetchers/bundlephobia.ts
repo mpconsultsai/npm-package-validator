@@ -5,7 +5,6 @@ const BUNDLEPHOBIA_SIZE_URL = "https://bundlephobia.com/api/size";
 export interface BundleSizeInfo {
   size: number;
   gzip: number;
-  dependencyCount?: number;
   version?: string;
 }
 
@@ -47,9 +46,6 @@ export async function fetchBundleSize(
     return {
       size,
       gzip,
-      dependencyCount: Number.isFinite(Number(data?.dependencyCount))
-        ? Number(data.dependencyCount)
-        : undefined,
       version: typeof data?.version === "string" ? data.version : version,
     };
   } catch (error: unknown) {
@@ -60,15 +56,4 @@ export async function fetchBundleSize(
     console.warn(`Bundlephobia unavailable for ${pkg}: ${message}`);
     return null;
   }
-}
-
-export function bundlephobiaPackageUrl(
-  packageName: string,
-  version?: string,
-): string {
-  const pkg =
-    version && version !== "Unknown"
-      ? `${packageName}@${version}`
-      : packageName;
-  return `https://bundlephobia.com/package/${encodeURIComponent(pkg)}`;
 }

@@ -122,7 +122,7 @@ function detectPackageHealthFlags(data: PackageAnalysisResult): PackageHealthFla
 function concernTheme(text: string): string | null {
   const t = text.toLowerCase();
   if (
-    /unmaintain|no meaningful maintenance|maintenance activity|days since (?:last )?publish|abandon|not actively maintained|no longer maintained/.test(
+    /unmaintain|no meaningful maintenance|maintenance activity|days since (?:its )?last publish|days since publish|abandon|not actively maintained|no longer maintained|lack of (?:any )?activity|lack of future support|not suitable for use in new projects/.test(
       t,
     )
   ) {
@@ -139,6 +139,9 @@ function concernTheme(text: string): string | null {
   }
   if (/vulnerab|security advisory|\bcve\b|critical\/high/.test(t)) {
     return "security";
+  }
+  if (/do not use this package|poses a significant risk/.test(t)) {
+    return "do-not-use-lead";
   }
   return null;
 }
@@ -165,6 +168,55 @@ function dedupeConcerns(concerns: string[]): string[] {
   }
 
   return out;
+}
+
+/**
+ * Build a single reasoning paragraph without repeating the same themes
+ * (e.g. unmaintained called out by both our override and the model).
+ */
+function mergeReasoning(preferred: string[], aiReasoning: string): string {
+  const seenThemes = new Set<string>();
+  const parts: string[] = [];
+
+  const remember = (text: string) => {
+    const theme = concernTheme(text);
+    if (theme) seenThemes.add(theme);
+    if (/^do not use this package/i.test(text.trim())) {
+      seenThemes.add("do-not-use-lead");
+    }
+  };
+
+  const push = (raw: string) => {
+    let text = raw.trim().replace(/\s+/g, " ");
+    if (!text) return;
+
+    if (/^do not use this package/i.test(text)) {
+      if (seenThemes.has("do-not-use-lead")) return;
+      seenThemes.add("do-not-use-lead");
+    }
+
+    const theme = concernTheme(text);
+    if (theme && seenThemes.has(theme)) return;
+
+    remember(text);
+    if (!/[.!?]$/.test(text)) text = `${text}.`;
+    parts.push(text);
+  };
+
+  for (const part of preferred) {
+    push(part);
+  }
+
+  const sentences = aiReasoning
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  for (const sentence of sentences) {
+    push(sentence);
+  }
+
+  return parts.join(" ");
 }
 
 function normalizeRecommendation(
@@ -213,17 +265,16 @@ function applyHealthRecommendationOverrides(
     ...analysis.concerns,
   ]).slice(0, 5);
 
-  const reasonText = flags.reasons.join(" ");
-
   return {
     ...analysis,
     recommendation: "do-not-use",
     maintenanceRating: "poor",
     overallScore: Math.min(analysis.overallScore, flags.deprecated || flags.archived ? 25 : 35),
     concerns: concerns.length > 0 ? concerns : ["Package appears unsafe to adopt for new work."],
-    reasoning:
-      `Do not use this package for new projects. ${reasonText} ` +
-      (analysis.reasoning ? analysis.reasoning : ""),
+    reasoning: mergeReasoning(
+      ["Do not use this package for new projects", ...flags.reasons],
+      analysis.reasoning || "",
+    ),
   };
 }
 
@@ -306,8 +357,10 @@ function applyBundleSizeNotes(
   return {
     ...analysis,
     concerns: [assessment.note, ...concerns].slice(0, 5),
-    reasoning:
-      `${assessment.note} ${analysis.reasoning || ""}`.trim(),
+    reasoning: mergeReasoning(
+      [assessment.note],
+      analysis.reasoning || "",
+    ),
   };
 }
 
