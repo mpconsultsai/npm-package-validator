@@ -188,7 +188,7 @@ export function MetricsChartsCard({ packageName }: { packageName: string }) {
   }, [packageName]);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
       {error && (
         <p className="text-sm text-red-600 dark:text-red-400 mb-4">{error}</p>
       )}

@@ -72,7 +72,7 @@ export function MetricsCard({
   })).filter((level) => level.count > 0);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div>
           <p className="text-sm text-gray-600 dark:text-gray-400">

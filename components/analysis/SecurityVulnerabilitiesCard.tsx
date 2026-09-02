@@ -38,7 +38,7 @@ export function SecurityVulnerabilitiesCard({
   );
 
   return (
-    <div className="bg-red-50 dark:bg-red-900/20 rounded-lg shadow-lg p-6 border-2 border-red-200 dark:border-red-800 relative">
+    <div className="bg-red-50 dark:bg-red-900/20 rounded-lg shadow-lg p-4 sm:p-6 border-2 border-red-200 dark:border-red-800 relative">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-bold text-2xl flex items-center gap-2 text-red-800 dark:text-red-200">
           <svg

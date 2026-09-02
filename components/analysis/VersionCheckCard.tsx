@@ -57,7 +57,7 @@ export function VersionCheckCard({
     : [];
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
       <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
         Check security advisories for a specific version
       </p>

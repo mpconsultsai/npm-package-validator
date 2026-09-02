@@ -19,7 +19,7 @@ interface SimilarPackagesCardProps {
 function RelatedPackagesSkeleton() {
   return (
     <div
-      className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6"
+      className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6"
       aria-busy="true"
       aria-live="polite"
     >
@@ -82,7 +82,7 @@ export function SimilarPackagesCard({ packageName, keywords }: SimilarPackagesCa
 
   if (packages.length === 0) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
         <p className="text-gray-500 dark:text-gray-400 text-sm">
           No related packages found.
         </p>
@@ -91,7 +91,7 @@ export function SimilarPackagesCard({ packageName, keywords }: SimilarPackagesCa
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {packages.map((pkg) => (
           <Link

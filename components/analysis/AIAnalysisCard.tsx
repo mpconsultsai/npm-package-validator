@@ -17,7 +17,7 @@ interface AIAnalysisCardProps {
 
 export function AIAnalysisCard({ ai }: AIAnalysisCardProps) {
   return (
-    <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg shadow-lg p-6">
+    <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg shadow-lg p-4 sm:p-6">
       <div className="space-y-4">
         <div>
           <h3 className="font-semibold text-lg mb-2">Summary</h3>

@@ -240,7 +240,7 @@ export function PackageSearchForm({
   const showClear = value.length > 0 && !disabled && !loading;
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 mb-8">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 sm:p-8 mb-4 sm:mb-8">
       <form onSubmit={handleSubmit}>
         <div ref={containerRef} className="relative">
           <label htmlFor="packageName" className="sr-only">

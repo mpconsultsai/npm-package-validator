@@ -168,7 +168,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-      <div className="container mx-auto px-4 py-16">
+      <div className="container mx-auto px-2 sm:px-4 py-3 sm:py-16">
         <div className="max-w-4xl mx-auto">
           <PageHeader showHomeLink />
           <PackageSearchForm
@@ -179,7 +179,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
           />
 
           {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-8">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 sm:p-4 mb-4 sm:mb-8">
               <p className="text-red-800 dark:text-red-200">{error}</p>
               {nameFromPath && (
                 <button
@@ -194,7 +194,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
           )}
 
           {analysisData && (
-            <div className="space-y-6 mb-8">
+            <div className="space-y-4 sm:space-y-6 mb-4 sm:mb-8">
               <OverviewTabs
                 active={overviewTab}
                 onChange={(tab) => {
@@ -238,7 +238,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
               />
 
               {activeTab === "ai" && (
-                <div className="space-y-6">
+                <div className="space-y-4 sm:space-y-6">
                   {analysisData.security?.vulnerabilities?.length > 0 &&
                     securityFilter && (
                       <SecurityVulnerabilitiesCard
@@ -253,7 +253,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                   {analysisData.ai ? (
                     <AIAnalysisCard ai={analysisData.ai} />
                   ) : (
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
                       <p className="text-gray-600 dark:text-gray-400">
                         AI analysis is not available for this package.
                       </p>

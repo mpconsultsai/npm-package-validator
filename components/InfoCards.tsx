@@ -1,7 +1,7 @@
 export function InfoCards() {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
         <div className="text-blue-600 dark:text-blue-400 mb-3">
           <svg
             className="w-8 h-8"
@@ -23,7 +23,7 @@ export function InfoCards() {
         </p>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
         <div className="text-green-600 dark:text-green-400 mb-3">
           <svg
             className="w-8 h-8"
@@ -45,7 +45,7 @@ export function InfoCards() {
         </p>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 sm:p-6">
         <div className="text-purple-600 dark:text-purple-400 mb-3">
           <svg
             className="w-8 h-8"

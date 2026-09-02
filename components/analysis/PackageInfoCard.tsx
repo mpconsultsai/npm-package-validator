@@ -18,7 +18,7 @@ interface PackageInfoCardProps {
 
 export function PackageInfoCard({ packageInfo }: PackageInfoCardProps) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
       {packageInfo.description && (
         <div className="mb-6 pb-6 border-b border-gray-200 dark:border-gray-600">
           {packageInfo.dependents !== undefined &&
