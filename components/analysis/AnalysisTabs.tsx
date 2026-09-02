@@ -143,11 +143,7 @@ export function AnalysisTabs({
               )}
             </span>
             {showSecurity && (
-              <SecuritySeverityBadges
-                security={security}
-                size="tab"
-                className="hidden sm:inline-flex"
-              />
+              <SecuritySeverityBadges security={security} size="tab" />
             )}
           </button>
         );

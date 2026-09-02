@@ -55,7 +55,9 @@ export function SecuritySeverityBadges({
 
   return (
     <span
-      className={`inline-flex items-center gap-1 flex-shrink-0 ${className}`}
+      className={`${
+        isTab ? "hidden sm:inline-flex" : "inline-flex"
+      } items-center gap-1 flex-shrink-0 ${className}`}
       aria-label={`${levels.map((l) => `${l.count} ${l.label.toLowerCase()}`).join(", ")} vulnerabilities`}
     >
       {levels.map((level) => {

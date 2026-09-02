@@ -108,11 +108,7 @@ export function OverviewTabs({ active, onChange, security }: OverviewTabsProps) 
             <span className="truncate sm:hidden">{tab.shortLabel}</span>
             <span className="truncate hidden sm:inline">{tab.label}</span>
             {showSecurity && (
-              <SecuritySeverityBadges
-                security={security}
-                size="tab"
-                className="hidden sm:inline-flex"
-              />
+              <SecuritySeverityBadges security={security} size="tab" />
             )}
           </button>
         );
