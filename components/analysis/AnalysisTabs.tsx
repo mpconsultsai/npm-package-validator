@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import {
   SecuritySeverityBadges,
-  hasHighRiskSecurityIssues,
   type SecurityCountSummary,
 } from "./SecuritySeverityBadges";
 
@@ -82,6 +81,7 @@ export function AnalysisTabs({
   const tabs: {
     id: AnalysisTabId;
     label: string;
+    shortLabel: string;
     icon: ReactNode;
     detail?: string;
     disabled?: boolean;
@@ -89,16 +89,23 @@ export function AnalysisTabs({
     {
       id: "ai",
       label: "AI analysis",
+      shortLabel: "AI",
       icon: <TabIconSpark />,
       detail: aiModel,
     },
     {
       id: "version",
       label: "Version check",
+      shortLabel: "Version",
       icon: <TabIconShield />,
       disabled: !versionAvailable,
     },
-    { id: "related", label: "Related packages", icon: <TabIconPackages /> },
+    {
+      id: "related",
+      label: "Related packages",
+      shortLabel: "Related",
+      icon: <TabIconPackages />,
+    },
   ];
 
   return (
@@ -110,25 +117,24 @@ export function AnalysisTabs({
       {tabs.map((tab) => {
         const selected = active === tab.id;
         const showSecurity = tab.id === "ai";
-        const highRisk = showSecurity && hasHighRiskSecurityIssues(security);
         return (
           <button
             key={tab.id}
             type="button"
             role="tab"
             aria-selected={selected}
+            aria-label={tab.label}
             disabled={tab.disabled}
             onClick={() => onChange(tab.id)}
-            className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 px-2 sm:px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+            className={`flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
               selected
                 ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-            } disabled:opacity-40 disabled:cursor-not-allowed ${
-              highRisk && !selected ? "ring-2 ring-red-400/70 dark:ring-red-500/60" : ""
-            }`}
+            } disabled:opacity-40 disabled:cursor-not-allowed`}
           >
             {tab.icon}
-            <span className="min-w-0 truncate">
+            <span className="min-w-0 truncate sm:hidden">{tab.shortLabel}</span>
+            <span className="min-w-0 truncate hidden sm:inline">
               {tab.label}
               {tab.detail && (
                 <span className="font-normal text-xs opacity-70 ml-1.5 hidden lg:inline">
@@ -137,7 +143,11 @@ export function AnalysisTabs({
               )}
             </span>
             {showSecurity && (
-              <SecuritySeverityBadges security={security} size="tab" />
+              <SecuritySeverityBadges
+                security={security}
+                size="tab"
+                className="hidden sm:inline-flex"
+              />
             )}
           </button>
         );

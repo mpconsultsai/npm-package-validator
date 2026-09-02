@@ -35,7 +35,10 @@ export function AIAnalysisCard({ ai }: AIAnalysisCardProps) {
                   : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
             }`}
           >
-            {ai.recommendation.toUpperCase().replace(/-/g, " ")}
+            {ai.recommendation === "do-not-use" ||
+            ai.recommendation === "not-recommended"
+              ? "DO NOT USE"
+              : ai.recommendation.toUpperCase().replace(/-/g, " ")}
           </span>
         </div>
 

@@ -23,6 +23,12 @@ export async function fetchNpmPackageData(packageName: string): Promise<NpmPacka
       description: sanitizeDescription(latestVersionData.description || data.description),
       author: latestVersionData.author,
       license: latestVersionData.license,
+      deprecated:
+        typeof latestVersionData.deprecated === "string"
+          ? latestVersionData.deprecated
+          : latestVersionData.deprecated
+            ? "This package has been deprecated"
+            : null,
       repository: latestVersionData.repository,
       homepage: latestVersionData.homepage,
       keywords: latestVersionData.keywords,
@@ -30,7 +36,7 @@ export async function fetchNpmPackageData(packageName: string): Promise<NpmPacka
       devDependencies: latestVersionData.devDependencies,
       maintainers: data.maintainers,
       time: data.time,
-      distTags: data['dist-tags'],
+      distTags: data["dist-tags"],
     };
   } catch (error: any) {
     if (error.response?.status === 404) {

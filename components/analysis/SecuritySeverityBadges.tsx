@@ -59,19 +59,14 @@ export function SecuritySeverityBadges({
       aria-label={`${levels.map((l) => `${l.count} ${l.label.toLowerCase()}`).join(", ")} vulnerabilities`}
     >
       {levels.map((level) => {
-        const isHighRisk = level.key === "critical" || level.key === "high";
         return (
           <span
             key={level.key}
             title={`${level.count} ${level.label}`}
             className={`inline-flex items-center justify-center rounded-full font-bold text-white ${severityBadgeClass(level.key)} ${
               isTab
-                ? `min-w-[1.125rem] h-[1.125rem] px-1 text-[10px] leading-none ${
-                    isHighRisk ? "ring-2 ring-white/90 shadow-sm" : ""
-                  }`
-                : `min-w-[1.5rem] h-6 px-1.5 text-xs ${
-                    isHighRisk ? "ring-2 ring-offset-1 ring-offset-white dark:ring-offset-gray-800 ring-white/80" : ""
-                  }`
+                ? "min-w-[1.125rem] h-[1.125rem] px-1 text-[10px] leading-none"
+                : "min-w-[1.5rem] h-6 px-1.5 text-xs"
             } ${level.key === "critical" && isTab ? "animate-pulse" : ""}`}
           >
             {level.count}

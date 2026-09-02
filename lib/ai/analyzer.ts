@@ -11,15 +11,173 @@ const GROQ_MODEL_LABEL = 'GPT-OSS 120B (Groq)';
  */
 export interface AIPackageAnalysis {
   summary: string;
-  recommendation: 'recommended' | 'use-with-caution' | 'not-recommended';
+  recommendation:
+    | "recommended"
+    | "use-with-caution"
+    | "not-recommended"
+    | "do-not-use";
   strengths: string[];
   concerns: string[];
   overallScore: number; // 0-100
-  securityRating: 'excellent' | 'good' | 'fair' | 'poor';
-  qualityRating: 'excellent' | 'good' | 'fair' | 'poor';
-  maintenanceRating: 'excellent' | 'good' | 'fair' | 'poor';
+  securityRating: "excellent" | "good" | "fair" | "poor";
+  qualityRating: "excellent" | "good" | "fair" | "poor";
+  maintenanceRating: "excellent" | "good" | "fair" | "poor";
   reasoning: string;
   model?: string; // e.g. "Gemini 2.5 Flash", "GPT-OSS 120B (Groq)"
+}
+
+const README_DO_NOT_USE_PATTERNS = [
+  /\bthis (?:package|project|module|library|repo(?:sitory)?) (?:is|has been) deprecated\b/i,
+  /\b(?:package|project) (?:is|has been) (?:officially )?deprecated\b/i,
+  /\bno longer maintained\b/i,
+  /\bnot (?:being )?actively maintained\b/i,
+  /\b(?:this )?(?:package|project) is unmaintained\b/i,
+  /\bthis (?:project|package|repo(?:sitory)?) is archived\b/i,
+  /\bend[- ]of[- ]life\b/i,
+  /\bdeprecated\.?\s+(?:please |kindly )?(?:use|install|switch to)\b/i,
+];
+
+interface PackageHealthFlags {
+  deprecated: boolean;
+  archived: boolean;
+  unmaintained: boolean;
+  reasons: string[];
+}
+
+function detectPackageHealthFlags(data: PackageAnalysisResult): PackageHealthFlags {
+  const reasons: string[] = [];
+  const deprecatedMessage = data.npm?.deprecated?.trim();
+  const deprecated = Boolean(deprecatedMessage);
+  if (deprecated) {
+    reasons.push(
+      deprecatedMessage!.length > 160
+        ? `npm marks this package as deprecated: ${deprecatedMessage!.slice(0, 157)}…`
+        : `npm marks this package as deprecated: ${deprecatedMessage}`,
+    );
+  }
+
+  const archived = Boolean(data.github?.archived);
+  if (archived) {
+    reasons.push("The GitHub repository is archived.");
+  }
+
+  const readme = data.readme ?? "";
+  const readmeWarning = README_DO_NOT_USE_PATTERNS.some((pattern) =>
+    pattern.test(readme),
+  );
+  if (readmeWarning && !deprecated) {
+    reasons.push(
+      "The README contains a deprecation, archive, or migration warning.",
+    );
+  }
+
+  const lastPublished =
+    data.npm?.time && data.npm.version ? data.npm.time[data.npm.version] : null;
+  const daysSincePublish = daysSince(lastPublished);
+  const daysSinceCommit = daysSince(data.github?.pushed_at);
+  const adoption = adoptionLevel(
+    data.downloads?.downloads,
+    data.github?.stars,
+    data.popularity?.dependents,
+  );
+  const maintenanceScore = data.popularity?.maintenanceScore;
+
+  const longSilent =
+    daysSincePublish !== null &&
+    daysSincePublish >= 730 &&
+    (daysSinceCommit === null || daysSinceCommit >= 365);
+  const lowMaintenance =
+    typeof maintenanceScore === "number" && maintenanceScore < 0.15;
+  const unmaintained =
+    !deprecated &&
+    !archived &&
+    (readmeWarning ||
+      (longSilent && adoption !== "widely-adopted") ||
+      (longSilent && lowMaintenance));
+
+  if (unmaintained && !readmeWarning) {
+    reasons.push(
+      "No meaningful maintenance activity for a long time — this package appears unmaintained.",
+    );
+  } else if (unmaintained && readmeWarning && reasons.length === 0) {
+    reasons.push(
+      "The package appears unmaintained based on its README and release history.",
+    );
+  }
+
+  return {
+    deprecated,
+    archived,
+    unmaintained,
+    reasons,
+  };
+}
+
+function normalizeRecommendation(
+  value: unknown,
+): AIPackageAnalysis["recommendation"] {
+  const raw = typeof value === "string" ? value.toLowerCase().trim() : "";
+  if (
+    raw === "do-not-use" ||
+    raw === "do not use" ||
+    raw === "dont-use" ||
+    raw === "don't-use"
+  ) {
+    return "do-not-use";
+  }
+  if (raw === "not-recommended" || raw === "not recommended") {
+    return "not-recommended";
+  }
+  if (raw === "use-with-caution" || raw === "use with caution") {
+    return "use-with-caution";
+  }
+  if (raw === "recommended") {
+    return "recommended";
+  }
+  return "use-with-caution";
+}
+
+/**
+ * Force a hard negative recommendation when package is deprecated,
+ * archived, or clearly unmaintained — do not trust the model alone.
+ */
+function applyHealthRecommendationOverrides(
+  analysis: AIPackageAnalysis,
+  flags: PackageHealthFlags,
+): AIPackageAnalysis {
+  const shouldBlock =
+    flags.deprecated || flags.archived || flags.unmaintained;
+  if (!shouldBlock) {
+    if (analysis.recommendation === "not-recommended") {
+      return { ...analysis, recommendation: "do-not-use" };
+    }
+    return analysis;
+  }
+
+  const concerns = [
+    ...flags.reasons,
+    ...analysis.concerns.filter(
+      (c) =>
+        c &&
+        c.toLowerCase() !== "none" &&
+        !flags.reasons.some((reason) =>
+          reason.toLowerCase().includes(c.toLowerCase()),
+        ),
+    ),
+  ].slice(0, 5);
+
+  const reasonText = flags.reasons.join(" ");
+
+  return {
+    ...analysis,
+    recommendation: "do-not-use",
+    maintenanceRating: "poor",
+    overallScore: Math.min(analysis.overallScore, flags.deprecated || flags.archived ? 25 : 35),
+    concerns: concerns.length > 0 ? concerns : ["Package appears unsafe to adopt for new work."],
+    reasoning:
+      `Do not use this package for new projects. ${reasonText} ` +
+      (analysis.reasoning ? analysis.reasoning : ""),
+  };
 }
 
 /**
@@ -144,6 +302,12 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
   prompt += `Version: ${npm?.version || 'Unknown'}\n`;
   prompt += `License: ${npm?.license || 'Unknown'}\n`;
   prompt += `Description: ${npm?.description || 'No description'}\n`;
+  if (npm?.deprecated) {
+    prompt += `⚠️ npm DEPRECATED: ${npm.deprecated}\n`;
+  }
+  if (github?.archived) {
+    prompt += `⚠️ GitHub repository is ARCHIVED\n`;
+  }
   if (npm?.keywords?.length) {
     prompt += `Keywords: ${npm.keywords.slice(0, 12).join(', ')}\n`;
   }
@@ -209,15 +373,24 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
     prompt += `- Migration warnings (e.g. "please use X instead", "consider switching to Y")\n`;
     prompt += `- Abandonment notices (e.g. "this project is archived", "not actively developed")\n`;
     prompt += `- Security warnings or end-of-life announcements\n`;
-    prompt += `If ANY of these are present, the package MUST be rated as "not-recommended" or "use-with-caution" at best!\n\n`;
+    prompt += `If ANY of these are present, recommendation MUST be "do-not-use".\n\n`;
+  }
+
+  const healthFlags = detectPackageHealthFlags(data);
+  if (healthFlags.deprecated || healthFlags.archived || healthFlags.unmaintained) {
+    prompt += `⚠️ HARD RULE — package health flags already detected:\n`;
+    for (const reason of healthFlags.reasons) {
+      prompt += `- ${reason}\n`;
+    }
+    prompt += `You MUST set recommendation to "do-not-use", maintenanceRating to "poor", and include these reasons in concerns.\n\n`;
   }
 
   prompt += `RECOMMENDATION RULES:\n`;
   prompt += `- Weigh security, adoption, quality, and true abandonment — not how recently a popular package happened to publish.\n`;
   prompt += `- Fewer than 90 days since last publish is healthy. Never call it stale. Never choose use-with-caution for that reason.\n`;
   prompt += `- Widely adopted packages (React, lodash, TypeScript, and similar) often go weeks or months between releases. That is expected for a stable major version.\n`;
-  prompt += `- use-with-caution requires a concrete risk: unpatched high/critical vulnerabilities, README deprecation or archive notice, likely malware/typosquat, or a niche package that looks abandoned (roughly 1+ year silent with little usage).\n`;
-  prompt += `- not-recommended is for deprecated, archived, malicious, or clearly abandoned packages with real risk.\n`;
+  prompt += `- use-with-caution requires a concrete risk: unpatched high/critical vulnerabilities, likely malware/typosquat, or a niche package with worrying signals that are not yet full abandonment.\n`;
+  prompt += `- do-not-use (preferred) or not-recommended: npm-deprecated packages, archived repos, README deprecation/migration notices, or clearly unmaintained packages. Say the package should not be used for new work.\n`;
   prompt += `- High open-issue counts on huge repos are not a red flag by themselves (they often include PRs or a large backlog).\n`;
   prompt += `- Do not pad concerns with release-cadence commentary when cadence is healthy. Use ["None"] if there are no real concerns.\n`;
   prompt += `- Maintenance rating: excellent if published within ~90 days or widely adopted with recent commits; good up to ~6 months (or longer if widely adopted and secure); fair/poor only for genuine inactivity.\n\n`;
@@ -229,7 +402,7 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
   prompt += `   Remaining sentences: notable capabilities or how it fits the ecosystem. Draw this from the description, keywords, and README.\n`;
   prompt += `   Do not lead with popularity, download counts, "zero vulnerabilities", npm scores, or how recently it was published. Those belong in strengths, scores, or reasoning.\n`;
   prompt += `   Only mention staleness or abandonment if the maintenance interpretation above says so.\n`;
-  prompt += `2. Overall recommendation: "recommended", "use-with-caution", or "not-recommended"\n`;
+  prompt += `2. Overall recommendation: "recommended", "use-with-caution", "not-recommended", or "do-not-use"\n`;
   prompt += `3. Key strengths (array of 3-5 strings)\n`;
   prompt += `4. Any concerns (array of 2-4 strings, or ["None"] if no real concerns)\n`;
   prompt += `5. Overall score (0-100). Do not deduct points for a normal release cadence on a widely adopted package.\n`;
@@ -240,7 +413,7 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
   prompt += `Respond ONLY with valid JSON in this exact format:\n`;
   prompt += `{\n`;
   prompt += `  "summary": "string",\n`;
-  prompt += `  "recommendation": "recommended|use-with-caution|not-recommended",\n`;
+  prompt += `  "recommendation": "recommended|use-with-caution|not-recommended|do-not-use",\n`;
   prompt += `  "strengths": ["string1", "string2", "string3"],\n`;
   prompt += `  "concerns": ["string1", "string2"],\n`;
   prompt += `  "overallScore": number,\n`;
@@ -310,7 +483,7 @@ function parseAIResponse(response: string): AIPackageAnalysis {
 
     return {
       summary: normalizeAiString(parsed.summary),
-      recommendation: parsed.recommendation || 'use-with-caution',
+      recommendation: normalizeRecommendation(parsed.recommendation),
       strengths: strengths.length > 0 ? strengths : ['Unable to identify specific strengths from data'],
       concerns: concerns.length > 0 ? concerns : ['Unable to identify specific concerns from data'],
       overallScore: Number(parsed.overallScore) || 50,
@@ -364,7 +537,10 @@ export async function analyzePackageWithAI(
     const aiAnalysis = parseAIResponse(text);
     aiAnalysis.model = 'Gemini 2.5 Flash';
     console.log('✓ Analysis completed with Gemini 2.5 Flash');
-    return aiAnalysis;
+    return applyHealthRecommendationOverrides(
+      aiAnalysis,
+      detectPackageHealthFlags(data),
+    );
   } catch (error: any) {
     // Check if it's a rate limit error (429)
     const isRateLimitError = error.message?.includes('429') || 
@@ -384,7 +560,10 @@ export async function analyzePackageWithAI(
         const aiAnalysis = parseAIResponse(text);
         aiAnalysis.model = 'Gemini 2.5 Flash Lite';
         console.log('✓ Analysis completed with Gemini 2.5 Flash-Lite');
-        return aiAnalysis;
+        return applyHealthRecommendationOverrides(
+          aiAnalysis,
+          detectPackageHealthFlags(data),
+        );
       } catch (flashLiteError: any) {
         const isFlashLiteRateLimit = flashLiteError.message?.includes('429') || 
                                       flashLiteError.message?.includes('quota') || 
@@ -410,7 +589,10 @@ export async function analyzePackageWithAI(
             const aiAnalysis = parseAIResponse(text);
             aiAnalysis.model = GROQ_MODEL_LABEL;
             console.log(`✓ Analysis completed with Groq (${GROQ_MODEL_LABEL})`);
-            return aiAnalysis;
+            return applyHealthRecommendationOverrides(
+              aiAnalysis,
+              detectPackageHealthFlags(data),
+            );
           } catch (groqError: any) {
             console.error('Groq also failed:', groqError);
             throw new Error(`Failed to analyze package with AI (all providers): ${groqError.message}`);

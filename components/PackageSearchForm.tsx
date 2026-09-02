@@ -240,7 +240,7 @@ export function PackageSearchForm({
   const showClear = value.length > 0 && !disabled && !loading;
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 sm:p-8 mb-4 sm:mb-8">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-2 sm:p-8 mb-4 sm:mb-8">
       <form onSubmit={handleSubmit}>
         <div ref={containerRef} className="relative">
           <label htmlFor="packageName" className="sr-only">
@@ -262,7 +262,7 @@ export function PackageSearchForm({
               }}
               onKeyDown={handleKeyDown}
               placeholder="Search npm packages, e.g. react, lodash, @types/node"
-              className={`w-full py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white disabled:opacity-60 pl-10 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden ${
+              className={`w-full text-base py-2.5 sm:py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white disabled:opacity-60 pl-10 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden ${
                 showClear ? "pr-10" : "pr-4"
               }`}
               disabled={disabled || loading}
@@ -272,6 +272,11 @@ export function PackageSearchForm({
               aria-activedescendant={activeDescendantId}
               aria-autocomplete="list"
               autoComplete="off"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="search"
+              inputMode="search"
             />
             {showClear && (
               <button

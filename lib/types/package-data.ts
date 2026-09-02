@@ -8,6 +8,8 @@ export interface NpmPackageData {
   description: string;
   author?: string | { name: string; email?: string };
   license?: string;
+  /** Present when the latest version is marked deprecated on npm */
+  deprecated?: string | null;
   repository?: {
     type: string;
     url: string;
