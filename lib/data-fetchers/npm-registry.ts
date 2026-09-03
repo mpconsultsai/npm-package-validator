@@ -105,6 +105,8 @@ export interface NpmSearchResult {
   description: string;
   version: string;
   score?: number;
+  keywords?: string[];
+  deprecated?: boolean;
 }
 
 /** Well-known packages probed for prefix completion when npm search omits them. */
@@ -136,7 +138,7 @@ const WELL_KNOWN_PACKAGES = [
 
 async function fetchRegistryLatestPackage(
   name: string,
-): Promise<NpmSearchResult | null> {
+): Promise<(NpmSearchResult & { keywords?: string[]; deprecated?: boolean }) | null> {
   try {
     const response = await axios.get(
       `${NPM_REGISTRY_URL}/${encodeURIComponent(name)}/latest`,
@@ -148,15 +150,51 @@ async function fetchRegistryLatestPackage(
     if (response.status === 404) return null;
 
     const data = response.data;
+    const keywords = Array.isArray(data.keywords)
+      ? data.keywords.filter((k: unknown) => typeof k === "string")
+      : undefined;
     return {
       name: data.name || name,
-      description: sanitizeDescription(data.description) || 'No description',
-      version: data.version || '',
+      description: sanitizeDescription(data.description) || "No description",
+      version: data.version || "",
       score: 1_000_000,
+      keywords,
+      deprecated: Boolean(data.deprecated),
     };
   } catch {
     return null;
   }
+}
+
+export async function fetchNpmPackageCards(
+  names: string[],
+): Promise<Array<{
+  name: string;
+  description: string;
+  version: string;
+  keywords?: string[];
+  deprecated?: boolean;
+}>> {
+  const unique = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
+  const results = await Promise.all(
+    unique.map(async (name) => {
+      const card = await fetchRegistryLatestPackage(name);
+      if (card && !card.deprecated) return card;
+      if (!name.includes("/")) {
+        const scopedCore = await fetchRegistryLatestPackage(`@${name}/core`);
+        if (scopedCore && !scopedCore.deprecated) return scopedCore;
+      }
+      return null;
+    }),
+  );
+  return results
+    .filter((r): r is NonNullable<typeof r> => r !== null)
+    .map(({ name, description, version, keywords }) => ({
+      name,
+      description,
+      version,
+      keywords,
+    }));
 }
 
 async function fetchExactPackageMatch(query: string): Promise<NpmSearchResult | null> {
@@ -339,9 +377,102 @@ export async function fetchNpmPackagePopularity(packageName: string): Promise<{
   }
 }
 
+const GENERIC_KEYWORDS = new Set([
+  "javascript",
+  "js",
+  "node",
+  "nodejs",
+  "node.js",
+  "npm",
+  "library",
+  "package",
+  "module",
+  "util",
+  "utils",
+  "utility",
+  "utilities",
+  "helper",
+  "helpers",
+  "ts",
+  "typescript",
+  "es6",
+  "esm",
+  "cjs",
+  "browser",
+  "frontend",
+  "backend",
+  "web",
+  "html",
+  "css",
+  "api",
+  "sdk",
+  "cli",
+  "tool",
+  "tools",
+  "framework",
+  "plugin",
+  "component",
+  "components",
+  "app",
+  "application",
+]);
+
+export function distinctiveKeywords(keywords?: string[] | null): string[] {
+  const seen = new Set<string>();
+  const distinctive: string[] = [];
+  for (const raw of keywords ?? []) {
+    const keyword = raw.trim().toLowerCase();
+    if (!keyword || GENERIC_KEYWORDS.has(keyword) || seen.has(keyword)) continue;
+    seen.add(keyword);
+    distinctive.push(keyword);
+    if (distinctive.length >= 4) break;
+  }
+  return distinctive;
+}
+
+function nameTokens(packageName: string): string[] {
+  const unscoped = packageName.includes("/")
+    ? packageName.split("/").pop() ?? packageName
+    : packageName;
+  return unscoped
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 3 && !GENERIC_KEYWORDS.has(token));
+}
+
+export function keywordOverlap(source: string[], candidate: string[] | undefined): number {
+  if (!source.length || !candidate?.length) return 0;
+  const candidateSet = new Set(candidate.map((k) => k.toLowerCase()));
+  let hits = 0;
+  for (const keyword of source) {
+    if (candidateSet.has(keyword)) hits += 1;
+  }
+  return hits / source.length;
+}
+
+function nameRelatedness(sourceName: string, candidateName: string): number {
+  const source = nameTokens(sourceName);
+  const candidate = nameTokens(candidateName);
+  if (!source.length || !candidate.length) return 0;
+  const candidateSet = new Set(candidate);
+  let hits = 0;
+  for (const token of source) {
+    if (candidateSet.has(token)) hits += 1;
+  }
+  return hits / source.length;
+}
+
+async function searchNpmSimilar(text: string, size: number) {
+  const response = await axios.get(`${NPM_REGISTRY_URL}/-/v1/search`, {
+    params: { text, size },
+    timeout: 15_000,
+  });
+  return response.data?.objects ?? [];
+}
+
 /**
- * Fetch similar/recommended packages by searching npm with the package's keywords or name.
- * Returns packages in the same "category" (e.g. other react-related or testing libs).
+ * Rank related packages by distinctive keyword overlap, name similarity,
+ * and npm's quality/popularity/maintenance scores — not raw search order.
  */
 export async function fetchSimilarPackages(
   packageName: string,
@@ -349,28 +480,59 @@ export async function fetchSimilarPackages(
   limit: number = 6
 ): Promise<Array<{ name: string; description: string; version: string }>> {
   try {
-    const searchTerm =
-      keywords?.length && keywords[0]
-        ? keywords.slice(0, 2).join(' ')
-        : packageName;
-    const response = await axios.get(
-      `${NPM_REGISTRY_URL}/-/v1/search`,
-      { params: { text: searchTerm, size: limit + 10 } }
+    const distinctive = distinctiveKeywords(keywords);
+    const queries = new Set<string>();
+    if (distinctive.length) {
+      queries.add(distinctive.slice(0, 3).map((k) => `keywords:${k}`).join(" "));
+    }
+    queries.add(packageName);
+
+    const searches = await Promise.allSettled(
+      [...queries].map((text) => searchNpmSimilar(text, Math.max(limit * 4, 20))),
     );
-    const objects = response.data?.objects || [];
+
     const currentLower = packageName.toLowerCase();
-    const similar = objects
-      .filter((p: any) => p.package?.name?.toLowerCase() !== currentLower)
+    const seen = new Set<string>([currentLower]);
+    const ranked: Array<{
+      name: string;
+      description: string;
+      version: string;
+      score: number;
+    }> = [];
+
+    for (const result of searches) {
+      if (result.status !== "fulfilled") continue;
+      for (const entry of result.value) {
+        const name = entry.package?.name;
+        if (!name) continue;
+        const key = name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        const overlap = keywordOverlap(distinctive, entry.package?.keywords);
+        const nameScore = nameRelatedness(packageName, name);
+        const npmScore = Number(entry.score?.final) || 0;
+        const popularity = Number(entry.score?.detail?.popularity) || 0;
+        // Prefer true category overlap over a popular-but-unrelated hit.
+        const score = overlap * 4 + nameScore * 2 + npmScore + popularity * 0.5;
+        if (score <= 0.15) continue;
+
+        ranked.push({
+          name,
+          description:
+            sanitizeDescription(entry.package?.description) || "No description",
+          version: entry.package?.version ?? "",
+          score,
+        });
+      }
+    }
+
+    return ranked
+      .sort((a, b) => b.score - a.score)
       .slice(0, limit)
-      .map((p: any) => ({
-        name: p.package?.name ?? '',
-        description: sanitizeDescription(p.package?.description) || 'No description',
-        version: p.package?.version ?? '',
-      }))
-      .filter((p: any) => p.name);
-    return similar;
+      .map(({ name, description, version }) => ({ name, description, version }));
   } catch (error: any) {
-    console.warn('Could not fetch similar packages:', error.message);
+    console.warn("Could not fetch similar packages:", error.message);
     return [];
   }
 }

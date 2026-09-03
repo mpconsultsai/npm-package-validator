@@ -1,14 +1,10 @@
-export { AnalysisTabs } from "./AnalysisTabs";
-export type { AnalysisTabId } from "./AnalysisTabs";
-export { OverviewTabs } from "./OverviewTabs";
-export type { OverviewTabId } from "./OverviewTabs";
+export { AnalysisTabs, DetailsTabs } from "./PackageTabs";
+export type { AnalysisTabId, DetailsTabId } from "./PackageTabs";
 export { AdvisoryLinks } from "./AdvisoryLinks";
 export { PackageInfoCard } from "./PackageInfoCard";
 export { MetricsCard } from "./MetricsCard";
 export { MetricsChartsCard } from "./MetricsChartsCard";
-export { SecurityVulnerabilitiesCard } from "./SecurityVulnerabilitiesCard";
-export { VersionCheckCard } from "./VersionCheckCard";
+export { SecurityCard } from "./SecurityCard";
 export { AIAnalysisCard } from "./AIAnalysisCard";
 export { SimilarPackagesCard } from "./SimilarPackagesCard";
-export { SecuritySeverityBadges } from "./SecuritySeverityBadges";
 export type { SecurityCountSummary } from "./SecuritySeverityBadges";

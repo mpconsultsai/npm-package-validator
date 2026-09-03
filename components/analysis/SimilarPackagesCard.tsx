@@ -8,23 +8,28 @@ interface SimilarPackage {
   name: string;
   description: string;
   version: string;
+  competitor?: boolean;
 }
 
 interface SimilarPackagesCardProps {
   packageName: string;
   /** Pass when available from analysis to avoid extra API work */
   keywords?: string[] | null;
+  /** AI-named alternative packages */
+  competitors?: string[] | null;
 }
 
 function RelatedPackagesSkeleton() {
   return (
     <div
       className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6"
-      aria-busy="true"
-      aria-live="polite"
+      role="status"
     >
       <span className="sr-only">Loading related packages</span>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+        aria-hidden="true"
+      >
         {Array.from({ length: 6 }, (_, i) => (
           <div
             key={i}
@@ -41,8 +46,13 @@ function RelatedPackagesSkeleton() {
   );
 }
 
-export function SimilarPackagesCard({ packageName, keywords }: SimilarPackagesCardProps) {
+export function SimilarPackagesCard({
+  packageName,
+  keywords,
+  competitors,
+}: SimilarPackagesCardProps) {
   const keywordsKey = (keywords ?? []).join(",");
+  const competitorsKey = (competitors ?? []).join(",");
   const [packages, setPackages] = useState<SimilarPackage[]>([]);
   const [loading, setLoading] = useState(Boolean(packageName));
 
@@ -52,6 +62,7 @@ export function SimilarPackagesCard({ packageName, keywords }: SimilarPackagesCa
     const controller = new AbortController();
     const params = new URLSearchParams({ package: packageName });
     if (keywordsKey) params.set("keywords", keywordsKey);
+    if (competitorsKey) params.set("competitors", competitorsKey);
 
     const load = async () => {
       try {
@@ -74,7 +85,7 @@ export function SimilarPackagesCard({ packageName, keywords }: SimilarPackagesCa
     return () => {
       controller.abort();
     };
-  }, [packageName, keywordsKey]);
+  }, [packageName, keywordsKey, competitorsKey]);
 
   if (loading) {
     return <RelatedPackagesSkeleton />;
@@ -99,9 +110,16 @@ export function SimilarPackagesCard({ packageName, keywords }: SimilarPackagesCa
             href={`/package/${encodeURIComponent(pkg.name)}`}
             className="block p-4 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-indigo-500 dark:hover:border-indigo-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
           >
-            <p className="font-semibold text-gray-900 dark:text-white truncate">
-              {pkg.name}
-            </p>
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-semibold text-gray-900 dark:text-white truncate">
+                {pkg.name}
+              </p>
+              {pkg.competitor && (
+                <span className="shrink-0 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+                  Competitor
+                </span>
+              )}
+            </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
               v{pkg.version}
             </p>

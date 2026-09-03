@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { extractPackageName } from "@/lib/validation";
+import { smoothNavigate } from "@/lib/smooth-navigate";
 
 export interface PackageSearchSuggestion {
   name: string;
@@ -66,6 +68,8 @@ export function PackageSearchForm({
   disabled = false,
 }: PackageSearchFormProps) {
   const listboxId = useId();
+  const router = useRouter();
+  const pathname = usePathname();
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -103,8 +107,12 @@ export function PackageSearchForm({
     allowDropdownRef.current = true;
     dismissDropdown();
     onChange("");
+    if (pathname !== "/") {
+      smoothNavigate(() => router.push("/"));
+      return;
+    }
     inputRef.current?.focus();
-  }, [onChange, dismissDropdown]);
+  }, [onChange, dismissDropdown, pathname, router]);
 
   useEffect(() => {
     if (loading || !allowDropdownRef.current) return;
@@ -347,21 +355,6 @@ export function PackageSearchForm({
             </ul>
           )}
         </div>
-        {loading && (
-          <div
-            role="status"
-            aria-live="polite"
-            className="mt-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-4 py-3"
-          >
-            <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-              Analysing package…
-            </p>
-            <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-              If the server was recently restarted, this may take a moment while
-              it comes back online.
-            </p>
-          </div>
-        )}
       </form>
     </div>
   );

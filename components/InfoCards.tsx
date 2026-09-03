@@ -82,8 +82,11 @@ export function InfoCards() {
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeWidth={2}
-            d="M13 10V3L4 14h7v7l9-11h-7z"
+            d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
           />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 2v4" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M22 4h-4" />
+          <circle cx="4" cy="20" r="2" strokeWidth={2} />
         </svg>
       </InfoCard>
     </div>

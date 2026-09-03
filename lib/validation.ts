@@ -14,6 +14,19 @@ export function extractPackageName(input: string): string {
   return (input?.trim().split(/\s+/)[0] || '').trim();
 }
 
+/** Lowercase npm name; add a missing @ for scope/name (e.g. angular/core → @angular/core). */
+export function normalizeNpmPackageName(input: string): string {
+  const name = extractPackageName(input).toLowerCase();
+  if (
+    name &&
+    !name.startsWith("@") &&
+    /^[a-z0-9-~][a-z0-9-._~]*\/[a-z0-9-~][a-z0-9-._~]*$/.test(name)
+  ) {
+    return `@${name}`;
+  }
+  return name;
+}
+
 export function validatePackageName(packageName: string): { valid: boolean; error?: string } {
   const trimmed = extractPackageName(packageName);
 

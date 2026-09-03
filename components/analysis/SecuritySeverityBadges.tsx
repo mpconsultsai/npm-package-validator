@@ -22,19 +22,13 @@ function countFor(
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
-export function getVisibleSecurityCounts(
+function getVisibleSecurityCounts(
   summary: SecurityCountSummary | null | undefined,
 ) {
   return SEVERITY_LEVELS.map((level) => ({
     ...level,
     count: countFor(summary, level.key),
   })).filter((level) => level.count > 0);
-}
-
-export function hasHighRiskSecurityIssues(
-  summary: SecurityCountSummary | null | undefined,
-): boolean {
-  return countFor(summary, "critical") > 0 || countFor(summary, "high") > 0;
 }
 
 interface SecuritySeverityBadgesProps {

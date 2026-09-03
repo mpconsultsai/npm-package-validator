@@ -202,37 +202,3 @@ export async function checkPackageSecurity(
     throw new Error(`Failed to check package security: ${message}`);
   }
 }
-
-/**
- * Quick check if package has critical or high vulnerabilities
- */
-export async function hasHighRiskVulnerabilities(
-  packageName: string
-): Promise<boolean> {
-  try {
-    const summary = await checkPackageSecurity(packageName);
-    return summary.critical > 0 || summary.high > 0;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Get simple vulnerability count
- */
-export async function getVulnerabilityCount(
-  packageName: string
-): Promise<{ critical: number; high: number; moderate: number; low: number; total: number }> {
-  try {
-    const summary = await checkPackageSecurity(packageName);
-    return {
-      critical: summary.critical,
-      high: summary.high,
-      moderate: summary.moderate,
-      low: summary.low,
-      total: summary.totalCount,
-    };
-  } catch {
-    return { critical: 0, high: 0, moderate: 0, low: 0, total: 0 };
-  }
-}

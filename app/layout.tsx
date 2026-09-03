@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { getSiteUrl } from "@/lib/site-url";
+import { AppShell } from "@/components/AppShell";
 import "./globals.css";
 
 const siteName = "NPM Package Validator";
@@ -72,7 +73,7 @@ export default function RootLayout({
   return (
     <html lang="en-GB" suppressHydrationWarning>
       <body className="antialiased" suppressHydrationWarning>
-        {children}
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

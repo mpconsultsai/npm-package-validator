@@ -95,21 +95,3 @@ export async function analyzePackage(
 
   return result;
 }
-
-/**
- * Analyze multiple packages in parallel
- */
-export async function analyzeMultiplePackages(
-  packageNames: string[],
-): Promise<PackageAnalysisResult[]> {
-  const promises = packageNames.map((name) =>
-    analyzePackage(name).catch((error: unknown) => ({
-      packageName: name,
-      errors: {
-        npm: error instanceof Error ? error.message : "Analysis failed",
-      },
-    })),
-  );
-
-  return Promise.all(promises);
-}

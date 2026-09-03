@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import Groq from 'groq-sdk';
 import type { PackageAnalysisResult } from '../types/package-data';
 import { formatBytes } from '../utils/format';
+import { extractPackageName, normalizeNpmPackageName, validatePackageName } from '../validation';
 
 /** Groq retired llama-3.3-70b-versatile on 16 Aug 2026; gpt-oss-120b is the documented replacement. */
 const GROQ_MODEL = 'openai/gpt-oss-120b';
@@ -24,6 +25,8 @@ export interface AIPackageAnalysis {
   qualityRating: "excellent" | "good" | "fair" | "poor";
   maintenanceRating: "excellent" | "good" | "fair" | "poor";
   reasoning: string;
+  /** npm package names that are genuine alternatives, not ecosystem add-ons */
+  competitors?: string[];
   model?: string; // e.g. "Gemini 2.5 Flash", "GPT-OSS 120B (Groq)"
 }
 
@@ -407,6 +410,46 @@ function getGroqClient() {
   return new Groq({ apiKey });
 }
 
+/** Rate limits, overload, and temporary Gemini outages should fall through the provider chain. */
+function isGeminiCapacityError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  const lower = message.toLowerCase();
+  return (
+    /\b429\b/.test(message) ||
+    /\b503\b/.test(message) ||
+    lower.includes('quota') ||
+    lower.includes('rate limit') ||
+    lower.includes('resource_exhausted') ||
+    lower.includes('service unavailable') ||
+    lower.includes('high demand') ||
+    lower.includes('try again later') ||
+    lower.includes('overloaded')
+  );
+}
+
+async function analyzeWithGroq(
+  systemPrompt: string,
+  prompt: string,
+  data: PackageAnalysisResult,
+): Promise<AIPackageAnalysis> {
+  const groqClient = getGroqClient();
+  const chatCompletion = await groqClient.chat.completions.create({
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: prompt },
+    ],
+    model: GROQ_MODEL,
+    temperature: 0.7,
+    max_tokens: 2048,
+  });
+
+  const text = chatCompletion.choices[0]?.message?.content || '';
+  const aiAnalysis = parseAIResponse(text, data.packageName);
+  aiAnalysis.model = GROQ_MODEL_LABEL;
+  console.log(`✓ Analysis completed with Groq (${GROQ_MODEL_LABEL})`);
+  return finalizeAiAnalysis(aiAnalysis, data);
+}
+
 function daysSince(iso?: string | null): number | null {
   if (!iso) return null;
   const ms = Date.now() - new Date(iso).getTime();
@@ -625,7 +668,8 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
   prompt += `6. Security rating: "excellent", "good", "fair", or "poor"\n`;
   prompt += `7. Quality rating: "excellent", "good", "fair", or "poor"\n`;
   prompt += `8. Maintenance rating: "excellent", "good", "fair", or "poor"\n`;
-  prompt += `9. Reasoning for your recommendation (2-3 sentences)\n\n`;
+  prompt += `9. Reasoning for your recommendation (2-3 sentences)\n`;
+  prompt += `10. Competitors: 4-6 real npm package names for genuine alternatives that do the same job (replacements you would consider instead). Same category, different product — not plugins, wrappers, or ecosystem add-ons of this package. Use exact registry names: include the @ for scoped packages (e.g. "@angular/core", not "angular" or "angular/core"). Lowercase, no versions. Never include "${packageName}" itself.\n\n`;
   prompt += `Respond ONLY with valid JSON in this exact format:\n`;
   prompt += `{\n`;
   prompt += `  "summary": "string",\n`;
@@ -636,7 +680,8 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
   prompt += `  "securityRating": "excellent|good|fair|poor",\n`;
   prompt += `  "qualityRating": "excellent|good|fair|poor",\n`;
   prompt += `  "maintenanceRating": "excellent|good|fair|poor",\n`;
-  prompt += `  "reasoning": "string"\n`;
+  prompt += `  "reasoning": "string",\n`;
+  prompt += `  "competitors": ["package-name", "@scope/package-name"]\n`;
   prompt += `}\n\n`;
   prompt += `Do not include any text outside the JSON object. Use normal ASCII spaces and hyphens (e.g. "well-maintained"), never join words.`;
 
@@ -662,7 +707,27 @@ function normalizeAiString(value: unknown): string {
 /**
  * Parse AI response into structured format
  */
-function parseAIResponse(response: string): AIPackageAnalysis {
+function parseCompetitorNames(
+  value: unknown,
+  packageName: string,
+): string[] {
+  const raw = Array.isArray(value) ? value : [];
+  const seen = new Set<string>([packageName.toLowerCase()]);
+  const names: string[] = [];
+  for (const entry of raw) {
+    const name = normalizeNpmPackageName(normalizeAiString(entry));
+    if (!name || seen.has(name) || !validatePackageName(name).valid) continue;
+    seen.add(name);
+    names.push(name);
+    if (names.length >= 6) break;
+  }
+  return names;
+}
+
+function parseAIResponse(
+  response: string,
+  packageName: string,
+): AIPackageAnalysis {
   try {
     // Remove markdown code blocks if present
     const cleanedResponse = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -707,6 +772,7 @@ function parseAIResponse(response: string): AIPackageAnalysis {
       qualityRating: parsed.qualityRating || 'fair',
       maintenanceRating: parsed.maintenanceRating || 'fair',
       reasoning: normalizeAiString(parsed.reasoning) || normalizeAiString(parsed.summary) || 'Analysis based on package metrics',
+      competitors: parseCompetitorNames(parsed.competitors, packageName),
     };
   } catch (error) {
     console.error('Failed to parse AI response:', error);
@@ -722,12 +788,14 @@ function parseAIResponse(response: string): AIPackageAnalysis {
       qualityRating: 'fair',
       maintenanceRating: 'fair',
       reasoning: 'Please review the package metrics manually.',
+      competitors: [],
     };
   }
 }
 
 /**
- * Analyze a package using AI with automatic fallback to Flash-Lite on rate limit
+ * Analyze a package using AI with automatic fallback:
+ * Gemini Flash → Flash-Lite → Groq on rate limits / capacity errors (429, 503, etc.)
  */
 export async function analyzePackageWithAI(
   data: PackageAnalysisResult
@@ -750,130 +818,44 @@ export async function analyzePackageWithAI(
     const response = result.response;
     const text = response.text();
     
-    const aiAnalysis = parseAIResponse(text);
+    const aiAnalysis = parseAIResponse(text, data.packageName);
     aiAnalysis.model = 'Gemini 2.5 Flash';
     console.log('✓ Analysis completed with Gemini 2.5 Flash');
     return finalizeAiAnalysis(aiAnalysis, data);
   } catch (error: any) {
-    // Check if it's a rate limit error (429)
-    const isRateLimitError = error.message?.includes('429') || 
-                             error.message?.includes('quota') || 
-                             error.message?.includes('rate limit');
-    
-    if (isRateLimitError) {
-      console.warn('⚠ Rate limit hit on Flash, falling back to Flash-Lite...');
-      
-      // Fallback to Gemini 2.5 Flash-Lite
-      try {
-        const fallbackModel = getAIModel('gemini-2.5-flash-lite');
-        const result = await fallbackModel.generateContent(fullPrompt);
-        const response = result.response;
-        const text = response.text();
-        
-        const aiAnalysis = parseAIResponse(text);
-        aiAnalysis.model = 'Gemini 2.5 Flash Lite';
-        console.log('✓ Analysis completed with Gemini 2.5 Flash-Lite');
-        return finalizeAiAnalysis(aiAnalysis, data);
-      } catch (flashLiteError: any) {
-        const isFlashLiteRateLimit = flashLiteError.message?.includes('429') || 
-                                      flashLiteError.message?.includes('quota') || 
-                                      flashLiteError.message?.includes('rate limit');
-        
-        if (isFlashLiteRateLimit) {
-          console.warn('⚠ Flash-Lite also rate limited, falling back to Groq...');
-          
-          // Final fallback to Groq (14,400 requests/day)
-          try {
-            const groqClient = getGroqClient();
-            const chatCompletion = await groqClient.chat.completions.create({
-              messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: prompt }
-              ],
-              model: GROQ_MODEL,
-              temperature: 0.7,
-              max_tokens: 2048,
-            });
-            
-            const text = chatCompletion.choices[0]?.message?.content || '';
-            const aiAnalysis = parseAIResponse(text);
-            aiAnalysis.model = GROQ_MODEL_LABEL;
-            console.log(`✓ Analysis completed with Groq (${GROQ_MODEL_LABEL})`);
-            return finalizeAiAnalysis(aiAnalysis, data);
-          } catch (groqError: any) {
-            console.error('Groq also failed:', groqError);
-            throw new Error(`Failed to analyze package with AI (all providers): ${groqError.message}`);
-          }
-        } else {
-          console.error('Flash-Lite failed (non-rate-limit):', flashLiteError);
-          throw new Error(`Failed to analyze package with AI: ${flashLiteError.message}`);
-        }
-      }
-    } else {
-      // Non-rate-limit error, throw immediately
+    if (!isGeminiCapacityError(error)) {
       console.error('AI analysis failed:', error);
       throw new Error(`Failed to analyze package with AI: ${error.message}`);
     }
-  }
-}
 
-/**
- * Generate a quick summary for a package with fallback
- */
-export async function generatePackageSummary(
-  packageName: string,
-  version: string,
-  license: string,
-  npmUrl: string,
-  score: number
-): Promise<string> {
-  const prompt = `Package: ${packageName}
-Version: ${version}
-License: ${license}
-URL: ${npmUrl}
-Quality Score: ${score}/100
+    console.warn('⚠ Gemini Flash unavailable (rate/capacity), falling back to Flash-Lite...');
 
-Generate a single concise sentence (max 20 words) summarizing if this package is good to use.`;
+    try {
+      const fallbackModel = getAIModel('gemini-2.5-flash-lite');
+      const result = await fallbackModel.generateContent(fullPrompt);
+      const response = result.response;
+      const text = response.text();
 
-  // Try Flash first, fallback to Flash-Lite
-  try {
-    const model = getAIModel('gemini-2.5-flash');
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    return response.text();
-  } catch (error: any) {
-    const isRateLimitError = error.message?.includes('429') || 
-                             error.message?.includes('quota') || 
-                             error.message?.includes('rate limit');
-    
-    if (isRateLimitError) {
+      const aiAnalysis = parseAIResponse(text, data.packageName);
+      aiAnalysis.model = 'Gemini 2.5 Flash Lite';
+      console.log('✓ Analysis completed with Gemini 2.5 Flash-Lite');
+      return finalizeAiAnalysis(aiAnalysis, data);
+    } catch (flashLiteError: any) {
+      if (!isGeminiCapacityError(flashLiteError)) {
+        console.error('Flash-Lite failed (non-capacity):', flashLiteError);
+        throw new Error(`Failed to analyze package with AI: ${flashLiteError.message}`);
+      }
+
+      console.warn('⚠ Flash-Lite unavailable (rate/capacity), falling back to Groq...');
+
       try {
-        const fallbackModel = getAIModel('gemini-2.5-flash-lite');
-        const result = await fallbackModel.generateContent(prompt);
-        const response = result.response;
-        return response.text();
-      } catch (flashLiteError: any) {
-        const isFlashLiteRateLimit = flashLiteError.message?.includes('429') || 
-                                      flashLiteError.message?.includes('quota') || 
-                                      flashLiteError.message?.includes('rate limit');
-        
-        if (isFlashLiteRateLimit) {
-          try {
-            const groqClient = getGroqClient();
-            const chatCompletion = await groqClient.chat.completions.create({
-              messages: [{ role: 'user', content: prompt }],
-              model: GROQ_MODEL,
-              temperature: 0.7,
-              max_tokens: 256,
-            });
-            return chatCompletion.choices[0]?.message?.content || `${packageName} v${version} - Quality score: ${score}/100`;
-          } catch {
-            return `${packageName} v${version} - Quality score: ${score}/100`;
-          }
-        }
-        return `${packageName} v${version} - Quality score: ${score}/100`;
+        return await analyzeWithGroq(systemPrompt, prompt, data);
+      } catch (groqError: any) {
+        console.error('Groq also failed:', groqError);
+        throw new Error(
+          `Failed to analyze package with AI (all providers): ${groqError.message}`,
+        );
       }
     }
-    return `${packageName} v${version} - Quality score: ${score}/100`;
   }
 }

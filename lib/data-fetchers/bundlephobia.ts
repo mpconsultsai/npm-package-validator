@@ -2,6 +2,14 @@ import axios from "axios";
 
 const BUNDLEPHOBIA_SIZE_URL = "https://bundlephobia.com/api/size";
 
+const BUNDLEPHOBIA_HEADERS = {
+  Accept: "application/json",
+  "User-Agent":
+    "Mozilla/5.0 (compatible; npm-package-validator/1.0; +https://github.com)",
+  Origin: "https://bundlephobia.com",
+  Referer: "https://bundlephobia.com/",
+};
+
 export interface BundleSizeInfo {
   size: number;
   gzip: number;
@@ -25,13 +33,7 @@ export async function fetchBundleSize(
     const response = await axios.get(BUNDLEPHOBIA_SIZE_URL, {
       params: { package: pkg },
       timeout: 20_000,
-      headers: {
-        Accept: "application/json",
-        "User-Agent":
-          "Mozilla/5.0 (compatible; npm-package-validator/1.0; +https://github.com)",
-        Origin: "https://bundlephobia.com",
-        Referer: "https://bundlephobia.com/",
-      },
+      headers: BUNDLEPHOBIA_HEADERS,
       validateStatus: (status) => status === 200,
     });
 

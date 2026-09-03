@@ -23,3 +23,37 @@ body {
     text-wrap: balance;
   }
 }
+
+.site-chrome-header {
+  view-transition-name: site-header;
+}
+
+.site-chrome-search {
+  view-transition-name: site-search;
+}
+
+.route-panel {
+  view-transition-name: route-panel;
+  animation: route-panel-in 220ms ease-out;
+}
+
+@keyframes route-panel-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 200ms;
+  animation-timing-function: ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-panel {
+    animation: none;
+  }
+}
