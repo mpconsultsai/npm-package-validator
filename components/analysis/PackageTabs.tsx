@@ -132,20 +132,26 @@ export function AnalysisTabs({
   onChange,
   aiModel,
   security,
+  showAi = true,
 }: {
   active: AnalysisTabId;
   onChange: (tab: AnalysisTabId) => void;
   aiModel?: string;
   security?: SecurityCountSummary | null;
+  showAi?: boolean;
 }) {
   const tabs: TabDef<AnalysisTabId>[] = [
-    {
-      id: "ai",
-      label: "AI analysis",
-      shortLabel: "AI",
-      icon: <TabIconSparkles />,
-      detail: aiModel,
-    },
+    ...(showAi
+      ? [
+          {
+            id: "ai" as const,
+            label: "AI analysis",
+            shortLabel: "AI",
+            icon: <TabIconSparkles />,
+            detail: aiModel,
+          },
+        ]
+      : []),
     { id: "info", label: "Package info", shortLabel: "Info", icon: <TabIconBox /> },
     {
       id: "security",
@@ -157,7 +163,7 @@ export function AnalysisTabs({
 
   return (
     <TabRow
-      label="AI analysis"
+      label="Package analysis"
       tabs={tabs}
       active={active}
       onChange={onChange}

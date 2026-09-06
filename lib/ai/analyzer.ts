@@ -274,8 +274,9 @@ function applyHealthRecommendationOverrides(
     maintenanceRating: "poor",
     overallScore: Math.min(analysis.overallScore, flags.deprecated || flags.archived ? 25 : 35),
     concerns: concerns.length > 0 ? concerns : ["Package appears unsafe to adopt for new work."],
+    // Keep reasons in concerns only — do not also paste them into reasoning
     reasoning: mergeReasoning(
-      ["Do not use this package for new projects", ...flags.reasons],
+      ["Do not use this package for new projects"],
       analysis.reasoning || "",
     ),
   };
@@ -360,11 +361,67 @@ function applyBundleSizeNotes(
   return {
     ...analysis,
     concerns: [assessment.note, ...concerns].slice(0, 5),
-    reasoning: mergeReasoning(
-      [assessment.note],
-      analysis.reasoning || "",
-    ),
   };
+}
+
+/** Drop reasoning sentences that restate concerns (theme or near-duplicate text). */
+function stripReasoningOverlap(
+  reasoning: string,
+  concerns: string[],
+): string {
+  if (!reasoning.trim()) return reasoning;
+
+  const themes = new Set(
+    concerns
+      .map((c) => concernTheme(c))
+      .filter((t): t is string => Boolean(t)),
+  );
+  const concernNorms = concerns
+    .map((c) =>
+      c
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim(),
+    )
+    .filter((c) => c.length > 12);
+
+  const kept = reasoning
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter((sentence) => {
+      const theme = concernTheme(sentence);
+      if (theme && themes.has(theme)) return false;
+
+      const norm = sentence
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+      return !concernNorms.some(
+        (c) =>
+          norm.includes(c) ||
+          c.includes(norm) ||
+          tokenOverlap(norm, c) >= 0.65,
+      );
+    });
+
+  const out = kept.join(" ").trim();
+  if (out) return out;
+  if (concerns.length > 0) {
+    return "Recommendation follows from the concerns listed above.";
+  }
+  return reasoning.trim();
+}
+
+function tokenOverlap(a: string, b: string): number {
+  const as = new Set(a.split(/\s+/).filter((w) => w.length > 3));
+  const bs = new Set(b.split(/\s+/).filter((w) => w.length > 3));
+  if (as.size === 0 || bs.size === 0) return 0;
+  let hit = 0;
+  for (const w of as) {
+    if (bs.has(w)) hit += 1;
+  }
+  return hit / Math.min(as.size, bs.size);
 }
 
 function finalizeAiAnalysis(
@@ -376,9 +433,11 @@ function finalizeAiAnalysis(
     detectPackageHealthFlags(data),
   );
   const withBundle = applyBundleSizeNotes(withHealth, data);
+  const concerns = dedupeConcerns(withBundle.concerns).slice(0, 5);
   return {
     ...withBundle,
-    concerns: dedupeConcerns(withBundle.concerns).slice(0, 5),
+    concerns,
+    reasoning: stripReasoningOverlap(withBundle.reasoning || "", concerns),
   };
 }
 
@@ -489,34 +548,33 @@ function maintenanceContext(
   const popular = adoption === 'widely-adopted';
 
   if (publish === null) {
-    return 'unknown — no publish date; do not infer abandonment from missing data';
+    return 'unknown publish date — do not infer abandonment';
   }
   if (publish < 90) {
-    return `healthy (${publish} days since last publish). A gap of weeks or a few months is a normal release cadence. Do not call this stale. Do not use it to justify use-with-caution.`;
+    return `healthy (${publish}d since publish). Not stale; never use-with-caution for cadence alone.`;
   }
   if (publish < 180) {
-    if (popular) {
-      return `normal for a mature, widely used package (${publish} days). This is not stale. Recommendation must not drop to use-with-caution on cadence alone.`;
-    }
-    return `acceptable (${publish} days). Not stale. Only mention as a mild note if there are other real risks.`;
+    return popular
+      ? `normal for mature/widely used (${publish}d). Not stale; cadence alone ≠ caution.`
+      : `acceptable (${publish}d). Not stale; mild note only if other risks exist.`;
   }
   if (publish < 365) {
     if (popular && (commit === null || commit < 180)) {
-      return `mature/stable (${publish} days since publish). Widely adopted packages often go months between releases. Treat as maintained unless README says otherwise.`;
+      return `mature/stable (${publish}d). Months between releases OK for widely adopted; treat as maintained unless README says otherwise.`;
     }
-    return `slow (${publish} days). May note slower releases, but use-with-caution only if there are also vulnerabilities, deprecation, or no commits.`;
+    return `slow (${publish}d). Caution only with vulns, deprecation, or no commits.`;
   }
   if (popular && commit !== null && commit < 90) {
-    return `long gap since npm publish (${publish} days) but recent git activity. For a widely adopted package this is often a stable major version, not abandonment.`;
+    return `long publish gap (${publish}d) but recent git — often stable major, not abandonment.`;
   }
   if (publish >= 365 && (commit === null || commit >= 180) && !popular) {
-    return `likely unmaintained (${publish} days since publish). This can justify use-with-caution or not-recommended.`;
+    return `likely unmaintained (${publish}d since publish) — may justify caution or do-not-use.`;
   }
-  return `long gap since last publish (${publish} days). Weigh adoption and security: a popular, vulnerability-free package may still be recommended with a maintenance note.`;
+  return `long publish gap (${publish}d). Popular + secure may still be recommended with a maintenance note.`;
 }
 
 /**
- * Create a prompt for package analysis
+ * Create a prompt for package analysis (kept compact to limit tokens).
  */
 function createAnalysisPrompt(data: PackageAnalysisResult): string {
   const { packageName, npm, downloads, github, security, readme, popularity, bundleSize } = data;
@@ -537,155 +595,118 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
     adoption,
   );
 
-  let prompt = `Analyse this npm package and provide a detailed assessment:\n\n`;
-  
-  // Package basics
-  prompt += `Package: ${packageName}\n`;
-  prompt += `Version: ${npm?.version || 'Unknown'}\n`;
-  prompt += `License: ${npm?.license || 'Unknown'}\n`;
-  prompt += `Description: ${npm?.description || 'No description'}\n`;
-  if (npm?.deprecated) {
-    prompt += `⚠️ npm DEPRECATED: ${npm.deprecated}\n`;
-  }
-  if (github?.archived) {
-    prompt += `⚠️ GitHub repository is ARCHIVED\n`;
-  }
+  const lines: string[] = [
+    `Analyse npm package "${packageName}". JSON only.`,
+    "",
+    `v${npm?.version || "?"}; license ${npm?.license || "?"}`,
+    `Desc: ${npm?.description || "none"}`,
+  ];
+
+  if (npm?.deprecated) lines.push(`DEPRECATED: ${npm.deprecated}`);
+  if (github?.archived) lines.push("GitHub ARCHIVED");
   if (npm?.keywords?.length) {
-    prompt += `Keywords: ${npm.keywords.slice(0, 12).join(', ')}\n`;
+    lines.push(`Keywords: ${npm.keywords.slice(0, 10).join(", ")}`);
   }
-  prompt += `npm URL: https://www.npmjs.com/package/${packageName}\n`;
-
-  if (daysSincePublish !== null && daysSincePublish >= 0) {
-    prompt += `Days Since Last Publish: ${daysSincePublish}\n`;
-  } else if (daysSincePublish !== null && daysSincePublish < 0) {
-    prompt += `Package recently published (within the last day)\n`;
+  if (daysSincePublish !== null) {
+    lines.push(
+      daysSincePublish >= 0
+        ? `Days since publish: ${daysSincePublish}`
+        : "Published within last day",
+    );
   }
-  prompt += `\n`;
 
-  prompt += `Adoption:\n`;
-  prompt += `- Level: ${adoption}\n`;
+  const adoptionBits = [`adoption=${adoption}`];
   if (monthlyDownloads !== undefined) {
-    prompt += `- Downloads (last month): ${monthlyDownloads.toLocaleString()}\n`;
+    adoptionBits.push(`downloads/mo=${monthlyDownloads.toLocaleString()}`);
   }
   if (popularity?.dependents !== undefined) {
-    prompt += `- npm dependents: ${popularity.dependents.toLocaleString()}\n`;
+    adoptionBits.push(`dependents=${popularity.dependents.toLocaleString()}`);
   }
   if (popularity) {
-    prompt += `- npm popularity score: ${popularity.popularityScore}\n`;
-    prompt += `- npm quality score: ${popularity.qualityScore}\n`;
-    prompt += `- npm maintenance score: ${popularity.maintenanceScore}\n`;
+    adoptionBits.push(
+      `npm scores p/q/m=${popularity.popularityScore}/${popularity.qualityScore}/${popularity.maintenanceScore}`,
+    );
   }
-  prompt += `\n`;
+  lines.push(adoptionBits.join("; "));
 
-  // GitHub stats
   if (github) {
-    prompt += `GitHub Statistics:\n`;
-    prompt += `- Stars: ${github.stars.toLocaleString()}\n`;
-    prompt += `- Forks: ${github.forks.toLocaleString()}\n`;
-    prompt += `- Open Issues: ${github.open_issues.toLocaleString()}\n`;
-
-    if (daysSinceCommit !== null && daysSinceCommit >= 0) {
-      prompt += `- Days Since Last Commit: ${daysSinceCommit}\n`;
-    } else if (daysSinceCommit !== null && daysSinceCommit < 0) {
-      prompt += `- Recently committed (within the last day)\n`;
+    const gh = [
+      `stars=${github.stars.toLocaleString()}`,
+      `forks=${github.forks.toLocaleString()}`,
+      `openIssues=${github.open_issues.toLocaleString()}`,
+      `lang=${github.language || "?"}`,
+    ];
+    if (daysSinceCommit !== null) {
+      gh.push(
+        daysSinceCommit >= 0
+          ? `daysSinceCommit=${daysSinceCommit}`
+          : "committed within last day",
+      );
     }
-    
-    prompt += `- Language: ${github.language || 'Unknown'}\n\n`;
+    lines.push(`GitHub: ${gh.join("; ")}`);
   }
 
-  prompt += `Maintenance interpretation (authoritative — follow this):\n${cadenceNote}\n\n`;
+  lines.push(`Maintenance (authoritative): ${cadenceNote}`);
 
-  // Security vulnerabilities
   if (security) {
-    prompt += `Security Assessment:\n`;
-    prompt += `- Total Vulnerabilities: ${security.totalCount}\n`;
-    prompt += `- Critical: ${security.critical}\n`;
-    prompt += `- High: ${security.high}\n`;
-    prompt += `- Moderate: ${security.moderate}\n`;
-    prompt += `- Low: ${security.low}\n\n`;
+    lines.push(
+      `Vulns total=${security.totalCount} (crit=${security.critical}, high=${security.high}, mod=${security.moderate}, low=${security.low})`,
+    );
   }
 
   const bundleAssessment = assessBundleSize(data);
   if (bundleSize && bundleAssessment.gzip !== null && bundleAssessment.size !== null) {
-    prompt += `Browser bundle size (Bundlephobia):\n`;
-    prompt += `- Minified: ${formatBytes(bundleAssessment.size)} (${bundleAssessment.size} bytes)\n`;
-    prompt += `- Gzip: ${formatBytes(bundleAssessment.gzip)} (${bundleAssessment.gzip} bytes)\n`;
-    prompt += `- Size rating: ${bundleAssessment.level}\n`;
+    let bundleLine = `Bundle: ${formatBytes(bundleAssessment.size)} min / ${formatBytes(bundleAssessment.gzip)} gzip (${bundleAssessment.level})`;
     if (bundleAssessment.level === "large" || bundleAssessment.level === "very-large") {
-      prompt += `⚠️ This bundle is ${bundleAssessment.level.replace("-", " ")}. You MUST mention it in concerns and weigh it in reasoning for client-side use. Do not treat a large gzip payload as a strength.\n`;
+      bundleLine += " — MUST list in concerns for browser use; not a strength";
     } else if (bundleAssessment.level === "notable") {
-      prompt += `Optional: briefly note the non-trivial bundle size if relevant to the use case.\n`;
-    } else {
-      prompt += `Bundle size is modest — may list as a strength for front-end use if relevant.\n`;
+      bundleLine += " — optional concern if front-end relevant";
     }
-    prompt += `\n`;
+    lines.push(bundleLine);
   }
 
-  // README content (first 3000 chars - most important section)
   if (readme) {
-    prompt += `README Content (first 3000 characters):\n`;
-    prompt += `${readme}\n\n`;
-    prompt += `⚠️ CRITICAL: Check the README above for:\n`;
-    prompt += `- What the package is, who it is for, and how it is typically used\n`;
-    prompt += `- Deprecation notices (e.g. "no longer maintained", "deprecated", "unmaintained")\n`;
-    prompt += `- Migration warnings (e.g. "please use X instead", "consider switching to Y")\n`;
-    prompt += `- Abandonment notices (e.g. "this project is archived", "not actively developed")\n`;
-    prompt += `- Security warnings or end-of-life announcements\n`;
-    prompt += `If ANY of these are present, recommendation MUST be "do-not-use".\n\n`;
+    lines.push("", "README (excerpt):", readme, "");
+    lines.push(
+      "From README: infer what/who/how; if deprecation, migration, archive, EOL, or unmaintained → recommendation do-not-use.",
+    );
   }
 
   const healthFlags = detectPackageHealthFlags(data);
   if (healthFlags.deprecated || healthFlags.archived || healthFlags.unmaintained) {
-    prompt += `⚠️ HARD RULE — package health flags already detected:\n`;
+    lines.push("HARD FLAGS (do-not-use + maintenanceRating=poor; put in concerns):");
     for (const reason of healthFlags.reasons) {
-      prompt += `- ${reason}\n`;
+      lines.push(`- ${reason}`);
     }
-    prompt += `You MUST set recommendation to "do-not-use", maintenanceRating to "poor", and include these reasons in concerns.\n\n`;
   }
 
-  prompt += `RECOMMENDATION RULES:\n`;
-  prompt += `- Weigh security, adoption, quality, and true abandonment — not how recently a popular package happened to publish.\n`;
-  prompt += `- Fewer than 90 days since last publish is healthy. Never call it stale. Never choose use-with-caution for that reason.\n`;
-  prompt += `- Widely adopted packages (React, lodash, TypeScript, and similar) often go weeks or months between releases. That is expected for a stable major version.\n`;
-  prompt += `- use-with-caution requires a concrete risk: unpatched high/critical vulnerabilities, likely malware/typosquat, or a niche package with worrying signals that are not yet full abandonment.\n`;
-  prompt += `- do-not-use (preferred) or not-recommended: npm-deprecated packages, archived repos, README deprecation/migration notices, or clearly unmaintained packages. Say the package should not be used for new work.\n`;
-  prompt += `- A large or very-large browser bundle (see Bundlephobia section) must appear in concerns when the package is meant for front-end/browser use.\n`;
-  prompt += `- High open-issue counts on huge repos are not a red flag by themselves (they often include PRs or a large backlog).\n`;
-  prompt += `- Do not pad concerns with release-cadence commentary when cadence is healthy. Use ["None"] if there are no real concerns.\n`;
-  prompt += `- Maintenance rating: excellent if published within ~90 days or widely adopted with recent commits; good up to ~6 months (or longer if widely adopted and secure); fair/poor only for genuine inactivity.\n\n`;
-  
-  prompt += `Based on this data, provide:\n`;
-  prompt += `1. A summary (3-4 sentences) that explains the package itself, not a scorecard.\n`;
-  prompt += `   Sentence 1: what it is (library, CLI, plugin, framework) and the problem it solves.\n`;
-  prompt += `   Sentence 2: who it is for and how you would use it (e.g. import React icon components, tree-shake icons in a UI).\n`;
-  prompt += `   Remaining sentences: notable capabilities or how it fits the ecosystem. Draw this from the description, keywords, and README.\n`;
-  prompt += `   Do not lead with popularity, download counts, "zero vulnerabilities", npm scores, or how recently it was published. Those belong in strengths, scores, or reasoning.\n`;
-  prompt += `   Only mention staleness or abandonment if the maintenance interpretation above says so.\n`;
-  prompt += `2. Overall recommendation: "recommended", "use-with-caution", "not-recommended", or "do-not-use"\n`;
-  prompt += `3. Key strengths (array of 3-5 strings)\n`;
-  prompt += `4. Any concerns (array of 2-4 strings, or ["None"] if no real concerns)\n`;
-  prompt += `5. Overall score (0-100). Do not deduct points for a normal release cadence on a widely adopted package.\n`;
-  prompt += `6. Security rating: "excellent", "good", "fair", or "poor"\n`;
-  prompt += `7. Quality rating: "excellent", "good", "fair", or "poor"\n`;
-  prompt += `8. Maintenance rating: "excellent", "good", "fair", or "poor"\n`;
-  prompt += `9. Reasoning for your recommendation (2-3 sentences)\n`;
-  prompt += `10. Competitors: 4-6 real npm package names for genuine alternatives that do the same job (replacements you would consider instead). Same category, different product — not plugins, wrappers, or ecosystem add-ons of this package. Use exact registry names: include the @ for scoped packages (e.g. "@angular/core", not "angular" or "angular/core"). Lowercase, no versions. Never include "${packageName}" itself.\n\n`;
-  prompt += `Respond ONLY with valid JSON in this exact format:\n`;
-  prompt += `{\n`;
-  prompt += `  "summary": "string",\n`;
-  prompt += `  "recommendation": "recommended|use-with-caution|not-recommended|do-not-use",\n`;
-  prompt += `  "strengths": ["string1", "string2", "string3"],\n`;
-  prompt += `  "concerns": ["string1", "string2"],\n`;
-  prompt += `  "overallScore": number,\n`;
-  prompt += `  "securityRating": "excellent|good|fair|poor",\n`;
-  prompt += `  "qualityRating": "excellent|good|fair|poor",\n`;
-  prompt += `  "maintenanceRating": "excellent|good|fair|poor",\n`;
-  prompt += `  "reasoning": "string",\n`;
-  prompt += `  "competitors": ["package-name", "@scope/package-name"]\n`;
-  prompt += `}\n\n`;
-  prompt += `Do not include any text outside the JSON object. Use normal ASCII spaces and hyphens (e.g. "well-maintained"), never join words.`;
+  lines.push(
+    "",
+    "Rules:",
+    "- Weigh security, adoption, quality, true abandonment — not normal publish gaps on popular packages.",
+    "- <90d since publish is healthy. Widely adopted packages often go months between releases.",
+    "- use-with-caution: concrete risk (unpatched high/crit vulns, likely malware/typosquat, niche + worrying signals).",
+    "- do-not-use: deprecated, archived, README deprecation/migration, or clearly unmaintained.",
+    "- Large/very-large browser bundle → concerns. High open issues on huge repos ≠ red flag alone.",
+    "- No cadence padding in concerns when healthy; use [\"None\"] if none. Score: no penalty for normal cadence on widely adopted.",
+    "- Maintenance rating: excellent ~<90d or widely adopted + recent commits; good ~6mo (or longer if popular+secure); fair/poor only for real inactivity.",
+    "",
+    "Fields:",
+    "- summary: 3-4 sentences — what it is, who for / how used, notable capabilities. From desc/keywords/README. No metrics lead (downloads, stars, vulns, publish age).",
+    "- recommendation: recommended|use-with-caution|not-recommended|do-not-use",
+    "- strengths: 3-5 short bullets",
+    "- concerns: 2-4 short distinct risk bullets (or [\"None\"]). Facts only — do NOT restate them in reasoning.",
+    "- overallScore: 0-100",
+    "- securityRating, qualityRating, maintenanceRating: excellent|good|fair|poor",
+    "- reasoning: 1-2 sentences WHY the recommendation — tradeoffs / decision. Do NOT repeat concern wording or themes.",
+    `- competitors: 4-6 real npm alternatives (same job, not plugins/wrappers of this). Exact registry names with @ if scoped. Lowercase, no versions. Never "${packageName}".`,
+    "",
+    "JSON shape:",
+    '{"summary":"","recommendation":"","strengths":[],"concerns":[],"overallScore":0,"securityRating":"","qualityRating":"","maintenanceRating":"","reasoning":"","competitors":[]}',
+    "No text outside JSON. ASCII spaces/hyphens only.",
+  );
 
-  return prompt;
+  return lines.join("\n");
 }
 
 function normalizeAiPunctuation(text: string): string {
@@ -802,11 +823,10 @@ export async function analyzePackageWithAI(
 ): Promise<AIPackageAnalysis> {
   const prompt = createAnalysisPrompt(data);
 
-  const systemPrompt = 'You are an expert software engineer helping another developer decide whether to use an npm package. ' +
-    'The summary must explain what the package is and what it is for, using the description and README, before any quality judgement. ' +
-    'Do not write a metrics recap in the summary (downloads, stars, "zero vulnerabilities", publish recency). ' +
-    'A few weeks or months since the last npm publish is normal for widely used libraries and is not a reason to recommend caution. ' +
-    'Provide honest, balanced assessments. Always respond in valid JSON format.';
+  const systemPrompt =
+    'Expert engineer advising on npm package adoption. ' +
+    'Summary = what it is/for (from desc/README), not a metrics recap. ' +
+    'Normal publish gaps on popular libs are not caution. JSON only.';
 
   const fullPrompt = `${systemPrompt}\n\n${prompt}`;
 

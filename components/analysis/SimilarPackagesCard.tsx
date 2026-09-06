@@ -64,6 +64,7 @@ export function SimilarPackagesCard({
     if (keywordsKey) params.set("keywords", keywordsKey);
     if (competitorsKey) params.set("competitors", competitorsKey);
 
+    setLoading(true);
     const load = async () => {
       try {
         const { ok, data } = await fetchJson<{ packages?: SimilarPackage[] }>(

@@ -538,7 +538,7 @@ export async function fetchSimilarPackages(
 }
 
 /**
- * Fetch package README content (first 3000 characters for AI analysis)
+ * Fetch package README content (truncated for AI analysis)
  */
 export async function fetchNpmReadme(packageName: string): Promise<string | null> {
   try {
@@ -549,9 +549,8 @@ export async function fetchNpmReadme(packageName: string): Promise<string | null
       return null;
     }
     
-    // Return first 3000 characters to keep AI prompt reasonable
-    // Focus on the top section where deprecation notices usually appear
-    return readme.substring(0, 3000);
+    // Top of README usually has purpose + deprecation notices; keep prompt lean
+    return readme.substring(0, 2000);
   } catch (error: any) {
     console.error(`Failed to fetch README for ${packageName}:`, error.message);
     return null;

@@ -6,6 +6,11 @@ import semver from "semver";
 import { fetchJson, friendlyFetchError } from "@/lib/fetch-client";
 import { useShellSearchLoading } from "@/components/AppShell";
 import { InfoCards } from "@/components/InfoCards";
+import { WatchToggle } from "@/components/Watchlist";
+import { useWatchlistActions } from "@/lib/use-watchlist";
+import { useAiAnalysisEnabled, useAiAnalysisPrefReady } from "@/lib/use-ai-analysis-pref";
+import { getAiAnalysisEnabled } from "@/lib/ai-analysis-pref";
+import type { WatchlistSummary } from "@/lib/watchlist-store";
 import {
   PackageInfoCard,
   MetricsCard,
@@ -18,6 +23,20 @@ import {
   type AnalysisTabId,
   type DetailsTabId,
 } from "@/components/analysis";
+
+function summaryFromAnalysis(data: any): WatchlistSummary {
+  return {
+    version:
+      data?.packageInfo?.latestVersion &&
+      data.packageInfo.latestVersion !== "Unknown"
+        ? data.packageInfo.latestVersion
+        : undefined,
+    qualityScore: data?.metrics?.qualityScore,
+    vulnerabilityCount: data?.security?.totalCount,
+    deprecated: Boolean(data?.npm?.deprecated),
+    recommendation: data?.ai?.recommendation,
+  };
+}
 
 export default function PackagePage() {
   const params = useParams();
@@ -33,25 +52,19 @@ export default function PackagePage() {
 function AIAnalysisSkeleton() {
   return (
     <div
-      className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg shadow-lg p-4 sm:p-6"
+      className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6"
       role="status"
     >
       <span className="sr-only">Generating AI analysis</span>
-      <div className="space-y-4 animate-pulse" aria-hidden="true">
-        <div>
-          <div className="h-5 w-24 rounded bg-gray-200 dark:bg-gray-700 mb-2" />
-          <div className="h-4 w-full rounded bg-gray-200 dark:bg-gray-700" />
-          <div className="h-4 w-5/6 rounded bg-gray-200 dark:bg-gray-700 mt-2" />
-          <div className="h-4 w-4/6 rounded bg-gray-200 dark:bg-gray-700 mt-2" />
-        </div>
-        <div>
-          <div className="h-5 w-36 rounded bg-gray-200 dark:bg-gray-700 mb-2" />
-          <div className="h-9 w-32 rounded-full bg-gray-200 dark:bg-gray-700" />
-        </div>
-        <div>
-          <div className="h-5 w-28 rounded bg-gray-200 dark:bg-gray-700 mb-2" />
-          <div className="h-4 w-full rounded-full bg-gray-200 dark:bg-gray-700" />
-        </div>
+      <div className="space-y-3 animate-pulse" aria-hidden="true">
+        <div className="h-4 w-full rounded bg-gray-200 dark:bg-gray-700" />
+        <div className="h-4 w-11/12 rounded bg-gray-200 dark:bg-gray-700" />
+        <div className="h-4 w-4/5 rounded bg-gray-200 dark:bg-gray-700" />
+        <div className="h-4 w-full rounded bg-gray-200 dark:bg-gray-700" />
+        <div className="h-4 w-2/3 rounded bg-gray-200 dark:bg-gray-700" />
+        <div className="h-4 w-5/6 rounded bg-gray-200 dark:bg-gray-700" />
+        <div className="h-4 w-3/4 rounded bg-gray-200 dark:bg-gray-700" />
+        <div className="h-4 w-1/2 rounded bg-gray-200 dark:bg-gray-700" />
       </div>
     </div>
   );
@@ -97,15 +110,17 @@ function PanelSkeleton({ label }: { label: string }) {
 }
 
 function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
+  const aiEnabled = useAiAnalysisEnabled();
+  const aiPrefReady = useAiAnalysisPrefReady();
   const [loading, setLoading] = useState(Boolean(nameFromPath));
-  const [aiLoading, setAiLoading] = useState(Boolean(nameFromPath));
+  const [aiLoading, setAiLoading] = useState(false);
   const [analysisData, setAnalysisData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [versionToCheck, setVersionToCheck] = useState("");
   const [versionSecurityData, setVersionSecurityData] = useState<any>(null);
   const [versionSecurityLoading, setVersionSecurityLoading] = useState(false);
-  const [analysisTab, setAnalysisTab] = useState<AnalysisTabId>("ai");
+  const [analysisTab, setAnalysisTab] = useState<AnalysisTabId>("info");
   const [detailsTab, setDetailsTab] = useState<DetailsTabId>("metrics");
   const [chartsOpened, setChartsOpened] = useState(false);
   const [relatedOpened, setRelatedOpened] = useState(false);
@@ -167,7 +182,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
   }, []);
 
   const loadAnalysis = useCallback(
-    async (name: string) => {
+    async (name: string, withAi: boolean) => {
       analysisAbort.current?.abort();
       aiAbort.current?.abort();
       const controller = new AbortController();
@@ -176,11 +191,11 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
       aiAbort.current = aiController;
 
       setLoading(true);
-      setAiLoading(true);
+      setAiLoading(withAi);
       setError(null);
       setAiError(null);
       setAnalysisData(null);
-      setAnalysisTab("ai");
+      setAnalysisTab(withAi ? "ai" : "info");
       setDetailsTab("metrics");
       setChartsOpened(false);
       setRelatedOpened(false);
@@ -215,8 +230,11 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
         setAnalysisData(data);
         setLoading(false);
 
-        // Metrics are ready — fetch AI in the background
-        void loadAiAnalysis(name, aiController.signal);
+        if (withAi) {
+          void loadAiAnalysis(name, aiController.signal);
+        } else {
+          setAiLoading(false);
+        }
       } catch (err: unknown) {
         if (controller.signal.aborted) return;
         setError(friendlyFetchError(err));
@@ -247,13 +265,51 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
   }, []);
 
   useEffect(() => {
-    if (!nameFromPath) return;
-    loadAnalysis(nameFromPath);
+    if (!aiPrefReady || !nameFromPath) return;
+    loadAnalysis(nameFromPath, getAiAnalysisEnabled());
     return () => {
       analysisAbort.current?.abort();
       aiAbort.current?.abort();
     };
-  }, [nameFromPath, loadAnalysis]);
+  }, [aiPrefReady, nameFromPath, loadAnalysis]);
+
+  useEffect(() => {
+    if (!aiPrefReady) return;
+
+    if (!aiEnabled) {
+      aiAbort.current?.abort();
+      setAiLoading(false);
+      setAiError(null);
+      setAnalysisTab((tab) => (tab === "ai" ? "info" : tab));
+      return;
+    }
+
+    if (
+      !nameFromPath ||
+      loading ||
+      !analysisData ||
+      analysisData.ai ||
+      aiLoading ||
+      aiError
+    ) {
+      return;
+    }
+
+    const controller = new AbortController();
+    aiAbort.current = controller;
+    void loadAiAnalysis(nameFromPath, controller.signal);
+    // Do not abort in cleanup when deps like aiLoading change — that was
+    // cancelling the request and leaving aiLoading stuck true.
+  }, [
+    aiPrefReady,
+    aiEnabled,
+    nameFromPath,
+    analysisData,
+    loading,
+    aiLoading,
+    aiError,
+    loadAiAnalysis,
+  ]);
 
   useEffect(() => {
     const name = analysisData?.packageInfo?.name;
@@ -352,9 +408,22 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
     return [latest, ...availableVersions];
   })();
 
-  const apisPending = loading || aiLoading;
+  const apisPending =
+    !aiPrefReady || loading || (aiEnabled && aiLoading);
   const showResults = apisPending || Boolean(analysisData);
   useShellSearchLoading(apisPending);
+  const { updateSummary } = useWatchlistActions();
+
+  const packageDisplayName =
+    analysisData?.packageInfo?.name ?? nameFromPath;
+  const watchSummary = analysisData
+    ? summaryFromAnalysis(analysisData)
+    : undefined;
+
+  useEffect(() => {
+    if (!packageDisplayName || !analysisData || apisPending) return;
+    updateSummary(packageDisplayName, summaryFromAnalysis(analysisData));
+  }, [packageDisplayName, analysisData, apisPending, updateSummary]);
 
   return (
     <>
@@ -364,7 +433,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
               {nameFromPath && (
                 <button
                   type="button"
-                  onClick={() => loadAnalysis(nameFromPath)}
+                  onClick={() => loadAnalysis(nameFromPath, aiEnabled)}
                   className="mt-3 text-sm font-medium text-red-800 dark:text-red-200 underline hover:no-underline"
                 >
                   Try again
@@ -375,14 +444,23 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
 
           {showResults && (
             <div className="space-y-4 sm:space-y-6 mb-4 sm:mb-8">
+              <div className="flex justify-end">
+                <WatchToggle
+                  packageName={packageDisplayName}
+                  summary={watchSummary}
+                  disabled={!packageDisplayName}
+                />
+              </div>
+
               <AnalysisTabs
                 active={analysisTab}
                 onChange={handleAnalysisTabChange}
                 aiModel={analysisData?.ai?.model}
                 security={analysisData?.security}
+                showAi={aiPrefReady && aiEnabled}
               />
 
-              {analysisTab === "ai" && (
+              {aiPrefReady && aiEnabled && analysisTab === "ai" && (
                 <div className="space-y-4 sm:space-y-6">
                   {apisPending ? (
                     <AIAnalysisSkeleton />
@@ -415,14 +493,14 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
               )}
 
               {analysisTab === "info" &&
-                (apisPending || !analysisData?.packageInfo ? (
+                (loading || !analysisData?.packageInfo ? (
                   <PanelSkeleton label="Loading package info" />
                 ) : (
                   <PackageInfoCard packageInfo={analysisData.packageInfo} />
                 ))}
 
               {analysisTab === "security" &&
-                (apisPending || !analysisData?.packageInfo ? (
+                (loading || !analysisData?.packageInfo ? (
                   <PanelSkeleton label="Loading security" />
                 ) : (
                   <SecurityCard
@@ -445,13 +523,13 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
               />
 
               {detailsTab === "metrics" &&
-                (apisPending || !analysisData?.metrics ? (
+                (loading || !analysisData?.metrics ? (
                   <MetricsSkeleton />
                 ) : (
                   <MetricsCard metrics={analysisData.metrics} />
                 ))}
 
-              {chartsOpened && analysisData?.packageInfo && !apisPending && (
+              {chartsOpened && analysisData?.packageInfo && !loading && (
                 <div hidden={detailsTab !== "charts"}>
                   <MetricsChartsCard
                     packageName={analysisData.packageInfo.name}
@@ -459,12 +537,21 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                 </div>
               )}
 
-              {relatedOpened && !apisPending && (
+              {relatedOpened &&
+                detailsTab === "related" &&
+                aiEnabled &&
+                aiLoading && <PanelSkeleton label="Loading related packages" />}
+
+              {relatedOpened &&
+                !loading &&
+                !(aiEnabled && aiLoading) && (
                 <div hidden={detailsTab !== "related"}>
                   <SimilarPackagesCard
                     packageName={analysisData.packageInfo?.name ?? nameFromPath}
                     keywords={analysisData.npm?.keywords}
-                    competitors={analysisData.ai?.competitors}
+                    competitors={
+                      aiEnabled ? analysisData.ai?.competitors : undefined
+                    }
                   />
                 </div>
               )}
