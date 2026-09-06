@@ -7,6 +7,7 @@ import {
   subscribeWatchlist,
   isWatched,
   toggleWatchlist,
+  addToWatchlist,
   updateWatchlistSummary,
   removeFromWatchlist,
   type WatchlistSummary,
@@ -32,6 +33,16 @@ export function useWatchlistActions() {
       toggleWatchlist(packageName, summary),
     [],
   );
+  const add = useCallback(
+    (packageName: string, summary?: WatchlistSummary) => {
+      if (isWatched(packageName)) {
+        if (summary) updateWatchlistSummary(packageName, summary);
+        return;
+      }
+      addToWatchlist(packageName, summary);
+    },
+    [],
+  );
   const remove = useCallback((packageName: string) => {
     removeFromWatchlist(packageName);
   }, []);
@@ -43,5 +54,5 @@ export function useWatchlistActions() {
     [],
   );
 
-  return { toggle, remove, updateSummary };
+  return { toggle, add, remove, updateSummary };
 }

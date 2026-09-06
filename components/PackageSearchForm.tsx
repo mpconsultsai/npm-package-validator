@@ -6,6 +6,7 @@ import { extractPackageName } from "@/lib/validation";
 import { smoothNavigate } from "@/lib/smooth-navigate";
 import { useAiAnalysisPref } from "@/lib/use-ai-analysis-pref";
 import { WatchlistSection } from "@/components/Watchlist";
+import { PasteListPanel } from "@/components/PasteList";
 import { useWatchlist } from "@/lib/use-watchlist";
 import { useWatchlistRefresh } from "@/lib/use-watchlist-refresh";
 import { summarizeWatchlistAlerts } from "@/lib/watchlist-store";
@@ -27,7 +28,7 @@ interface PackageSearchFormProps {
 const DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 2;
 
-type UtilityPanel = "watchlist" | "settings" | null;
+type UtilityPanel = "watchlist" | "paste" | "settings" | null;
 
 function SearchIcon({ className = "w-5 h-5" }: { className?: string }) {
   return (
@@ -115,6 +116,26 @@ function StarIcon({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
+function ClipboardIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+      />
+    </svg>
+  );
+}
+
 export function PackageSearchForm({
   value,
   onChange,
@@ -129,6 +150,7 @@ export function PackageSearchForm({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const watchlistPanelRef = useRef<HTMLDivElement>(null);
+  const pastePanelRef = useRef<HTMLDivElement>(null);
   const settingsPanelRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const allowDropdownRef = useRef(false);
@@ -276,6 +298,8 @@ export function PackageSearchForm({
   useEffect(() => {
     if (utilityPanel === "watchlist") {
       watchlistPanelRef.current?.focus();
+    } else if (utilityPanel === "paste") {
+      pastePanelRef.current?.focus();
     } else if (utilityPanel === "settings") {
       settingsPanelRef.current?.focus();
     }
@@ -552,6 +576,26 @@ export function PackageSearchForm({
             <button
               type="button"
               title={
+                utilityPanel === "paste"
+                  ? "Hide paste list"
+                  : "Show paste list"
+              }
+              aria-label={
+                utilityPanel === "paste"
+                  ? "Hide paste dependencies"
+                  : "Paste dependencies to analyse"
+              }
+              aria-expanded={utilityPanel === "paste"}
+              aria-controls="shell-panel-paste"
+              aria-haspopup="true"
+              onClick={(e) => toggleUtilityPanel("paste", e.currentTarget)}
+              className={utilityButtonClass(utilityPanel === "paste")}
+            >
+              <ClipboardIcon className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              title={
                 utilityPanel === "settings" ? "Hide settings" : "Show settings"
               }
               aria-label={
@@ -577,9 +621,11 @@ export function PackageSearchForm({
             ? watchCount > 0
               ? `Watchlist opened, ${watchCount} packages`
               : "Watchlist opened, no packages yet"
-            : utilityPanel === "settings"
-              ? "Settings opened"
-              : ""}
+            : utilityPanel === "paste"
+              ? "Paste dependencies opened"
+              : utilityPanel === "settings"
+                ? "Settings opened"
+                : ""}
         </div>
       )}
 
@@ -596,6 +642,22 @@ export function PackageSearchForm({
             Watchlist
           </h2>
           <WatchlistSection embedded checking={watchlistChecking} />
+        </div>
+      )}
+
+      {isHome && utilityPanel === "paste" && (
+        <div
+          id="shell-panel-paste"
+          ref={pastePanelRef}
+          role="region"
+          aria-labelledby="shell-paste-heading"
+          tabIndex={-1}
+          className="mt-3 sm:mt-4 border-t border-gray-100 dark:border-gray-700 pt-3 sm:pt-4 max-h-[32rem] overflow-y-auto outline-none"
+        >
+          <h2 id="shell-paste-heading" className="sr-only">
+            Paste dependencies
+          </h2>
+          <PasteListPanel />
         </div>
       )}
 

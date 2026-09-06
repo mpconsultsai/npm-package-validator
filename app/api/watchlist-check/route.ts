@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
           .map((entry: unknown) =>
             typeof entry === "string" ? extractPackageName(entry) : "",
           )
-          .filter(Boolean),
+          .filter((name): name is string => Boolean(name)),
       ),
     ]
       .filter((name) => validatePackageName(name).valid)
