@@ -258,7 +258,7 @@ export function PasteListPanel() {
           htmlFor={textareaId}
           className="block text-sm font-medium text-gray-900 dark:text-white"
         >
-          Paste dependencies
+          Analyse package.json
         </label>
         <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
           package.json, package-lock.json, yarn.lock, or a list of package names
@@ -271,7 +271,7 @@ export function PasteListPanel() {
           rows={6}
           spellCheck={false}
           placeholder={`{\n  "dependencies": {\n    "react": "^19.0.0",\n    "lodash": "^4.17.21"\n  }\n}`}
-          className="mt-2 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white px-3 py-2 font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="mt-2 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white px-3 py-2 font-mono outline-none focus:border-blue-500 focus:ring-2 focus:ring-inset focus:ring-blue-500/30 dark:focus:border-blue-400"
           disabled={running}
         />
       </div>

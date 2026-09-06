@@ -427,7 +427,7 @@ export function PackageSearchForm({
                 }}
                 onKeyDown={handleKeyDown}
                 placeholder="Search npm packages, e.g. react, lodash, @types/node"
-                className={`w-full text-base py-2.5 sm:py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white disabled:opacity-60 pl-10 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden ${
+                className={`w-full text-base py-2.5 sm:py-3 border border-gray-300 dark:border-gray-600 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-inset focus:ring-blue-500/30 dark:focus:border-blue-400 dark:bg-gray-700 dark:text-white disabled:opacity-60 pl-10 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden ${
                   showClear ? "pr-10" : "pr-4"
                 }`}
                 disabled={disabled || loading}
@@ -577,13 +577,13 @@ export function PackageSearchForm({
               type="button"
               title={
                 utilityPanel === "paste"
-                  ? "Hide paste list"
-                  : "Show paste list"
+                  ? "Close Analyse package.json"
+                  : "Analyse package.json"
               }
               aria-label={
                 utilityPanel === "paste"
-                  ? "Hide paste dependencies"
-                  : "Paste dependencies to analyse"
+                  ? "Close Analyse package.json"
+                  : "Analyse package.json"
               }
               aria-expanded={utilityPanel === "paste"}
               aria-controls="shell-panel-paste"
@@ -622,7 +622,7 @@ export function PackageSearchForm({
               ? `Watchlist opened, ${watchCount} packages`
               : "Watchlist opened, no packages yet"
             : utilityPanel === "paste"
-              ? "Paste dependencies opened"
+              ? "Analyse package.json opened"
               : utilityPanel === "settings"
                 ? "Settings opened"
                 : ""}
@@ -655,7 +655,7 @@ export function PackageSearchForm({
           className="mt-3 sm:mt-4 border-t border-gray-100 dark:border-gray-700 pt-3 sm:pt-4 max-h-[32rem] overflow-y-auto outline-none"
         >
           <h2 id="shell-paste-heading" className="sr-only">
-            Paste dependencies
+            Analyse package.json
           </h2>
           <PasteListPanel />
         </div>

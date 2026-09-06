@@ -285,7 +285,7 @@ export function updateWatchlistSummary(
 
 /** Apply polled status without treating it as a user review. */
 export function applyWatchlistFreshStatuses(
-  updates: WatchlistFresh & { name: string }[],
+  updates: (WatchlistFresh & { name: string })[],
   checkedAt = Date.now(),
 ): void {
   if (updates.length === 0) return;

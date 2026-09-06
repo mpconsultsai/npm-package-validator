@@ -15,15 +15,17 @@ const CONCURRENCY = 4;
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json().catch(() => ({}));
-    const raw = Array.isArray(body?.packages) ? body.packages : [];
+    const body = (await request.json().catch(() => ({}))) as {
+      packages?: unknown;
+    };
+    const raw: unknown[] = Array.isArray(body.packages) ? body.packages : [];
     const names = [
       ...new Set(
         raw
-          .map((entry: unknown) =>
+          .map((entry) =>
             typeof entry === "string" ? extractPackageName(entry) : "",
           )
-          .filter((name): name is string => Boolean(name)),
+          .filter((name): name is string => name.length > 0),
       ),
     ]
       .filter((name) => validatePackageName(name).valid)
