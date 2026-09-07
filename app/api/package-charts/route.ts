@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
 
     if (wantIssues) {
       issuesPromise = fetchNpmPackageData(packageName)
-        .then((npm) => {
+        .then(({ data: npm }) => {
           const githubInfo = npm.repository?.url
             ? parseGitHubUrl(npm.repository.url)
             : null;

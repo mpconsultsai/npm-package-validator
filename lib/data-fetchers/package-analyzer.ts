@@ -2,7 +2,6 @@ import type { PackageAnalysisResult } from "../types/package-data";
 import {
   fetchNpmPackageData,
   fetchNpmDownloadStats,
-  fetchNpmReadme,
   fetchNpmPackagePopularity,
 } from "./npm-registry";
 import { fetchGitHubDataFromUrl, parseGitHubUrl } from "./github";
@@ -21,9 +20,11 @@ export async function analyzePackage(
     errors: {},
   };
 
-  // Fetch npm registry data (required)
+  // Fetch npm registry data (required) — README comes from the same packument
   try {
-    result.npm = await fetchNpmPackageData(packageName);
+    const { data, readme } = await fetchNpmPackageData(packageName);
+    result.npm = data;
+    result.readme = readme;
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Unknown npm registry error";
@@ -54,13 +55,6 @@ export async function analyzePackage(
         }
       } catch {
         console.warn(`Could not fetch popularity for ${packageName}`);
-      }
-    })(),
-    (async () => {
-      try {
-        result.readme = await fetchNpmReadme(packageName);
-      } catch {
-        console.warn(`Could not fetch README for ${packageName}`);
       }
     })(),
     (async () => {

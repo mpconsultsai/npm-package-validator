@@ -11,11 +11,16 @@ async function handleAnalyzeAi(packageName: string) {
   }
 
   console.log(`Analyzing package with AI: ${packageName}`);
+  const t0 = Date.now();
   const packageData = await analyzePackageCached(packageName);
+  const dataMs = Date.now() - t0;
 
   let aiAnalysis = null;
+  let llmMs = 0;
   try {
+    const t1 = Date.now();
     aiAnalysis = await analyzePackageWithAI(packageData);
+    llmMs = Date.now() - t1;
   } catch (error: unknown) {
     console.error("AI analysis failed:", error);
     packageData.errors = {
@@ -23,6 +28,11 @@ async function handleAnalyzeAi(packageName: string) {
       ai: error instanceof Error ? error.message : "AI analysis failed",
     };
   }
+
+  const totalMs = Date.now() - t0;
+  console.log(
+    `AI timing ${packageName}: dataMs=${dataMs} llmMs=${llmMs} provider=${aiAnalysis?.model ?? "none"} totalMs=${totalMs}`,
+  );
 
   return NextResponse.json(
     buildAnalysisResponse(packageName, packageData, aiAnalysis),

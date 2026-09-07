@@ -27,7 +27,7 @@ export function PageHeader({ showHomeLink = false }: PageHeaderProps) {
           }}
         >
           <AppLogo className="w-7 h-7 sm:w-10 sm:h-10 md:w-12 md:h-12 shrink-0" />
-          <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">
+          <span className="inline-block bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text pb-[0.2em] leading-snug text-transparent">
             NPM Package Validator
           </span>
         </Link>

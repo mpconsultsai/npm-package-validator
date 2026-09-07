@@ -7,9 +7,13 @@ const NPM_REGISTRY_URL = 'https://registry.npmjs.org';
 const NPM_DOWNLOADS_URL = 'https://api.npmjs.org/downloads';
 
 /**
- * Fetch package metadata from npm registry
+ * Fetch package metadata from npm registry (single packument GET).
+ * Also returns a truncated README excerpt when present on the packument.
  */
-export async function fetchNpmPackageData(packageName: string): Promise<NpmPackageData> {
+export async function fetchNpmPackageData(packageName: string): Promise<{
+  data: NpmPackageData;
+  readme: string | null;
+}> {
   try {
     const response = await axios.get(`${NPM_REGISTRY_URL}/${packageName}`);
     const data = response.data;
@@ -17,26 +21,42 @@ export async function fetchNpmPackageData(packageName: string): Promise<NpmPacka
     const latestVersion = data['dist-tags']?.latest || Object.keys(data.versions || {}).pop();
     const latestVersionData = data.versions?.[latestVersion] || {};
 
+    const readmeRaw = typeof data.readme === "string" ? data.readme : null;
+    // Top of README usually has purpose + deprecation notices; keep prompt lean
+    const readme = readmeRaw ? readmeRaw.substring(0, 2000) : null;
+
     return {
-      name: data.name,
-      version: latestVersion,
-      description: sanitizeDescription(latestVersionData.description || data.description),
-      author: latestVersionData.author,
-      license: latestVersionData.license,
-      deprecated:
-        typeof latestVersionData.deprecated === "string"
-          ? latestVersionData.deprecated
-          : latestVersionData.deprecated
-            ? "This package has been deprecated"
+      data: {
+        name: data.name,
+        version: latestVersion,
+        description: sanitizeDescription(latestVersionData.description || data.description),
+        author: latestVersionData.author,
+        license: latestVersionData.license,
+        deprecated:
+          typeof latestVersionData.deprecated === "string"
+            ? latestVersionData.deprecated
+            : latestVersionData.deprecated
+              ? "This package has been deprecated"
+              : null,
+        repository: latestVersionData.repository,
+        homepage: latestVersionData.homepage,
+        keywords: latestVersionData.keywords,
+        dependencies: latestVersionData.dependencies,
+        peerDependencies: latestVersionData.peerDependencies,
+        devDependencies: latestVersionData.devDependencies,
+        browser: latestVersionData.browser,
+        bin: latestVersionData.bin,
+        engines:
+          latestVersionData.engines &&
+          typeof latestVersionData.engines === "object"
+            ? latestVersionData.engines
             : null,
-      repository: latestVersionData.repository,
-      homepage: latestVersionData.homepage,
-      keywords: latestVersionData.keywords,
-      dependencies: latestVersionData.dependencies,
-      devDependencies: latestVersionData.devDependencies,
-      maintainers: data.maintainers,
-      time: data.time,
-      distTags: data["dist-tags"],
+        exports: latestVersionData.exports,
+        maintainers: data.maintainers,
+        time: data.time,
+        distTags: data["dist-tags"],
+      },
+      readme,
     };
   } catch (error: any) {
     if (error.response?.status === 404) {
@@ -538,19 +558,13 @@ export async function fetchSimilarPackages(
 }
 
 /**
- * Fetch package README content (truncated for AI analysis)
+ * Fetch package README content (truncated for AI analysis).
+ * Prefer readme from fetchNpmPackageData when analysing — this is a standalone fallback.
  */
 export async function fetchNpmReadme(packageName: string): Promise<string | null> {
   try {
-    const response = await axios.get(`${NPM_REGISTRY_URL}/${packageName}`);
-    const readme = response.data.readme;
-    
-    if (!readme) {
-      return null;
-    }
-    
-    // Top of README usually has purpose + deprecation notices; keep prompt lean
-    return readme.substring(0, 2000);
+    const { readme } = await fetchNpmPackageData(packageName);
+    return readme;
   } catch (error: any) {
     console.error(`Failed to fetch README for ${packageName}:`, error.message);
     return null;

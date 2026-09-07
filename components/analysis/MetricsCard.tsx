@@ -8,6 +8,7 @@ interface MetricsCardProps {
     qualityScore: number;
     bundleSize?: number;
     bundleGzip?: number;
+    bundleNote?: string;
   };
 }
 
@@ -69,6 +70,11 @@ export function MetricsCard({ metrics }: MetricsCardProps) {
           </>
         )}
       </div>
+      {metrics.bundleNote && (
+        <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
+          {metrics.bundleNote}
+        </p>
+      )}
     </div>
   );
 }

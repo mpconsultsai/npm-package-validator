@@ -18,7 +18,15 @@ export interface NpmPackageData {
   homepage?: string;
   keywords?: string[];
   dependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  /** package.json browser field (string map or entry) */
+  browser?: unknown;
+  /** package.json bin */
+  bin?: unknown;
+  engines?: Record<string, string> | null;
+  /** package.json exports */
+  exports?: unknown;
   maintainers?: Array<{ name: string; email: string }>;
   time?: {
     created: string;

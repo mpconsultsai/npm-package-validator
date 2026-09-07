@@ -1,6 +1,7 @@
 import { formatDaysSinceRelease } from "@/lib/utils/format";
 import type { PackageAnalysisResult } from "@/lib/types/package-data";
 import type { AIPackageAnalysis } from "@/lib/ai/analyzer";
+import { classifyRuntimeEnvironment } from "@/lib/runtime-environment";
 
 export function getDaysSinceLastRelease(
   packageData: PackageAnalysisResult,
@@ -11,6 +12,27 @@ export function getDaysSinceLastRelease(
   return Math.floor(
     (Date.now() - new Date(lastPublished).getTime()) / (1000 * 60 * 60 * 24),
   );
+}
+
+export function getPackageRuntime(packageData: PackageAnalysisResult) {
+  const npm = packageData.npm;
+  return classifyRuntimeEnvironment({
+    name: npm?.name ?? packageData.packageName,
+    description: npm?.description,
+    keywords: npm?.keywords,
+    dependencies: npm?.dependencies,
+    peerDependencies: npm?.peerDependencies,
+    browser: npm?.browser,
+    bin: npm?.bin,
+    engines: npm?.engines,
+    exports: npm?.exports,
+    hasBrowserBundle:
+      packageData.bundleSize != null
+        ? true
+        : packageData.errors?.bundleSize
+          ? false
+          : undefined,
+  });
 }
 
 export function calculateQualityScore(
@@ -93,6 +115,7 @@ export function buildAnalysisResponse(
   aiAnalysis: AIPackageAnalysis | null = null,
 ) {
   const daysSinceLastRelease = getDaysSinceLastRelease(packageData);
+  const runtime = getPackageRuntime(packageData);
 
   return {
     ...packageData,
@@ -111,6 +134,12 @@ export function buildAnalysisResponse(
           ? formatDaysSinceRelease(daysSinceLastRelease)
           : null,
       dependents: packageData.popularity?.dependents,
+      runtime: {
+        kind: runtime.kind,
+        label: runtime.label,
+        confidence: runtime.confidence,
+        reasons: runtime.reasons,
+      },
     },
     metrics: {
       downloads: packageData.downloads?.downloads || 0,
@@ -121,6 +150,12 @@ export function buildAnalysisResponse(
         ? {
             bundleSize: packageData.bundleSize.size,
             bundleGzip: packageData.bundleSize.gzip,
+            ...(runtime.kind === "server"
+              ? {
+                  bundleNote:
+                    "Browser bundle size is less relevant for server-oriented packages.",
+                }
+              : {}),
           }
         : {}),
     },

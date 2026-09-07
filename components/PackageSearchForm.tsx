@@ -285,6 +285,17 @@ export function PackageSearchForm({
 
   useEffect(() => {
     if (!utilityPanel) return;
+    const mq = window.matchMedia("(max-width: 639px)");
+    const closeOnMobile = () => {
+      if (mq.matches) closeUtilityPanel(false);
+    };
+    closeOnMobile();
+    mq.addEventListener("change", closeOnMobile);
+    return () => mq.removeEventListener("change", closeOnMobile);
+  }, [utilityPanel, closeUtilityPanel]);
+
+  useEffect(() => {
+    if (!utilityPanel) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -521,7 +532,7 @@ export function PackageSearchForm({
           <div
             role="toolbar"
             aria-label="Search utilities"
-            className="flex shrink-0 items-center gap-0.5 sm:gap-1"
+            className="hidden shrink-0 items-center gap-0.5 sm:flex sm:gap-1"
           >
             <button
               type="button"

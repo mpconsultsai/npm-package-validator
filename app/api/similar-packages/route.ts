@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     let keywordList = keywords;
     if (!keywordList?.length) {
-      const npmData = await fetchNpmPackageData(packageName);
+      const { data: npmData } = await fetchNpmPackageData(packageName);
       keywordList = npmData.keywords ?? null;
     }
 

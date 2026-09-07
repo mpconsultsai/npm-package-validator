@@ -3,6 +3,8 @@ import Groq from 'groq-sdk';
 import type { PackageAnalysisResult } from '../types/package-data';
 import { formatBytes } from '../utils/format';
 import { extractPackageName, normalizeNpmPackageName, validatePackageName } from '../validation';
+import { classifyRuntimeEnvironment } from '../runtime-environment';
+import type { RuntimeKind } from '../runtime-environment';
 
 /** Groq retired llama-3.3-70b-versatile on 16 Aug 2026; gpt-oss-120b is the documented replacement. */
 const GROQ_MODEL = 'openai/gpt-oss-120b';
@@ -284,6 +286,35 @@ function applyHealthRecommendationOverrides(
 
 type BundleSizeLevel = "ok" | "notable" | "large" | "very-large";
 
+function packageRuntimeKind(data: PackageAnalysisResult): RuntimeKind {
+  const npm = data.npm;
+  return classifyRuntimeEnvironment({
+    name: npm?.name ?? data.packageName,
+    description: npm?.description,
+    keywords: npm?.keywords,
+    dependencies: npm?.dependencies,
+    peerDependencies: npm?.peerDependencies,
+    browser: npm?.browser,
+    bin: npm?.bin,
+    engines: npm?.engines,
+    exports: npm?.exports,
+    hasBrowserBundle:
+      data.bundleSize != null
+        ? true
+        : data.errors?.bundleSize
+          ? false
+          : undefined,
+  }).kind;
+}
+
+function isBrowserBundleRelevant(kind: RuntimeKind): boolean {
+  return kind === "client" || kind === "both" || kind === "unclear";
+}
+
+function isBundleConcernText(text: string): boolean {
+  return /bundle|gzip|minified|payload|bundlephobia/i.test(text);
+}
+
 function assessBundleSize(data: PackageAnalysisResult): {
   level: BundleSizeLevel | null;
   note: string | null;
@@ -334,12 +365,26 @@ function assessBundleSize(data: PackageAnalysisResult): {
 }
 
 /**
- * Ensure large/very-large bundles are called out in AI concerns.
+ * Ensure large/very-large bundles are called out in AI concerns —
+ * but not for packages that look server-only (browser payload is less relevant).
  */
 function applyBundleSizeNotes(
   analysis: AIPackageAnalysis,
   data: PackageAnalysisResult,
 ): AIPackageAnalysis {
+  const runtimeKind = packageRuntimeKind(data);
+
+  // Drop browser-bundle concerns for server-only packages (AI may still have added them).
+  if (!isBrowserBundleRelevant(runtimeKind)) {
+    const filtered = analysis.concerns.filter(
+      (c) => c && c.toLowerCase() !== "none" && !isBundleConcernText(c),
+    );
+    return {
+      ...analysis,
+      concerns: filtered.length > 0 ? filtered : ["None"],
+    };
+  }
+
   const assessment = assessBundleSize(data);
   if (
     !assessment.note ||
@@ -348,9 +393,7 @@ function applyBundleSizeNotes(
     return analysis;
   }
 
-  const alreadyNoted = analysis.concerns.some((c) =>
-    /bundle|gzip|minified|payload|bundlephobia/i.test(c),
-  );
+  const alreadyNoted = analysis.concerns.some((c) => isBundleConcernText(c));
   if (alreadyNoted) {
     return analysis;
   }
@@ -654,11 +697,25 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
     );
   }
 
+  const runtimeKind = packageRuntimeKind(data);
+  const runtimeLabel =
+    runtimeKind === "client"
+      ? "client (browser)"
+      : runtimeKind === "server"
+        ? "server / Node (not primarily browser)"
+        : runtimeKind === "both"
+          ? "client and server (isomorphic / dual)"
+          : "unclear (treat browser bundle cautiously if present)";
+  lines.push(`Runtime target (heuristic): ${runtimeLabel}`);
+
   const bundleAssessment = assessBundleSize(data);
   if (bundleSize && bundleAssessment.gzip !== null && bundleAssessment.size !== null) {
     let bundleLine = `Bundle: ${formatBytes(bundleAssessment.size)} min / ${formatBytes(bundleAssessment.gzip)} gzip (${bundleAssessment.level})`;
-    if (bundleAssessment.level === "large" || bundleAssessment.level === "very-large") {
-      bundleLine += " — MUST list in concerns for browser use; not a strength";
+    if (runtimeKind === "server") {
+      bundleLine +=
+        " — server-oriented package: do NOT list browser bundle size as a concern";
+    } else if (bundleAssessment.level === "large" || bundleAssessment.level === "very-large") {
+      bundleLine += " — MUST list in concerns for browser/client use; not a strength";
     } else if (bundleAssessment.level === "notable") {
       bundleLine += " — optional concern if front-end relevant";
     }
@@ -687,7 +744,8 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
     "- <90d since publish is healthy. Widely adopted packages often go months between releases.",
     "- use-with-caution: concrete risk (unpatched high/crit vulns, likely malware/typosquat, niche + worrying signals).",
     "- do-not-use: deprecated, archived, README deprecation/migration, or clearly unmaintained.",
-    "- Large/very-large browser bundle → concerns. High open issues on huge repos ≠ red flag alone.",
+    "- Large/very-large browser bundle → concerns only when runtime is client, both, or unclear. Server-only → ignore browser bundle size.",
+    "- High open issues on huge repos ≠ red flag alone.",
     "- No cadence padding in concerns when healthy; use [\"None\"] if none. Score: no penalty for normal cadence on widely adopted.",
     "- Maintenance rating: excellent ~<90d or widely adopted + recent commits; good ~6mo (or longer if popular+secure); fair/poor only for real inactivity.",
     "",

@@ -9,6 +9,8 @@ type CacheEntry = {
 };
 
 const cache = new Map<string, CacheEntry>();
+/** Coalesce concurrent analyze + analyze-ai cache misses into one fetch. */
+const inflight = new Map<string, Promise<PackageAnalysisResult>>();
 
 /**
  * Short-lived in-memory cache so progressive /api/analyze → /api/analyze-ai
@@ -23,7 +25,18 @@ export async function analyzePackageCached(
     return hit.data;
   }
 
-  const data = await analyzePackage(packageName);
-  cache.set(key, { data, expiresAt: Date.now() + TTL_MS });
-  return data;
+  const pending = inflight.get(key);
+  if (pending) return pending;
+
+  const promise = analyzePackage(packageName)
+    .then((data) => {
+      cache.set(key, { data, expiresAt: Date.now() + TTL_MS });
+      return data;
+    })
+    .finally(() => {
+      inflight.delete(key);
+    });
+
+  inflight.set(key, promise);
+  return promise;
 }

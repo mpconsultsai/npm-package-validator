@@ -201,6 +201,13 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
       setRelatedOpened(false);
       resetSecurityCheck();
 
+      // Start AI in parallel with metrics so the LLM is not blocked on analyze.
+      if (withAi) {
+        void loadAiAnalysis(name, aiController.signal);
+      } else {
+        setAiLoading(false);
+      }
+
       try {
         const { ok, data } = await fetchJson<any>(
           `/api/analyze?package=${encodeURIComponent(name)}`,
@@ -213,6 +220,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
         );
         if (controller.signal.aborted) return;
         if (!ok) {
+          aiController.abort();
           setError(data.error || "Failed to analyse package");
           setAiLoading(false);
           return;
@@ -227,16 +235,24 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
           }
         }
 
-        setAnalysisData(data);
+        // Preserve AI if it finished first (race with parallel analyze-ai).
+        setAnalysisData((prev: any) => {
+          if (prev?.ai && !data.ai) {
+            return {
+              ...data,
+              ai: prev.ai,
+              errors: {
+                ...data.errors,
+                ...prev.errors,
+              },
+            };
+          }
+          return data;
+        });
         setLoading(false);
-
-        if (withAi) {
-          void loadAiAnalysis(name, aiController.signal);
-        } else {
-          setAiLoading(false);
-        }
       } catch (err: unknown) {
         if (controller.signal.aborted) return;
+        aiController.abort();
         setError(friendlyFetchError(err));
         setAiLoading(false);
       } finally {
@@ -444,7 +460,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
 
           {showResults && (
             <div className="space-y-4 sm:space-y-6 mb-4 sm:mb-8">
-              <div className="flex justify-end">
+              <div className="hidden justify-end sm:flex">
                 <WatchToggle
                   packageName={packageDisplayName}
                   summary={watchSummary}
