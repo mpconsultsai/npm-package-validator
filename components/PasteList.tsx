@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import semver from "semver";
 import { fetchJson } from "@/lib/fetch-client";
@@ -24,9 +24,13 @@ interface AnalysisRow {
   qualityScore?: number;
   deprecated?: boolean;
   error?: string;
+  notFound?: boolean;
 }
 
 const CONCURRENCY = 3;
+
+const badgeBase =
+  "inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide";
 
 function summaryFromRow(row: AnalysisRow): WatchlistSummary {
   return {
@@ -35,6 +39,11 @@ function summaryFromRow(row: AnalysisRow): WatchlistSummary {
     qualityScore: row.qualityScore,
     deprecated: row.deprecated,
   };
+}
+
+function isNotFoundError(message: string | undefined): boolean {
+  if (!message) return false;
+  return /not found/i.test(message);
 }
 
 /** True when npm latest is newer than the pasted constraint / locked version. */
@@ -79,12 +88,94 @@ function SpecifiedCell({ requested }: { requested?: string }) {
   );
 }
 
+function StatusBadge({ row }: { row: AnalysisRow }) {
+  if (row.status === "pending") {
+    return <span className="text-gray-500 dark:text-gray-400">Queued</span>;
+  }
+  if (row.status === "loading") {
+    return <span className="text-gray-500 dark:text-gray-400">Analysing…</span>;
+  }
+  if (row.status === "done") {
+    return (
+      <span
+        className={`${badgeBase} bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100`}
+      >
+        Done
+      </span>
+    );
+  }
+  if (row.notFound || isNotFoundError(row.error)) {
+    return (
+      <span
+        className={`${badgeBase} bg-red-100 text-red-900 dark:bg-red-900/40 dark:text-red-100`}
+      >
+        Not Found
+      </span>
+    );
+  }
+  return (
+    <span
+      className={`${badgeBase} bg-red-100 text-red-900 dark:bg-red-900/40 dark:text-red-100`}
+      title={row.error}
+    >
+      Error
+    </span>
+  );
+}
+
+function escapeMdCell(value: string): string {
+  return value.replace(/\|/g, "\\|").replace(/\n/g, " ");
+}
+
+function statusLabel(row: AnalysisRow): string {
+  if (row.status === "pending") return "Queued";
+  if (row.status === "loading") return "Analysing";
+  if (row.status === "done") return "Done";
+  if (row.notFound || isNotFoundError(row.error)) return "Not Found";
+  return row.error ? `Error: ${row.error}` : "Error";
+}
+
+function buildMarkdownReport(rows: AnalysisRow[]): string {
+  const lines = [
+    "# Package analysis",
+    "",
+    `Generated ${new Date().toISOString()}`,
+    "",
+    "| Package | Specified | Latest | Vulns | Quality | Status | Notes |",
+    "| --- | --- | --- | ---: | ---: | --- | --- |",
+  ];
+
+  for (const row of rows) {
+    const notes: string[] = [];
+    if (row.deprecated) notes.push("deprecated");
+    if (row.updateAvailable) notes.push("update available");
+    lines.push(
+      `| ${escapeMdCell(row.name)} | ${escapeMdCell(row.requested ?? "—")} | ${escapeMdCell(row.version ? `v${row.version}` : "—")} | ${typeof row.vulnerabilityCount === "number" ? String(row.vulnerabilityCount) : "—"} | ${typeof row.qualityScore === "number" ? `${row.qualityScore}/100` : "—"} | ${escapeMdCell(statusLabel(row))} | ${escapeMdCell(notes.join(", ") || "—")} |`,
+    );
+  }
+
+  lines.push("");
+  return lines.join("\n");
+}
+
+function downloadMarkdown(content: string, filename: string) {
+  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 export function PasteListPanel() {
   const headingId = useId();
   const textareaId = useId();
+  const selectAllId = useId();
   const { add } = useWatchlistActions();
   const [text, setText] = useState("");
   const [rows, setRows] = useState<AnalysisRow[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [meta, setMeta] = useState<{
     invalidCount: number;
     truncated: boolean;
@@ -94,6 +185,7 @@ export function PasteListPanel() {
   const [doneCount, setDoneCount] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
   const cancelledRef = useRef(false);
+  const selectAllRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     return () => {
@@ -101,6 +193,25 @@ export function PasteListPanel() {
       cancelledRef.current = true;
     };
   }, []);
+
+  const selectableNames = useMemo(
+    () => rows.filter((row) => row.status === "done").map((row) => row.name),
+    [rows],
+  );
+
+  const selectedCount = useMemo(
+    () => selectableNames.filter((name) => selected.has(name)).length,
+    [selectableNames, selected],
+  );
+
+  const allSelected =
+    selectableNames.length > 0 && selectedCount === selectableNames.length;
+
+  useEffect(() => {
+    if (!selectAllRef.current) return;
+    selectAllRef.current.indeterminate =
+      selectedCount > 0 && selectedCount < selectableNames.length;
+  }, [selectedCount, selectableNames.length]);
 
   const stop = useCallback(() => {
     cancelledRef.current = true;
@@ -112,9 +223,28 @@ export function PasteListPanel() {
     stop();
     setText("");
     setRows([]);
+    setSelected(new Set());
     setMeta(null);
     setDoneCount(0);
   }, [stop]);
+
+  const toggleSelected = (name: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelected((prev) => {
+      if (selectableNames.length === 0) return prev;
+      const allOn = selectableNames.every((name) => prev.has(name));
+      if (allOn) return new Set();
+      return new Set(selectableNames);
+    });
+  };
 
   const analyseList = useCallback(async () => {
     const parsed = parseDependencyList(text);
@@ -126,6 +256,7 @@ export function PasteListPanel() {
 
     if (parsed.entries.length === 0) {
       setRows([]);
+      setSelected(new Set());
       setDoneCount(0);
       return;
     }
@@ -136,6 +267,7 @@ export function PasteListPanel() {
     cancelledRef.current = false;
     setRunning(true);
     setDoneCount(0);
+    setSelected(new Set());
 
     const initial: AnalysisRow[] = parsed.entries.map((entry) => ({
       name: entry.name,
@@ -175,13 +307,15 @@ export function PasteListPanel() {
             if (cancelledRef.current || controller.signal.aborted) return;
 
             if (!ok) {
+              const error = data?.error || "Analysis failed";
               setRows((prev) =>
                 prev.map((row, i) =>
                   i === index
                     ? {
                         ...row,
                         status: "error",
-                        error: data?.error || "Analysis failed",
+                        error,
+                        notFound: isNotFoundError(error),
                       }
                     : row,
                 ),
@@ -211,14 +345,16 @@ export function PasteListPanel() {
             }
           } catch (err: unknown) {
             if (controller.signal.aborted || cancelledRef.current) return;
+            const error =
+              err instanceof Error ? err.message : "Request failed";
             setRows((prev) =>
               prev.map((row, i) =>
                 i === index
                   ? {
                       ...row,
                       status: "error",
-                      error:
-                        err instanceof Error ? err.message : "Request failed",
+                      error,
+                      notFound: isNotFoundError(error),
                     }
                   : row,
               ),
@@ -235,20 +371,20 @@ export function PasteListPanel() {
     if (!cancelledRef.current) setRunning(false);
   }, [text]);
 
-  const flagged = rows.filter(
-    (row) =>
-      row.status === "done" &&
-      (Boolean(row.deprecated) ||
-        (row.vulnerabilityCount ?? 0) > 0 ||
-        Boolean(row.updateAvailable)),
-  );
   const doneRows = rows.filter((row) => row.status === "done");
   const updateCount = rows.filter((row) => row.updateAvailable).length;
+  const selectedRows = doneRows.filter((row) => selected.has(row.name));
 
-  const addRowsToWatchlist = (targets: AnalysisRow[]) => {
-    for (const row of targets) {
+  const addSelectedToWatchlist = () => {
+    for (const row of selectedRows) {
       add(row.name, summaryFromRow(row));
     }
+  };
+
+  const exportMarkdown = () => {
+    const markdown = buildMarkdownReport(rows);
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadMarkdown(markdown, `package-analysis-${stamp}.md`);
   };
 
   return (
@@ -303,25 +439,23 @@ export function PasteListPanel() {
             Reset
           </button>
         )}
-        {doneRows.length > 0 && !running && (
-          <>
-            <button
-              type="button"
-              onClick={() => addRowsToWatchlist(doneRows)}
-              className="inline-flex items-center rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              Add all to watchlist
-            </button>
-            {flagged.length > 0 && (
-              <button
-                type="button"
-                onClick={() => addRowsToWatchlist(flagged)}
-                className="inline-flex items-center rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-              >
-                Add flagged ({flagged.length})
-              </button>
-            )}
-          </>
+        {rows.length > 0 && !running && (
+          <button
+            type="button"
+            onClick={exportMarkdown}
+            className="inline-flex items-center rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            Export Markdown
+          </button>
+        )}
+        {selectedRows.length > 0 && !running && (
+          <button
+            type="button"
+            onClick={addSelectedToWatchlist}
+            className="inline-flex items-center rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            Add selected to watchlist ({selectedRows.length})
+          </button>
         )}
       </div>
 
@@ -365,6 +499,19 @@ export function PasteListPanel() {
             >
               <thead className="bg-gray-50 dark:bg-gray-900/40 text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
                 <tr>
+                  <th className="w-10 px-3 py-2 font-semibold">
+                    <input
+                      ref={selectAllRef}
+                      id={selectAllId}
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleSelectAll}
+                      disabled={running || selectableNames.length === 0}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                      aria-label="Select all analysed packages"
+                      title="Select all"
+                    />
+                  </th>
                   <th className="px-3 py-2 font-semibold">Package</th>
                   <th className="px-3 py-2 font-semibold">Specified</th>
                   <th className="px-3 py-2 font-semibold">Latest</th>
@@ -374,70 +521,76 @@ export function PasteListPanel() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                {rows.map((row) => (
-                  <tr key={row.name} className="bg-white dark:bg-gray-800">
-                    <td className="px-3 py-2">
-                      <Link
-                        href={`/package/${encodeURIComponent(row.name)}`}
-                        className="font-medium text-blue-600 dark:text-blue-400 hover:underline"
-                      >
-                        {row.name}
-                      </Link>
-                      {row.deprecated && (
-                        <span className="ml-2 inline-flex rounded-md bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-orange-900 dark:bg-orange-900/40 dark:text-orange-100">
-                          Deprecated
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
-                      <SpecifiedCell requested={row.requested} />
-                    </td>
-                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
-                      {row.version && row.version !== "Unknown" ? (
-                        <span className="inline-flex flex-wrap items-center gap-1.5">
-                          <span className="tabular-nums">v{row.version}</span>
-                          {row.updateAvailable && (
-                            <span className="inline-flex rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100">
-                              Update
-                            </span>
-                          )}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="px-3 py-2 tabular-nums">
-                      {typeof row.vulnerabilityCount === "number" ? (
-                        <span
-                          className={
-                            row.vulnerabilityCount > 0
-                              ? "font-medium text-red-700 dark:text-red-300"
-                              : "text-gray-700 dark:text-gray-300"
-                          }
+                {rows.map((row) => {
+                  const canSelect = row.status === "done";
+                  return (
+                    <tr key={row.name} className="bg-white dark:bg-gray-800">
+                      <td className="px-3 py-2">
+                        <input
+                          type="checkbox"
+                          checked={canSelect && selected.has(row.name)}
+                          onChange={() => toggleSelected(row.name)}
+                          disabled={running || !canSelect}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-40"
+                          aria-label={`Select ${row.name}`}
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <Link
+                          href={`/package/${encodeURIComponent(row.name)}`}
+                          className="font-medium text-blue-600 dark:text-blue-400 hover:underline"
                         >
-                          {row.vulnerabilityCount}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-gray-700 dark:text-gray-300 tabular-nums">
-                      {typeof row.qualityScore === "number"
-                        ? `${row.qualityScore}/100`
-                        : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-gray-500 dark:text-gray-400">
-                      {row.status === "pending" && "Queued"}
-                      {row.status === "loading" && "Analysing…"}
-                      {row.status === "done" && "Done"}
-                      {row.status === "error" && (
-                        <span className="text-red-600 dark:text-red-400">
-                          {row.error || "Error"}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                          {row.name}
+                        </Link>
+                        {row.deprecated && (
+                          <span className="ml-2 inline-flex rounded-md bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-orange-900 dark:bg-orange-900/40 dark:text-orange-100">
+                            Deprecated
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
+                        <SpecifiedCell requested={row.requested} />
+                      </td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300">
+                        {row.version && row.version !== "Unknown" ? (
+                          <span className="inline-flex flex-wrap items-center gap-1.5">
+                            <span className="tabular-nums">v{row.version}</span>
+                            {row.updateAvailable && (
+                              <span className="inline-flex rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100">
+                                Update
+                              </span>
+                            )}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="px-3 py-2 tabular-nums">
+                        {typeof row.vulnerabilityCount === "number" ? (
+                          <span
+                            className={
+                              row.vulnerabilityCount > 0
+                                ? "font-medium text-red-700 dark:text-red-300"
+                                : "text-gray-700 dark:text-gray-300"
+                            }
+                          >
+                            {row.vulnerabilityCount}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300 tabular-nums">
+                        {typeof row.qualityScore === "number"
+                          ? `${row.qualityScore}/100`
+                          : "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <StatusBadge row={row} />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
