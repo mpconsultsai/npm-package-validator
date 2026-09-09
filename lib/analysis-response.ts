@@ -35,6 +35,16 @@ export function getPackageRuntime(packageData: PackageAnalysisResult) {
   });
 }
 
+/** Count published versions from the npm packument `time` map. */
+export function countNpmReleases(
+  time?: Record<string, string> | null,
+): number {
+  if (!time) return 0;
+  return Object.keys(time).filter(
+    (key) => !["created", "modified", "unpublished"].includes(key),
+  ).length;
+}
+
 export function calculateQualityScore(
   packageData: PackageAnalysisResult,
 ): number {
@@ -146,6 +156,7 @@ export function buildAnalysisResponse(
       stars: packageData.github?.stars || 0,
       openIssues: packageData.github?.open_issues || 0,
       qualityScore: calculateQualityScore(packageData),
+      releaseCount: countNpmReleases(packageData.npm?.time),
       ...(packageData.bundleSize
         ? {
             bundleSize: packageData.bundleSize.size,

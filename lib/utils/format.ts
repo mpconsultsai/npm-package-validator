@@ -16,6 +16,18 @@ export function formatDaysSinceRelease(days: number): string {
   return `${totalDays} ${totalDays === 1 ? "day" : "days"} ago`;
 }
 
+/** Short UK-style date for version publish times (e.g. 9 Sep 2026). */
+export function formatPublishDate(iso: string | undefined | null): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
 /** Human-readable byte size (decimal units, matching Bundlephobia-style labels). */
 export function formatBytes(bytes: number): string {
   const value = Number(bytes);

@@ -523,6 +523,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                     packageName={analysisData.packageInfo.name}
                     latestVersion={analysisData.packageInfo.latestVersion}
                     availableVersions={securityVersions}
+                    versionTimes={analysisData.npm?.time}
                     selectedVersion={versionToCheck}
                     onVersionChange={(v) => {
                       checkedVersionRef.current = null;
@@ -549,6 +550,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                 <div hidden={detailsTab !== "charts"}>
                   <MetricsChartsCard
                     packageName={analysisData.packageInfo.name}
+                    versionTimes={analysisData.npm?.time}
                   />
                 </div>
               )}

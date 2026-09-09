@@ -6,6 +6,7 @@ interface MetricsCardProps {
     stars: number;
     openIssues: number;
     qualityScore: number;
+    releaseCount?: number;
     bundleSize?: number;
     bundleGzip?: number;
     bundleNote?: string;
@@ -15,6 +16,8 @@ interface MetricsCardProps {
 export function MetricsCard({ metrics }: MetricsCardProps) {
   const hasBundleSize =
     metrics.bundleSize !== undefined && metrics.bundleGzip !== undefined;
+  const hasReleaseCount =
+    typeof metrics.releaseCount === "number" && metrics.releaseCount > 0;
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
@@ -49,6 +52,16 @@ export function MetricsCard({ metrics }: MetricsCardProps) {
           </p>
           <p className="text-2xl font-bold">{metrics.qualityScore}/100</p>
         </div>
+        {hasReleaseCount && (
+          <div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Releases
+            </p>
+            <p className="text-2xl font-bold">
+              {metrics.releaseCount!.toLocaleString()}
+            </p>
+          </div>
+        )}
         {hasBundleSize && (
           <>
             <div>

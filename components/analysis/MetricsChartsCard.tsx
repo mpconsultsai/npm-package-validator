@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
   Line,
   LineChart,
@@ -12,6 +14,7 @@ import {
 } from "recharts";
 import { formatCompactNumber } from "@/lib/utils/format";
 import { fetchJson } from "@/lib/fetch-client";
+import { buildReleaseCadence } from "@/lib/release-cadence";
 
 interface ChartPoint {
   date: string;
@@ -26,6 +29,13 @@ interface ChartsPayload {
 function formatTickDate(iso: string) {
   const d = new Date(`${iso}T00:00:00`);
   return d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+}
+
+function formatTooltipDate(iso: string) {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", {
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function MetricLineChart({
@@ -114,6 +124,80 @@ function MetricLineChart({
   );
 }
 
+/** Histogram of publishes per month — right chart for release cadence. */
+function ReleaseCadenceChart({ points }: { points: ChartPoint[] }) {
+  const data = points.map((p) => ({
+    ...p,
+    label: formatTickDate(p.date),
+  }));
+  const total = points.reduce((sum, p) => sum + p.value, 0);
+
+  return (
+    <div>
+      <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+        Release cadence
+      </p>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+        npm publishes per month
+        {total > 0 ? ` · ${total.toLocaleString()} in view` : ""}
+      </p>
+      {data.length < 1 ? (
+        <p className="text-sm text-gray-500 dark:text-gray-400 py-8">
+          No release history available.
+        </p>
+      ) : (
+        <div className="h-52 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#6b7280" opacity={0.25} />
+              <XAxis
+                dataKey="label"
+                tick={{ fill: "#9ca3af", fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                interval="preserveStartEnd"
+                minTickGap={28}
+              />
+              <YAxis
+                allowDecimals={false}
+                tick={{ fill: "#9ca3af", fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                width={36}
+              />
+              <Tooltip
+                formatter={(value) => [
+                  typeof value === "number"
+                    ? `${value} release${value === 1 ? "" : "s"}`
+                    : String(value ?? ""),
+                  "Published",
+                ]}
+                labelFormatter={(_, payload) =>
+                  payload?.[0]?.payload?.date
+                    ? formatTooltipDate(payload[0].payload.date)
+                    : ""
+                }
+                contentStyle={{
+                  backgroundColor: "#1f2937",
+                  border: "1px solid #374151",
+                  borderRadius: 8,
+                  color: "#f3f4f6",
+                }}
+              />
+              <Bar
+                dataKey="value"
+                fill="#8b5cf6"
+                radius={[3, 3, 0, 0]}
+                maxBarSize={28}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ChartSkeleton() {
   return (
     <div>
@@ -123,7 +207,13 @@ function ChartSkeleton() {
   );
 }
 
-export function MetricsChartsCard({ packageName }: { packageName: string }) {
+export function MetricsChartsCard({
+  packageName,
+  versionTimes,
+}: {
+  packageName: string;
+  versionTimes?: Record<string, string>;
+}) {
   const [data, setData] = useState<ChartsPayload>({
     downloads: [],
     issues: [],
@@ -131,6 +221,11 @@ export function MetricsChartsCard({ packageName }: { packageName: string }) {
   const [error, setError] = useState<string | null>(null);
   const [loadingDownloads, setLoadingDownloads] = useState(true);
   const [loadingIssues, setLoadingIssues] = useState(true);
+
+  const releasePoints = useMemo(
+    () => buildReleaseCadence(versionTimes, 36),
+    [versionTimes],
+  );
 
   useEffect(() => {
     if (!packageName) return;
@@ -142,7 +237,9 @@ export function MetricsChartsCard({ packageName }: { packageName: string }) {
       done: () => void,
     ) => {
       try {
-        const { ok, data: payload } = await fetchJson<ChartsPayload & { error?: string }>(
+        const { ok, data: payload } = await fetchJson<
+          ChartsPayload & { error?: string }
+        >(
           `/api/package-charts?package=${encodeURIComponent(packageName)}&series=${series}`,
           {
             signal: controller.signal,
@@ -172,7 +269,10 @@ export function MetricsChartsCard({ packageName }: { packageName: string }) {
     void load(
       "downloads",
       (payload) =>
-        setData((current) => ({ ...current, downloads: payload.downloads || [] })),
+        setData((current) => ({
+          ...current,
+          downloads: payload.downloads || [],
+        })),
       () => setLoadingDownloads(false),
     );
     void load(
@@ -203,6 +303,7 @@ export function MetricsChartsCard({ packageName }: { packageName: string }) {
             empty="No download history available."
           />
         )}
+        <ReleaseCadenceChart points={releasePoints} />
         {loadingIssues ? (
           <ChartSkeleton />
         ) : (
