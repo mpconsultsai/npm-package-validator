@@ -121,6 +121,8 @@ export function buildReleaseTypeMix(
   for (const [key, iso] of Object.entries(time)) {
     if (META_KEYS.has(key)) continue;
     if (!semver.valid(key) || semver.prerelease(key)) continue;
+    // 0.0.0 is a placeholder, not a meaningful release
+    if (semver.eq(key, "0.0.0")) continue;
     const at = new Date(iso);
     if (Number.isNaN(at.getTime())) continue;
     events.push({ version: key, at });
