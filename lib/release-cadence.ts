@@ -128,16 +128,18 @@ export function buildReleaseTypeMix(
 
   if (events.length === 0) return empty;
 
-  events.sort((a, b) => a.at.getTime() - b.at.getTime());
+  // Classify along semver lineage (not publish time). Packages that maintain
+  // multiple major lines (e.g. msw 1.x + 2.x) otherwise look like constant majors.
+  events.sort((a, b) => semver.compare(a.version, b.version));
 
-  const end = new Date(
-    Date.UTC(
-      events[events.length - 1].at.getUTCFullYear(),
-      events[events.length - 1].at.getUTCMonth(),
-      1,
-    ),
+  const latestPublish = events.reduce(
+    (max, e) => (e.at > max ? e.at : max),
+    events[0].at,
   );
-  const windowStart = addMonths(end, -(maxMonths - 1));
+  const endMonth = new Date(
+    Date.UTC(latestPublish.getUTCFullYear(), latestPublish.getUTCMonth(), 1),
+  );
+  const windowStart = addMonths(endMonth, -(maxMonths - 1));
 
   const monthBuckets = new Map<
     string,
@@ -182,7 +184,7 @@ export function buildReleaseTypeMix(
   }
 
   const points: ReleaseTypeMixPoint[] = [];
-  for (let cur = start; cur <= end; cur = addMonths(cur, 1)) {
+  for (let cur = start; cur <= endMonth; cur = addMonths(cur, 1)) {
     const key = monthKey(cur);
     const bucket = monthBuckets.get(key) ?? { major: 0, minor: 0, patch: 0 };
     points.push({ date: key, ...bucket });
@@ -191,6 +193,10 @@ export function buildReleaseTypeMix(
   return {
     points,
     totals,
-    recentMajors: majorsInWindow.reverse().slice(0, 5),
+    recentMajors: majorsInWindow
+      .sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+      )
+      .slice(0, 5),
   };
 }
