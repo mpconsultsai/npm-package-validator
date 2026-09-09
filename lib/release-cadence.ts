@@ -1,7 +1,8 @@
 /**
- * Build a monthly release-count series from the npm packument `time` map.
- * Empty months are filled so gaps in cadence are visible.
+ * Build release history series from the npm packument `time` map.
  */
+
+import semver from "semver";
 
 const META_KEYS = new Set(["created", "modified", "unpublished"]);
 
@@ -9,6 +10,20 @@ export interface ReleaseCadencePoint {
   /** First day of month, YYYY-MM-DD */
   date: string;
   value: number;
+}
+
+export interface ReleaseTypeMixPoint {
+  date: string;
+  major: number;
+  minor: number;
+  patch: number;
+}
+
+export interface ReleaseTypeMixResult {
+  points: ReleaseTypeMixPoint[];
+  totals: { major: number; minor: number; patch: number; all: number };
+  /** Most recent major bumps in the window (newest first) */
+  recentMajors: { version: string; date: string }[];
 }
 
 function monthKey(d: Date): string {
@@ -19,6 +34,27 @@ function monthKey(d: Date): string {
 
 function addMonths(d: Date, n: number): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1));
+}
+
+type BumpKind = "major" | "minor" | "patch";
+
+function classifyBump(previous: string | null, next: string): BumpKind | null {
+  const cleaned = semver.valid(next);
+  if (!cleaned || semver.prerelease(cleaned)) return null;
+
+  if (!previous) {
+    const parsed = semver.parse(cleaned);
+    if (!parsed) return null;
+    if (parsed.minor === 0 && parsed.patch === 0) return "major";
+    if (parsed.patch === 0) return "minor";
+    return "patch";
+  }
+
+  const diff = semver.diff(previous, cleaned);
+  if (!diff) return null;
+  if (diff === "major" || diff === "premajor") return "major";
+  if (diff === "minor" || diff === "preminor") return "minor";
+  return "patch";
 }
 
 /**
@@ -54,7 +90,6 @@ export function buildReleaseCadence(
     Date.UTC(latest.getUTCFullYear(), latest.getUTCMonth(), 1),
   );
 
-  // Cap to recent window ending at last release month
   const windowStart = addMonths(end, -(maxMonths - 1));
   if (start < windowStart) start = windowStart;
 
@@ -65,4 +100,97 @@ export function buildReleaseCadence(
   }
 
   return points;
+}
+
+/**
+ * Monthly stacked major / minor / patch bumps (stable releases only).
+ * Helps judge API churn when choosing a package.
+ */
+export function buildReleaseTypeMix(
+  time?: Record<string, string> | null,
+  maxMonths = 36,
+): ReleaseTypeMixResult {
+  const empty: ReleaseTypeMixResult = {
+    points: [],
+    totals: { major: 0, minor: 0, patch: 0, all: 0 },
+    recentMajors: [],
+  };
+  if (!time) return empty;
+
+  const events: { version: string; at: Date }[] = [];
+  for (const [key, iso] of Object.entries(time)) {
+    if (META_KEYS.has(key)) continue;
+    if (!semver.valid(key) || semver.prerelease(key)) continue;
+    const at = new Date(iso);
+    if (Number.isNaN(at.getTime())) continue;
+    events.push({ version: key, at });
+  }
+
+  if (events.length === 0) return empty;
+
+  events.sort((a, b) => a.at.getTime() - b.at.getTime());
+
+  const end = new Date(
+    Date.UTC(
+      events[events.length - 1].at.getUTCFullYear(),
+      events[events.length - 1].at.getUTCMonth(),
+      1,
+    ),
+  );
+  const windowStart = addMonths(end, -(maxMonths - 1));
+
+  const monthBuckets = new Map<
+    string,
+    { major: number; minor: number; patch: number }
+  >();
+  const totals = { major: 0, minor: 0, patch: 0, all: 0 };
+  const majorsInWindow: { version: string; date: string }[] = [];
+
+  let previous: string | null = null;
+  for (const event of events) {
+    const kind = classifyBump(previous, event.version);
+    previous = event.version;
+    if (!kind) continue;
+
+    const monthStart = new Date(
+      Date.UTC(event.at.getUTCFullYear(), event.at.getUTCMonth(), 1),
+    );
+    if (monthStart < windowStart) continue;
+
+    const key = monthKey(event.at);
+    const bucket = monthBuckets.get(key) ?? { major: 0, minor: 0, patch: 0 };
+    bucket[kind] += 1;
+    monthBuckets.set(key, bucket);
+    totals[kind] += 1;
+    totals.all += 1;
+    if (kind === "major") {
+      majorsInWindow.push({
+        version: event.version,
+        date: event.at.toISOString(),
+      });
+    }
+  }
+
+  if (totals.all === 0) return empty;
+
+  let start = windowStart;
+  const firstInView = [...monthBuckets.keys()].sort()[0];
+  if (firstInView) {
+    const [y, m] = firstInView.split("-").map(Number);
+    const firstMonth = new Date(Date.UTC(y, m - 1, 1));
+    if (firstMonth > start) start = firstMonth;
+  }
+
+  const points: ReleaseTypeMixPoint[] = [];
+  for (let cur = start; cur <= end; cur = addMonths(cur, 1)) {
+    const key = monthKey(cur);
+    const bucket = monthBuckets.get(key) ?? { major: 0, minor: 0, patch: 0 };
+    points.push({ date: key, ...bucket });
+  }
+
+  return {
+    points,
+    totals,
+    recentMajors: majorsInWindow.reverse().slice(0, 5),
+  };
 }

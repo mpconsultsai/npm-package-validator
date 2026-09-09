@@ -3,6 +3,7 @@ import type {
   RuntimeConfidence,
   RuntimeKind,
 } from "@/lib/runtime-environment";
+import { GitHubIcon } from "@/components/BrandIcons";
 
 /** npm search `dependents` count — badge when widely depended-on. */
 const POPULAR_MIN_DEPENDENTS = 1000;
@@ -15,6 +16,8 @@ interface PackageInfo {
   license: string;
   description?: string;
   npmUrl: string;
+  homepage?: string;
+  repository?: string;
   daysSinceLastRelease?: number | null;
   lastReleaseLabel?: string | null;
   dependents?: number;
@@ -28,6 +31,14 @@ interface PackageInfo {
 
 interface PackageInfoCardProps {
   packageInfo: PackageInfo;
+}
+
+function githubRepoUrl(repository?: string): string | null {
+  if (!repository) return null;
+  const match = repository.match(/github\.com[:/]([^/]+)\/([^/\s#.]+)/i);
+  if (!match) return null;
+  const repo = match[2].replace(/\.git$/i, "");
+  return `https://github.com/${match[1]}/${repo}`;
 }
 
 function formatDependents(count: number): string {
@@ -118,6 +129,7 @@ export function PackageInfoCard({ packageInfo }: PackageInfoCardProps) {
         {runtimeBadge}
       </div>
     ) : null;
+  const githubUrl = githubRepoUrl(packageInfo.repository);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
@@ -153,7 +165,18 @@ export function PackageInfoCard({ packageInfo }: PackageInfoCardProps) {
             </span>
           </div>
           <p className="text-lg font-semibold text-gray-900 dark:text-white">
-            {packageInfo.name}
+            {packageInfo.homepage ? (
+              <a
+                href={packageInfo.homepage}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline underline-offset-2"
+              >
+                {packageInfo.name}
+              </a>
+            ) : (
+              packageInfo.name
+            )}
           </p>
         </div>
 
@@ -263,7 +286,7 @@ export function PackageInfoCard({ packageInfo }: PackageInfoCardProps) {
           </div>
         )}
 
-        <div className="md:col-span-2">
+        <div className="md:col-span-2 flex flex-wrap items-center gap-x-4 gap-y-2">
           <a
             href={packageInfo.npmUrl}
             target="_blank"
@@ -275,6 +298,7 @@ export function PackageInfoCard({ packageInfo }: PackageInfoCardProps) {
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
@@ -285,6 +309,17 @@ export function PackageInfoCard({ packageInfo }: PackageInfoCardProps) {
             </svg>
             View on npm
           </a>
+          {githubUrl && (
+            <a
+              href={githubUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline"
+            >
+              <GitHubIcon className="w-4 h-4 shrink-0" />
+              View on GitHub
+            </a>
+          )}
         </div>
       </div>
     </div>

@@ -12,9 +12,13 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatCompactNumber } from "@/lib/utils/format";
+import { formatCompactNumber, formatPublishDate } from "@/lib/utils/format";
 import { fetchJson } from "@/lib/fetch-client";
-import { buildReleaseCadence } from "@/lib/release-cadence";
+import {
+  buildReleaseCadence,
+  buildReleaseTypeMix,
+  type ReleaseTypeMixResult,
+} from "@/lib/release-cadence";
 
 interface ChartPoint {
   date: string;
@@ -64,7 +68,7 @@ function MetricLineChart({
           {empty}
         </p>
       ) : (
-        <div className="h-52 w-full">
+        <div className="h-52 w-full overflow-hidden">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#6b7280" opacity={0.25} />
@@ -146,7 +150,7 @@ function ReleaseCadenceChart({ points }: { points: ChartPoint[] }) {
           No release history available.
         </p>
       ) : (
-        <div className="h-52 w-full">
+        <div className="h-52 w-full overflow-hidden">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#6b7280" opacity={0.25} />
@@ -198,6 +202,120 @@ function ReleaseCadenceChart({ points }: { points: ChartPoint[] }) {
   );
 }
 
+/**
+ * Overall major/minor/patch share — clearer for adoption decisions than
+ * monthly stacked bars.
+ */
+function ReleaseTypeMixChart({ mix }: { mix: ReleaseTypeMixResult }) {
+  const { totals, recentMajors } = mix;
+  if (totals.all < 1) {
+    return (
+      <div>
+        <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+          Release type mix
+        </p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 py-4">
+          No stable release history available.
+        </p>
+      </div>
+    );
+  }
+
+  const pct = (n: number) => Math.round((n / totals.all) * 100);
+  const segments = [
+    {
+      key: "major" as const,
+      label: "Major",
+      count: totals.major,
+      swatch: "bg-blue-900",
+    },
+    {
+      key: "minor" as const,
+      label: "Minor",
+      count: totals.minor,
+      swatch: "bg-blue-500",
+    },
+    {
+      key: "patch" as const,
+      label: "Patch",
+      count: totals.patch,
+      swatch: "bg-emerald-500",
+    },
+  ].filter((s) => s.count > 0);
+
+  return (
+    <div className="relative isolate">
+      <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
+        Release type mix
+      </p>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+        Share of stable semver bumps in the last ~3 years · higher major share
+        can mean more breaking upgrades
+      </p>
+
+      <div
+        className="flex h-3.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700"
+        role="img"
+        aria-label={segments
+          .map((s) => `${s.label}: ${pct(s.count)}%`)
+          .join(", ")}
+      >
+        {segments.map((seg, index) => (
+          <div
+            key={seg.key}
+            className={`h-full ${seg.swatch} ${
+              index === 0 || index === segments.length - 1 ? "min-w-2" : ""
+            }`}
+            style={{ flex: `${seg.count} 1 0%` }}
+            title={`${seg.label}: ${seg.count} (${pct(seg.count)}%)`}
+          />
+        ))}
+      </div>
+
+      <div className="mt-2 flex h-4 flex-wrap items-center gap-x-4 gap-y-1 text-xs leading-4 text-gray-600 dark:text-gray-400">
+        {segments.map((seg) => (
+          <span
+            key={seg.key}
+            className="inline-flex h-4 items-center gap-1.5"
+          >
+            <span
+              className={`inline-block size-2.5 shrink-0 rounded-full ${seg.swatch}`}
+              aria-hidden="true"
+            />
+            <span className="leading-4">
+              {seg.label}{" "}
+              <span className="tabular-nums text-gray-500 dark:text-gray-400">
+                {pct(seg.count)}% · {seg.count}
+              </span>
+            </span>
+          </span>
+        ))}
+      </div>
+
+      {recentMajors.length > 0 && (
+        <div className="mt-4">
+          <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
+            Recent major releases
+          </p>
+          <ul className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
+            {recentMajors.map((m) => (
+              <li
+                key={`${m.version}-${m.date}`}
+                className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5"
+              >
+                <span className="font-mono text-sm font-semibold">v{m.version}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {formatPublishDate(m.date) ?? "—"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ChartSkeleton() {
   return (
     <div>
@@ -224,6 +342,10 @@ export function MetricsChartsCard({
 
   const releasePoints = useMemo(
     () => buildReleaseCadence(versionTimes, 36),
+    [versionTimes],
+  );
+  const releaseTypeMix = useMemo(
+    () => buildReleaseTypeMix(versionTimes, 36),
     [versionTimes],
   );
 
@@ -304,6 +426,7 @@ export function MetricsChartsCard({
           />
         )}
         <ReleaseCadenceChart points={releasePoints} />
+        <ReleaseTypeMixChart mix={releaseTypeMix} />
         {loadingIssues ? (
           <ChartSkeleton />
         ) : (
