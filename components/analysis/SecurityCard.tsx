@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { AdvisoryLinks } from "./AdvisoryLinks";
 import { AdvisoryDescription } from "./AdvisoryDescription";
 import {
@@ -39,6 +42,16 @@ interface SecurityCardProps {
   securityData: { error?: string; security?: SecurityResult } | null;
 }
 
+const TIME_META = new Set(["created", "modified", "unpublished"]);
+
+const isPublishedVersion = (
+  version: string,
+  versionTimes?: Record<string, string>,
+): boolean => {
+  if (!versionTimes) return false;
+  return Boolean(versionTimes[version]) && !TIME_META.has(version);
+};
+
 const SEVERITY_SEGMENTS = [
   { key: "critical" as const, label: "Critical", className: "bg-purple-500" },
   { key: "high" as const, label: "High", className: "bg-red-500" },
@@ -48,22 +61,7 @@ const SEVERITY_SEGMENTS = [
 
 function SeverityMix({ security }: { security: SecurityResult }) {
   const total = security.totalCount;
-  if (total <= 0) {
-    return (
-      <div className="mt-3">
-        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Severity mix
-        </p>
-        <div
-          className="h-3 w-full overflow-hidden rounded-full bg-emerald-500"
-          title="No known vulnerabilities"
-        />
-        <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">
-          No known vulnerabilities
-        </p>
-      </div>
-    );
-  }
+  if (total <= 0) return null;
 
   const segments = SEVERITY_SEGMENTS.map((seg) => ({
     ...seg,
@@ -128,6 +126,63 @@ export function SecurityCard({
       : latestVersion
         ? [latestVersion]
         : [];
+  const versionsKey = versions.join("\0");
+
+  const [mode, setMode] = useState<"listed" | "custom">("listed");
+  const [listedVersion, setListedVersion] = useState(
+    () =>
+      (selectedVersion && versions.includes(selectedVersion)
+        ? selectedVersion
+        : versions[0]) || "",
+  );
+  const [customVersion, setCustomVersion] = useState("");
+  const [customNotFound, setCustomNotFound] = useState(false);
+  const [checkedCustom, setCheckedCustom] = useState<string | null>(null);
+
+  const defaultListed =
+    (latestVersion && versions.includes(latestVersion)
+      ? latestVersion
+      : versions[0]) || "";
+
+  useEffect(() => {
+    if (versions.length === 0) return;
+    setListedVersion((prev) => (versions.includes(prev) ? prev : versions[0]));
+  }, [versionsKey, versions]);
+
+  const applyListedVersion = (version: string) => {
+    setListedVersion(version);
+    setCustomNotFound(false);
+    onVersionChange(version);
+  };
+
+  const applyCustomVersion = () => {
+    const version = customVersion.trim();
+    if (!version) return;
+    if (versionTimes && !isPublishedVersion(version, versionTimes)) {
+      setCustomNotFound(true);
+      return;
+    }
+    setCustomNotFound(false);
+    setCheckedCustom(version);
+    onVersionChange(version);
+  };
+
+  const chooseMode = (next: "listed" | "custom") => {
+    if (next === mode) return;
+    setMode(next);
+    setCustomVersion("");
+    setCustomNotFound(false);
+    setCheckedCustom(null);
+    if (next === "listed") {
+      if (defaultListed) applyListedVersion(defaultListed);
+      return;
+    }
+    if (defaultListed) setListedVersion(defaultListed);
+  };
+
+  const showSecurity =
+    mode === "listed" ||
+    Boolean(checkedCustom && checkedCustom === customVersion.trim());
 
   const selectedPublished = formatPublishDate(
     selectedVersion ? versionTimes?.[selectedVersion] : null,
@@ -138,8 +193,39 @@ export function SecurityCard({
       <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
         Security advisories for the selected package version.
       </p>
-      <div className="flex flex-wrap gap-2 items-end">
-        <div className="flex-1 min-w-[140px]">
+      <div
+        role="radiogroup"
+        aria-label="Version source"
+        className="flex gap-5 mb-3 border-b border-gray-200 dark:border-gray-600"
+      >
+        {(
+          [
+            { id: "listed" as const, label: "Last 10 versions" },
+            { id: "custom" as const, label: "Older versions" },
+          ] as const
+        ).map((option) => {
+          const selected = mode === option.id;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => chooseMode(option.id)}
+              className={`-mb-px pb-2 text-sm font-medium border-b-2 transition-colors ${
+                selected
+                  ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400"
+                  : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+              }`}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {mode === "listed" ? (
+        <div>
           <label
             htmlFor="securityVersionSelect"
             className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
@@ -148,10 +234,10 @@ export function SecurityCard({
           </label>
           <select
             id="securityVersionSelect"
-            value={selectedVersion}
-            onChange={(e) => onVersionChange(e.target.value)}
+            value={listedVersion}
+            onChange={(e) => applyListedVersion(e.target.value)}
             disabled={versions.length === 0 || securityLoading}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white disabled:opacity-60"
+            className="w-full md:w-1/4 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white disabled:opacity-60"
           >
             {versions.map((v) => (
               <option key={v} value={v}>
@@ -160,25 +246,70 @@ export function SecurityCard({
               </option>
             ))}
           </select>
-          {selectedPublished && (
-            <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-              Released {selectedPublished}
+        </div>
+      ) : (
+        <div>
+          <label
+            htmlFor="securityVersionCustom"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          >
+            Version
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <input
+              id="securityVersionCustom"
+              type="text"
+              value={customVersion}
+              onChange={(e) => {
+                setCustomVersion(e.target.value);
+                if (customNotFound) setCustomNotFound(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  applyCustomVersion();
+                }
+              }}
+              placeholder="Enter version"
+              spellCheck={false}
+              autoComplete="off"
+              disabled={showSecurity && securityLoading}
+              className="w-full md:w-1/4 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white disabled:opacity-60"
+            />
+            <button
+              type="button"
+              onClick={applyCustomVersion}
+              disabled={(showSecurity && securityLoading) || !customVersion.trim()}
+              className="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              Check
+            </button>
+          </div>
+          {customNotFound && (
+            <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">
+              Version not found
             </p>
           )}
         </div>
-      </div>
+      )}
 
-      {securityLoading && (
+      {mode === "listed" && selectedPublished && (
+        <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+          Released {selectedPublished}
+        </p>
+      )}
+
+      {showSecurity && securityLoading && (
         <p className="mt-4 text-sm text-gray-500 dark:text-gray-400" role="status">
           Checking security for {packageName}@{selectedVersion || "…"}…
         </p>
       )}
 
-      {securityData?.error && !securityLoading && (
+      {showSecurity && securityData?.error && !securityLoading && (
         <p className="mt-4 text-red-600 dark:text-red-400">{securityData.error}</p>
       )}
 
-      {hasSecurity && !securityLoading && (
+      {showSecurity && hasSecurity && !securityLoading && (
         <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-600">
           <h3 className="font-semibold text-lg mb-3">
             Security for {packageName}@{selectedVersion}
@@ -237,12 +368,9 @@ export function SecurityCard({
               </div>
             </div>
           ) : (
-            <div>
-              <p className="text-green-600 dark:text-green-400 font-medium">
-                No known vulnerabilities for this version.
-              </p>
-              <SeverityMix security={securityData!.security!} />
-            </div>
+            <p className="text-green-600 dark:text-green-400 font-medium">
+              No known vulnerabilities for this version.
+            </p>
           )}
         </div>
       )}

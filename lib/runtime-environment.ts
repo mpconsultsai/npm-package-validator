@@ -331,3 +331,12 @@ export function classifyRuntimeEnvironment(
     reasons: reasons.slice(0, 6),
   };
 }
+
+/** Hide runtime in the UI when the heuristic is a guess. */
+export const isConfidentRuntime = (runtime?: {
+  kind?: RuntimeKind;
+  confidence?: RuntimeConfidence;
+} | null): boolean => {
+  if (!runtime?.kind || runtime.kind === "unclear") return false;
+  return runtime.confidence === "high" || runtime.confidence === "medium";
+};

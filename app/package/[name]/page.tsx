@@ -23,6 +23,7 @@ import {
   type AnalysisTabId,
   type DetailsTabId,
 } from "@/components/analysis";
+import { snapshotFromAnalysis } from "@/lib/package-compare";
 
 function summaryFromAnalysis(data: any): WatchlistSummary {
   return {
@@ -392,6 +393,16 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
     const version = versionToCheck.trim();
     if (!pkgName || !version) return;
 
+    const time = analysisData?.npm?.time as Record<string, string> | undefined;
+    const published =
+      Boolean(time?.[version]) &&
+      !["created", "modified", "unpublished"].includes(version);
+    if (time && !published) {
+      setVersionSecurityData({ error: "Version not found" });
+      setVersionSecurityLoading(false);
+      return;
+    }
+
     const latest = analysisData.packageInfo?.latestVersion;
     const canReuse =
       version === latest && analysisData.security
@@ -405,6 +416,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
     analysisData?.packageInfo?.name,
     analysisData?.packageInfo?.latestVersion,
     analysisData?.security,
+    analysisData?.npm?.time,
     loadVersionSecurity,
   ]);
 
@@ -413,7 +425,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
         .filter((k) => !["created", "modified", "unpublished"].includes(k))
         .filter((v) => semver.valid(v) && !semver.prerelease(v))
         .sort((a, b) => semver.compare(b, a))
-        .slice(0, 20)
+        .slice(0, 10)
     : [];
 
   // Ensure latest is in the selector list even if filtered out
@@ -570,6 +582,10 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                     competitors={
                       aiEnabled ? analysisData.ai?.competitors : undefined
                     }
+                    current={snapshotFromAnalysis(
+                      analysisData,
+                      analysisData.packageInfo?.name ?? nameFromPath,
+                    )}
                   />
                 </div>
               )}

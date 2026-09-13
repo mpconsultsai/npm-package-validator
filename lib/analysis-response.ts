@@ -2,6 +2,7 @@ import { formatDaysSinceRelease } from "@/lib/utils/format";
 import type { PackageAnalysisResult } from "@/lib/types/package-data";
 import type { AIPackageAnalysis } from "@/lib/ai/analyzer";
 import { classifyRuntimeEnvironment } from "@/lib/runtime-environment";
+import { licenseDisplayName } from "@/lib/license-info";
 
 export function getDaysSinceLastRelease(
   packageData: PackageAnalysisResult,
@@ -133,7 +134,7 @@ export function buildAnalysisResponse(
     packageInfo: {
       name: packageName,
       latestVersion: packageData.npm?.version || "Unknown",
-      license: packageData.npm?.license || "Unknown",
+      license: licenseDisplayName(packageData.npm?.license),
       npmUrl: `https://www.npmjs.com/package/${packageName}`,
       description: packageData.npm?.description || "",
       homepage: packageData.npm?.homepage,

@@ -6,11 +6,11 @@ const listeners = new Set<Listener>();
 let hydrated = false;
 let enabled = true;
 
-function emit() {
-  for (const listener of listeners) listener();
-}
+const emit = () => {
+  listeners.forEach((listener) => listener());
+};
 
-function read(): boolean {
+const read = (): boolean => {
   if (typeof window === "undefined") return true;
   if (!hydrated) {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -18,22 +18,18 @@ function read(): boolean {
     hydrated = true;
   }
   return enabled;
-}
+};
 
-export function subscribeAiAnalysisPref(listener: Listener): () => void {
+export const subscribeAiAnalysisPref = (listener: Listener): (() => void) => {
   listeners.add(listener);
   return () => listeners.delete(listener);
-}
+};
 
-export function getAiAnalysisEnabled(): boolean {
-  return read();
-}
+export const getAiAnalysisEnabled = (): boolean => read();
 
-export function getAiAnalysisEnabledServerSnapshot(): boolean {
-  return true;
-}
+export const getAiAnalysisEnabledServerSnapshot = (): boolean => true;
 
-export function setAiAnalysisEnabled(value: boolean): void {
+export const setAiAnalysisEnabled = (value: boolean): void => {
   const next = Boolean(value);
   if (hydrated && enabled === next) return;
   enabled = next;
@@ -44,4 +40,4 @@ export function setAiAnalysisEnabled(value: boolean): void {
     // ignore quota / private mode
   }
   emit();
-}
+};

@@ -26,19 +26,26 @@ export interface ReleaseTypeMixResult {
   recentMajors: { version: string; date: string }[];
 }
 
-function monthKey(d: Date): string {
+const monthKey = (d: Date): string => {
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");
   return `${y}-${m}-01`;
-}
+};
 
-function addMonths(d: Date, n: number): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1));
-}
+const addMonths = (d: Date, n: number): Date =>
+  new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1));
+
+const monthsBetween = (start: Date, end: Date): Date[] => {
+  const count =
+    (end.getUTCFullYear() - start.getUTCFullYear()) * 12 +
+    (end.getUTCMonth() - start.getUTCMonth()) +
+    1;
+  return Array.from({ length: Math.max(0, count) }, (_, i) => addMonths(start, i));
+};
 
 type BumpKind = "major" | "minor" | "patch";
 
-function classifyBump(previous: string | null, next: string): BumpKind | null {
+const classifyBump = (previous: string | null, next: string): BumpKind | null => {
   const cleaned = semver.valid(next);
   if (!cleaned || semver.prerelease(cleaned)) return null;
 
@@ -55,61 +62,57 @@ function classifyBump(previous: string | null, next: string): BumpKind | null {
   if (diff === "major" || diff === "premajor") return "major";
   if (diff === "minor" || diff === "preminor") return "minor";
   return "patch";
-}
+};
 
 /**
  * @param time npm `time` object (version → ISO date)
  * @param maxMonths cap the window to the most recent N months (default 36)
  */
-export function buildReleaseCadence(
+export const buildReleaseCadence = (
   time?: Record<string, string> | null,
   maxMonths = 36,
-): ReleaseCadencePoint[] {
+): ReleaseCadencePoint[] => {
   if (!time) return [];
 
-  const counts = new Map<string, number>();
-  let earliest: Date | null = null;
-  let latest: Date | null = null;
+  const published = Object.entries(time)
+    .filter(([key]) => !META_KEYS.has(key))
+    .map(([, iso]) => new Date(iso))
+    .filter((d) => !Number.isNaN(d.getTime()));
 
-  for (const [key, iso] of Object.entries(time)) {
-    if (META_KEYS.has(key)) continue;
-    const published = new Date(iso);
-    if (Number.isNaN(published.getTime())) continue;
-    const mk = monthKey(published);
-    counts.set(mk, (counts.get(mk) || 0) + 1);
-    if (!earliest || published < earliest) earliest = published;
-    if (!latest || published > latest) latest = published;
-  }
+  if (published.length === 0) return [];
 
-  if (!earliest || !latest || counts.size === 0) return [];
+  const counts = published.reduce((acc, d) => {
+    const mk = monthKey(d);
+    acc.set(mk, (acc.get(mk) || 0) + 1);
+    return acc;
+  }, new Map<string, number>());
 
-  let start = new Date(
-    Date.UTC(earliest.getUTCFullYear(), earliest.getUTCMonth(), 1),
-  );
+  const earliest = published.reduce((min, d) => (d < min ? d : min));
+  const latest = published.reduce((max, d) => (d > max ? d : max));
+
   const end = new Date(
     Date.UTC(latest.getUTCFullYear(), latest.getUTCMonth(), 1),
   );
-
   const windowStart = addMonths(end, -(maxMonths - 1));
-  if (start < windowStart) start = windowStart;
+  const startCandidate = new Date(
+    Date.UTC(earliest.getUTCFullYear(), earliest.getUTCMonth(), 1),
+  );
+  const start = startCandidate < windowStart ? windowStart : startCandidate;
 
-  const points: ReleaseCadencePoint[] = [];
-  for (let cur = start; cur <= end; cur = addMonths(cur, 1)) {
-    const key = monthKey(cur);
-    points.push({ date: key, value: counts.get(key) || 0 });
-  }
-
-  return points;
-}
+  return monthsBetween(start, end).map((cur) => {
+    const date = monthKey(cur);
+    return { date, value: counts.get(date) || 0 };
+  });
+};
 
 /**
  * Monthly stacked major / minor / patch bumps (stable releases only).
  * Helps judge API churn when choosing a package.
  */
-export function buildReleaseTypeMix(
+export const buildReleaseTypeMix = (
   time?: Record<string, string> | null,
   maxMonths = 36,
-): ReleaseTypeMixResult {
+): ReleaseTypeMixResult => {
   const empty: ReleaseTypeMixResult = {
     points: [],
     totals: { major: 0, minor: 0, patch: 0, all: 0 },
@@ -117,22 +120,19 @@ export function buildReleaseTypeMix(
   };
   if (!time) return empty;
 
-  const events: { version: string; at: Date }[] = [];
-  for (const [key, iso] of Object.entries(time)) {
-    if (META_KEYS.has(key)) continue;
-    if (!semver.valid(key) || semver.prerelease(key)) continue;
-    // 0.0.0 is a placeholder, not a meaningful release
-    if (semver.eq(key, "0.0.0")) continue;
-    const at = new Date(iso);
-    if (Number.isNaN(at.getTime())) continue;
-    events.push({ version: key, at });
-  }
+  const events = Object.entries(time)
+    .filter(
+      ([key]) =>
+        !META_KEYS.has(key) &&
+        semver.valid(key) &&
+        !semver.prerelease(key) &&
+        !semver.eq(key, "0.0.0"),
+    )
+    .map(([version, iso]) => ({ version, at: new Date(iso) }))
+    .filter((event) => !Number.isNaN(event.at.getTime()))
+    .sort((a, b) => semver.compare(a.version, b.version));
 
   if (events.length === 0) return empty;
-
-  // Classify along semver lineage (not publish time). Packages that maintain
-  // multiple major lines (e.g. msw 1.x + 2.x) otherwise look like constant majors.
-  events.sort((a, b) => semver.compare(a.version, b.version));
 
   const latestPublish = events.reduce(
     (max, e) => (e.at > max ? e.at : max),
@@ -143,62 +143,75 @@ export function buildReleaseTypeMix(
   );
   const windowStart = addMonths(endMonth, -(maxMonths - 1));
 
-  const monthBuckets = new Map<
-    string,
-    { major: number; minor: number; patch: number }
-  >();
-  const totals = { major: 0, minor: 0, patch: 0, all: 0 };
-  const majorsInWindow: { version: string; date: string }[] = [];
+  const classified = events.reduce<{
+    previous: string | null;
+    items: { version: string; at: Date; kind: BumpKind }[];
+  }>(
+    (acc, event) => {
+      const kind = classifyBump(acc.previous, event.version);
+      if (kind) acc.items.push({ ...event, kind });
+      acc.previous = event.version;
+      return acc;
+    },
+    { previous: null, items: [] },
+  ).items;
 
-  let previous: string | null = null;
-  for (const event of events) {
-    const kind = classifyBump(previous, event.version);
-    previous = event.version;
-    if (!kind) continue;
-
+  const inWindow = classified.filter((event) => {
     const monthStart = new Date(
       Date.UTC(event.at.getUTCFullYear(), event.at.getUTCMonth(), 1),
     );
-    if (monthStart < windowStart) continue;
+    return monthStart >= windowStart;
+  });
 
-    const key = monthKey(event.at);
-    const bucket = monthBuckets.get(key) ?? { major: 0, minor: 0, patch: 0 };
-    bucket[kind] += 1;
-    monthBuckets.set(key, bucket);
-    totals[kind] += 1;
-    totals.all += 1;
-    if (kind === "major") {
-      majorsInWindow.push({
-        version: event.version,
-        date: event.at.toISOString(),
-      });
-    }
-  }
+  if (inWindow.length === 0) return empty;
 
-  if (totals.all === 0) return empty;
+  const { monthBuckets, totals, majorsInWindow } = inWindow.reduce(
+    (acc, event) => {
+      const key = monthKey(event.at);
+      const bucket = acc.monthBuckets.get(key) ?? {
+        major: 0,
+        minor: 0,
+        patch: 0,
+      };
+      bucket[event.kind] += 1;
+      acc.monthBuckets.set(key, bucket);
+      acc.totals[event.kind] += 1;
+      acc.totals.all += 1;
+      if (event.kind === "major") {
+        acc.majorsInWindow.push({
+          version: event.version,
+          date: event.at.toISOString(),
+        });
+      }
+      return acc;
+    },
+    {
+      monthBuckets: new Map<
+        string,
+        { major: number; minor: number; patch: number }
+      >(),
+      totals: { major: 0, minor: 0, patch: 0, all: 0 },
+      majorsInWindow: [] as { version: string; date: string }[],
+    },
+  );
 
-  let start = windowStart;
   const firstInView = [...monthBuckets.keys()].sort()[0];
-  if (firstInView) {
+  const start = (() => {
+    if (!firstInView) return windowStart;
     const [y, m] = firstInView.split("-").map(Number);
     const firstMonth = new Date(Date.UTC(y, m - 1, 1));
-    if (firstMonth > start) start = firstMonth;
-  }
-
-  const points: ReleaseTypeMixPoint[] = [];
-  for (let cur = start; cur <= endMonth; cur = addMonths(cur, 1)) {
-    const key = monthKey(cur);
-    const bucket = monthBuckets.get(key) ?? { major: 0, minor: 0, patch: 0 };
-    points.push({ date: key, ...bucket });
-  }
+    return firstMonth > windowStart ? firstMonth : windowStart;
+  })();
 
   return {
-    points,
+    points: monthsBetween(start, endMonth).map((cur) => {
+      const key = monthKey(cur);
+      const bucket = monthBuckets.get(key) ?? { major: 0, minor: 0, patch: 0 };
+      return { date: key, ...bucket };
+    }),
     totals,
     recentMajors: majorsInWindow
-      .sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-      )
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 5),
   };
-}
+};

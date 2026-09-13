@@ -6,7 +6,7 @@ const GITHUB_API_URL = 'https://api.github.com';
 /**
  * Extract GitHub repo info from various URL formats
  */
-export function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
+export const parseGitHubUrl = (url: string): { owner: string; repo: string } | null => {
   if (!url) return null;
 
   // Handle various GitHub URL formats
@@ -23,12 +23,12 @@ export function parseGitHubUrl(url: string): { owner: string; repo: string } | n
   }
 
   return null;
-}
+};
 
 /**
  * Create GitHub API headers with optional authentication
  */
-function getGitHubHeaders(): Record<string, string> {
+const getGitHubHeaders = (): Record<string, string> => {
   const headers: Record<string, string> = {
     'Accept': 'application/vnd.github.v3+json',
     'User-Agent': 'npm-package-validator',
@@ -39,15 +39,15 @@ function getGitHubHeaders(): Record<string, string> {
   }
 
   return headers;
-}
+};
 
 /**
  * Fetch repository data from GitHub
  */
-export async function fetchGitHubRepoData(
+export const fetchGitHubRepoData = async (
   owner: string,
   repo: string
-): Promise<GitHubRepoData> {
+): Promise<GitHubRepoData> => {
   try {
     const response = await axios.get(`${GITHUB_API_URL}/repos/${owner}/${repo}`, {
       headers: getGitHubHeaders(),
@@ -82,16 +82,16 @@ export async function fetchGitHubRepoData(
     }
     throw new Error(`Failed to fetch GitHub data: ${error.message}`);
   }
-}
+};
 
 /**
  * Fetch latest releases from GitHub
  */
-export async function fetchGitHubReleases(
+export const fetchGitHubReleases = async (
   owner: string,
   repo: string,
   limit: number = 5
-): Promise<GitHubReleaseData[]> {
+): Promise<GitHubReleaseData[]> => {
   try {
     const response = await axios.get(
       `${GITHUB_API_URL}/repos/${owner}/${repo}/releases`,
@@ -115,22 +115,20 @@ export async function fetchGitHubReleases(
     }
     throw new Error(`Failed to fetch GitHub releases: ${error.message}`);
   }
-}
+};
 
 export interface ChartPoint {
   date: string;
   value: number;
 }
 
-function utcToday(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+const utcToday = (): string => new Date().toISOString().slice(0, 10);
 
-function utcYesterday(): string {
+const utcYesterday = (): string => {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - 1);
   return d.toISOString().slice(0, 10);
-}
+};
 
 class GitHubSearchRateLimitError extends Error {
   constructor() {
@@ -139,7 +137,7 @@ class GitHubSearchRateLimitError extends Error {
   }
 }
 
-async function searchIssueCount(q: string): Promise<number | null> {
+const searchIssueCount = async (q: string): Promise<number | null> => {
   try {
     const response = await axios.get(`${GITHUB_API_URL}/search/issues`, {
       headers: getGitHubHeaders(),
@@ -155,7 +153,7 @@ async function searchIssueCount(q: string): Promise<number | null> {
     }
     return null;
   }
-}
+};
 
 const openIssueCache = new Map<string, { expires: number; points: ChartPoint[] }>();
 const openIssueInflight = new Map<string, Promise<ChartPoint[]>>();
@@ -163,7 +161,7 @@ const OPEN_ISSUE_CACHE_MS = 30 * 60 * 1000;
 const OPEN_ISSUE_CACHE_MAX = 50;
 const GITHUB_GRAPHQL_URL = "https://api.github.com/graphql";
 
-function pruneOpenIssueCache() {
+const pruneOpenIssueCache = () => {
   const now = Date.now();
   for (const [key, entry] of openIssueCache) {
     if (entry.expires <= now) openIssueCache.delete(key);
@@ -173,13 +171,12 @@ function pruneOpenIssueCache() {
     if (!oldest) break;
     openIssueCache.delete(oldest);
   }
-}
+};
 
-function isSafeGitHubName(value: string): boolean {
-  return /^[A-Za-z0-9._-]+$/.test(value);
-}
+const isSafeGitHubName = (value: string): boolean =>
+  /^[A-Za-z0-9._-]+$/.test(value);
 
-function issueSnapshotDates(): string[] {
+const issueSnapshotDates = (): string[] => {
   const today = utcToday();
   const yesterday = utcYesterday();
   const now = new Date();
@@ -192,13 +189,13 @@ function issueSnapshotDates(): string[] {
   }
 
   return [...new Set(asOfDates)].sort((a, b) => a.localeCompare(b));
-}
+};
 
-async function fetchOpenIssueCountsGraphQL(
+const fetchOpenIssueCountsGraphQL = async (
   owner: string,
   repo: string,
   dates: string[]
-): Promise<ChartPoint[] | null> {
+): Promise<ChartPoint[] | null> => {
   const fields = dates.flatMap((date, i) => [
     `c${i}: search(query: ${JSON.stringify(`repo:${owner}/${repo} is:issue created:<=${date}`)}, type: ISSUE, first: 1) { issueCount }`,
     `x${i}: search(query: ${JSON.stringify(`repo:${owner}/${repo} is:issue is:closed closed:<=${date}`)}, type: ISSUE, first: 1) { issueCount }`,
@@ -235,12 +232,12 @@ async function fetchOpenIssueCountsGraphQL(
   } catch {
     return null;
   }
-}
+};
 
-async function fetchOpenIssuesUncached(
+const fetchOpenIssuesUncached = async (
   owner: string,
   repo: string
-): Promise<ChartPoint[]> {
+): Promise<ChartPoint[]> => {
   const dates = issueSnapshotDates();
   const fromGraphql = await fetchOpenIssueCountsGraphQL(owner, repo, dates);
   if (fromGraphql?.length) return fromGraphql;
@@ -264,16 +261,16 @@ async function fetchOpenIssuesUncached(
   }
 
   return points.sort((a, b) => a.date.localeCompare(b.date));
-}
+};
 
 /**
  * Open issue count at the end of each of the last 12 months.
  * Current month is as-of yesterday (today's counts are incomplete).
  */
-export async function fetchOpenIssuesByMonth(
+export const fetchOpenIssuesByMonth = async (
   owner: string,
   repo: string
-): Promise<ChartPoint[]> {
+): Promise<ChartPoint[]> => {
   if (!isSafeGitHubName(owner) || !isSafeGitHubName(repo)) return [];
 
   const cacheKey = `v3:${owner}/${repo}`.toLowerCase();
@@ -303,12 +300,12 @@ export async function fetchOpenIssuesByMonth(
 
   openIssueInflight.set(cacheKey, pending);
   return pending;
-}
+};
 
 /**
  * Get GitHub data from repository URL
  */
-export async function fetchGitHubDataFromUrl(repoUrl: string) {
+export const fetchGitHubDataFromUrl = async (repoUrl: string) => {
   const parsed = parseGitHubUrl(repoUrl);
   if (!parsed) {
     throw new Error('Invalid GitHub repository URL');
@@ -320,4 +317,4 @@ export async function fetchGitHubDataFromUrl(repoUrl: string) {
   ]);
 
   return { repoData, releases };
-}
+};

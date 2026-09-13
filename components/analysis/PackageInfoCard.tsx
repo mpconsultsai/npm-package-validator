@@ -1,9 +1,11 @@
 import { formatDaysSinceRelease } from "@/lib/utils/format";
-import type {
-  RuntimeConfidence,
-  RuntimeKind,
+import {
+  isConfidentRuntime,
+  type RuntimeConfidence,
+  type RuntimeKind,
 } from "@/lib/runtime-environment";
 import { GitHubIcon } from "@/components/BrandIcons";
+import { describeLicense } from "@/lib/license-info";
 
 /** npm search `dependents` count — badge when widely depended-on. */
 const POPULAR_MIN_DEPENDENTS = 1000;
@@ -82,7 +84,7 @@ function RuntimeBadge({
 }: {
   runtime: NonNullable<PackageInfo["runtime"]>;
 }) {
-  if (runtime.kind === "unclear") return null;
+  if (!isConfidentRuntime(runtime)) return null;
 
   const styles =
     runtime.kind === "client"
@@ -130,6 +132,7 @@ export function PackageInfoCard({ packageInfo }: PackageInfoCardProps) {
       </div>
     ) : null;
   const githubUrl = githubRepoUrl(packageInfo.repository);
+  const licenseInfo = describeLicense(packageInfo.license);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
@@ -249,12 +252,28 @@ export function PackageInfoCard({ packageInfo }: PackageInfoCardProps) {
               />
             </svg>
             <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-              License
+              Licence
             </span>
           </div>
           <p className="text-lg font-semibold text-gray-900 dark:text-white">
-            {packageInfo.license}
+            {licenseInfo?.href ? (
+              <a
+                href={licenseInfo.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline underline-offset-2"
+              >
+                {packageInfo.license}
+              </a>
+            ) : (
+              packageInfo.license
+            )}
           </p>
+          {licenseInfo?.summary && (
+            <p className="mt-1.5 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+              {licenseInfo.summary}
+            </p>
+          )}
         </div>
 
         {packageInfo.dependents !== undefined && (

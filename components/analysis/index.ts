@@ -7,4 +7,5 @@ export { MetricsChartsCard } from "./MetricsChartsCard";
 export { SecurityCard } from "./SecurityCard";
 export { AIAnalysisCard } from "./AIAnalysisCard";
 export { SimilarPackagesCard } from "./SimilarPackagesCard";
+export { PackageCompareTable } from "./PackageCompareTable";
 export type { SecurityCountSummary } from "./SecuritySeverityBadges";
