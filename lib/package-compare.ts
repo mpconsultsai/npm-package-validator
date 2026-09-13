@@ -36,27 +36,33 @@ type AnalysisLike = {
   security?: { totalCount?: number };
 };
 
+const asAnalysis = (data: unknown): AnalysisLike | null => {
+  if (!data || typeof data !== "object") return null;
+  return data as AnalysisLike;
+};
+
 export const snapshotFromAnalysis = (
-  data: AnalysisLike | null | undefined,
+  data: unknown,
   fallbackName = "",
 ): CompareColumn => {
-  const name = data?.packageInfo?.name || fallbackName;
-  const version = data?.packageInfo?.latestVersion;
+  const analysis = asAnalysis(data);
+  const name = analysis?.packageInfo?.name || fallbackName;
+  const version = analysis?.packageInfo?.latestVersion;
   return {
     name,
     status: "ready",
     version: version && version !== "Unknown" ? version : undefined,
-    qualityScore: data?.metrics?.qualityScore,
-    vulnerabilityCount: data?.security?.totalCount,
-    downloads: data?.metrics?.downloads,
-    bundleGzip: data?.metrics?.bundleGzip,
-    lastRelease: data?.packageInfo?.lastReleaseLabel ?? null,
-    runtime: isConfidentRuntime(data?.packageInfo?.runtime)
-      ? data?.packageInfo?.runtime?.label
+    qualityScore: analysis?.metrics?.qualityScore,
+    vulnerabilityCount: analysis?.security?.totalCount,
+    downloads: analysis?.metrics?.downloads,
+    bundleGzip: analysis?.metrics?.bundleGzip,
+    lastRelease: analysis?.packageInfo?.lastReleaseLabel ?? null,
+    runtime: isConfidentRuntime(analysis?.packageInfo?.runtime)
+      ? analysis?.packageInfo?.runtime?.label
       : undefined,
     license:
-      data?.packageInfo?.license && data.packageInfo.license !== "Unknown"
-        ? data.packageInfo.license
+      analysis?.packageInfo?.license && analysis.packageInfo.license !== "Unknown"
+        ? analysis.packageInfo.license
         : undefined,
   };
 };

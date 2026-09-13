@@ -29,7 +29,7 @@ export function InfoCards() {
     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-6">
       <InfoCard
         title="Security Analysis"
-        description="Check for vulnerabilities and security advisories"
+        description="Check for vulnerabilities and security advisories on the latest release, or any older version"
         iconClassName="text-blue-600 dark:text-blue-400"
       >
         <svg
@@ -49,7 +49,7 @@ export function InfoCards() {
 
       <InfoCard
         title="Quality Metrics"
-        description="Evaluate maintenance, popularity, and code quality"
+        description="Evaluate maintenance, popularity, and code quality — plus bundle size and alternatives"
         iconClassName="text-green-600 dark:text-green-400"
       >
         <svg
@@ -69,7 +69,7 @@ export function InfoCards() {
 
       <InfoCard
         title="AI-Powered"
-        description="Get intelligent recommendations using Agentic AI"
+        description="Get intelligent recommendations using Agentic AI, including suggested alternatives"
         iconClassName="text-purple-600 dark:text-purple-400"
       >
         <svg

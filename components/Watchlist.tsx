@@ -1,11 +1,54 @@
 "use client";
 
 import Link from "next/link";
+import semver from "semver";
 import { useWatchlist, useWatchlistActions } from "@/lib/use-watchlist";
 import {
   getWatchlistAlerts,
   type WatchlistEntry,
 } from "@/lib/watchlist-store";
+
+type VersionBumpKind = "major" | "minor" | "patch";
+
+const versionBumpKind = (
+  from: string,
+  to: string,
+): VersionBumpKind | null => {
+  const prev = semver.valid(semver.clean(from));
+  const next = semver.valid(semver.clean(to));
+  if (!prev || !next) return null;
+  const diff = semver.diff(prev, next);
+  if (!diff) return null;
+  if (diff === "major" || diff === "premajor") return "major";
+  if (diff === "minor" || diff === "preminor") return "minor";
+  return "patch";
+};
+
+const newVersionChip = (
+  entry: WatchlistEntry,
+): { label: string; className: string } | null => {
+  const next = entry.fresh?.version;
+  const prev = entry.summary?.version;
+  if (!next) return null;
+
+  const kind = prev && prev !== next ? versionBumpKind(prev, next) : null;
+  const bump =
+    kind === "major" ? "Major" : kind === "minor" ? "Minor" : kind === "patch" ? "Patch" : null;
+  const label =
+    prev && prev !== next
+      ? bump
+        ? `v${prev} → v${next} · ${bump}`
+        : `v${prev} → v${next}`
+      : `New v${next}`;
+
+  return {
+    label,
+    className:
+      kind === "major"
+        ? "bg-blue-100 text-blue-950 dark:bg-blue-900/50 dark:text-blue-100"
+        : "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100",
+  };
+};
 
 function formatCheckedAt(ts?: number): string {
   if (!ts) return "Not checked yet";
@@ -60,12 +103,9 @@ function TrashIcon({ className = "w-4 h-4" }: { className?: string }) {
 function AlertBadges({ entry }: { entry: WatchlistEntry }) {
   const alerts = getWatchlistAlerts(entry);
   const chips: { label: string; className: string }[] = [];
-  if (alerts.newVersion && entry.fresh?.version) {
-    chips.push({
-      label: `New v${entry.fresh.version}`,
-      className:
-        "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100",
-    });
+  if (alerts.newVersion) {
+    const versionChip = newVersionChip(entry);
+    if (versionChip) chips.push(versionChip);
   }
   if (alerts.newVulns) {
     const n = entry.fresh?.vulnerabilityCount ?? 0;
