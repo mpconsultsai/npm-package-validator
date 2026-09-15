@@ -18,10 +18,10 @@ import {
   SecurityCard,
   AIAnalysisCard,
   SimilarPackagesCard,
-  AnalysisTabs,
-  DetailsTabs,
-  type AnalysisTabId,
-  type DetailsTabId,
+  OverviewTabs,
+  InsightTabs,
+  type OverviewTabId,
+  type InsightTabId,
 } from "@/components/analysis";
 import { snapshotFromAnalysis } from "@/lib/package-compare";
 
@@ -121,8 +121,8 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
   const [versionToCheck, setVersionToCheck] = useState("");
   const [versionSecurityData, setVersionSecurityData] = useState<any>(null);
   const [versionSecurityLoading, setVersionSecurityLoading] = useState(false);
-  const [analysisTab, setAnalysisTab] = useState<AnalysisTabId>("info");
-  const [detailsTab, setDetailsTab] = useState<DetailsTabId>("metrics");
+  const [overviewTab, setOverviewTab] = useState<OverviewTabId>("info");
+  const [insightTab, setInsightTab] = useState<InsightTabId>("ai");
   const [chartsOpened, setChartsOpened] = useState(false);
   const [relatedOpened, setRelatedOpened] = useState(false);
   const versionCheckRequestId = useRef(0);
@@ -156,6 +156,32 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
       if (signal.aborted) return;
       if (!ok) {
         setAiError(data.error || "Failed to generate AI analysis");
+        return;
+      }
+      const ai = data.ai;
+      const softFail =
+        !ai ||
+        (typeof ai.summary === "string" &&
+          ai.summary.startsWith("Unable to generate AI analysis"));
+      if (softFail) {
+        setAiError("Failed to generate AI analysis");
+        setAnalysisData((prev: any) => {
+          if (!prev) return { ...data, ai: undefined };
+          return {
+            ...prev,
+            ...data,
+            ai: undefined,
+            metrics: {
+              ...prev.metrics,
+              ...data.metrics,
+            },
+            errors: {
+              ...prev.errors,
+              ...data.errors,
+              ai: "Failed to generate AI analysis",
+            },
+          };
+        });
         return;
       }
       setAnalysisData((prev: any) => {
@@ -196,8 +222,8 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
       setError(null);
       setAiError(null);
       setAnalysisData(null);
-      setAnalysisTab(withAi ? "ai" : "info");
-      setDetailsTab("metrics");
+      setOverviewTab("info");
+      setInsightTab(withAi ? "ai" : "security");
       setChartsOpened(false);
       setRelatedOpened(false);
       resetSecurityCheck();
@@ -263,14 +289,14 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
     [loadAiAnalysis],
   );
 
-  const handleAnalysisTabChange = (tab: AnalysisTabId) => {
-    setAnalysisTab(tab);
+  const handleOverviewTabChange = (tab: OverviewTabId) => {
+    if (tab === "charts") setChartsOpened(true);
+    setOverviewTab(tab);
   };
 
-  const handleDetailsTabChange = (tab: DetailsTabId) => {
-    if (tab === "charts") setChartsOpened(true);
+  const handleInsightTabChange = (tab: InsightTabId) => {
     if (tab === "related") setRelatedOpened(true);
-    setDetailsTab(tab);
+    setInsightTab(tab);
   };
 
   useEffect(() => {
@@ -297,7 +323,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
       aiAbort.current?.abort();
       setAiLoading(false);
       setAiError(null);
-      setAnalysisTab((tab) => (tab === "ai" ? "info" : tab));
+      setInsightTab((tab) => (tab === "ai" ? "security" : tab));
       return;
     }
 
@@ -388,7 +414,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
   );
 
   useEffect(() => {
-    if (analysisTab !== "security") return;
+    if (insightTab !== "security") return;
     const pkgName = analysisData?.packageInfo?.name;
     const version = versionToCheck.trim();
     if (!pkgName || !version) return;
@@ -411,7 +437,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
 
     void loadVersionSecurity(pkgName, version, canReuse);
   }, [
-    analysisTab,
+    insightTab,
     versionToCheck,
     analysisData?.packageInfo?.name,
     analysisData?.packageInfo?.latestVersion,
@@ -480,15 +506,47 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                 />
               </div>
 
-              <AnalysisTabs
-                active={analysisTab}
-                onChange={handleAnalysisTabChange}
+              <OverviewTabs
+                active={overviewTab}
+                onChange={handleOverviewTabChange}
+              />
+
+              {overviewTab === "info" &&
+                (loading || !analysisData?.packageInfo ? (
+                  <PanelSkeleton label="Loading package info" />
+                ) : (
+                  <PackageInfoCard packageInfo={analysisData.packageInfo} />
+                ))}
+
+              {overviewTab === "metrics" &&
+                (loading || !analysisData?.metrics ? (
+                  <MetricsSkeleton />
+                ) : (
+                  <MetricsCard metrics={analysisData.metrics} />
+                ))}
+
+              {chartsOpened && analysisData?.packageInfo && !loading && (
+                <div hidden={overviewTab !== "charts"}>
+                  <MetricsChartsCard
+                    packageName={analysisData.packageInfo.name}
+                    versionTimes={analysisData.npm?.time}
+                    keywords={analysisData.npm?.keywords}
+                    competitors={
+                      aiEnabled ? analysisData.ai?.competitors : undefined
+                    }
+                  />
+                </div>
+              )}
+
+              <InsightTabs
+                active={insightTab}
+                onChange={handleInsightTabChange}
                 aiModel={analysisData?.ai?.model}
                 security={analysisData?.security}
                 showAi={aiPrefReady && aiEnabled}
               />
 
-              {aiPrefReady && aiEnabled && analysisTab === "ai" && (
+              {aiPrefReady && aiEnabled && insightTab === "ai" && (
                 <div className="space-y-4 sm:space-y-6">
                   {apisPending ? (
                     <AIAnalysisSkeleton />
@@ -497,11 +555,9 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                   ) : (
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
                       <p className="text-gray-600 dark:text-gray-400">
-                        {aiError ||
-                          analysisData?.errors?.ai ||
-                          "AI analysis is not available for this package."}
+                        AI analysis could not be completed. Please try again.
                       </p>
-                      {aiError && nameFromPath && (
+                      {nameFromPath && (
                         <button
                           type="button"
                           onClick={() => {
@@ -512,7 +568,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                           }}
                           className="mt-3 text-sm font-medium text-blue-600 dark:text-blue-400 underline hover:no-underline"
                         >
-                          Retry AI analysis
+                          Try again
                         </button>
                       )}
                     </div>
@@ -520,14 +576,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                 </div>
               )}
 
-              {analysisTab === "info" &&
-                (loading || !analysisData?.packageInfo ? (
-                  <PanelSkeleton label="Loading package info" />
-                ) : (
-                  <PackageInfoCard packageInfo={analysisData.packageInfo} />
-                ))}
-
-              {analysisTab === "security" &&
+              {insightTab === "security" &&
                 (loading || !analysisData?.packageInfo ? (
                   <PanelSkeleton label="Loading security" />
                 ) : (
@@ -546,36 +595,15 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                   />
                 ))}
 
-              <DetailsTabs
-                active={detailsTab}
-                onChange={handleDetailsTabChange}
-              />
-
-              {detailsTab === "metrics" &&
-                (loading || !analysisData?.metrics ? (
-                  <MetricsSkeleton />
-                ) : (
-                  <MetricsCard metrics={analysisData.metrics} />
-                ))}
-
-              {chartsOpened && analysisData?.packageInfo && !loading && (
-                <div hidden={detailsTab !== "charts"}>
-                  <MetricsChartsCard
-                    packageName={analysisData.packageInfo.name}
-                    versionTimes={analysisData.npm?.time}
-                  />
-                </div>
-              )}
-
               {relatedOpened &&
-                detailsTab === "related" &&
+                insightTab === "related" &&
                 aiEnabled &&
                 aiLoading && <PanelSkeleton label="Loading related packages" />}
 
               {relatedOpened &&
+                insightTab === "related" &&
                 !loading &&
                 !(aiEnabled && aiLoading) && (
-                <div hidden={detailsTab !== "related"}>
                   <SimilarPackagesCard
                     packageName={analysisData.packageInfo?.name ?? nameFromPath}
                     keywords={analysisData.npm?.keywords}
@@ -587,8 +615,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                       analysisData.packageInfo?.name ?? nameFromPath,
                     )}
                   />
-                </div>
-              )}
+                )}
             </div>
           )}
 

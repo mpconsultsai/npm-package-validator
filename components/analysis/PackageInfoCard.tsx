@@ -1,15 +1,11 @@
 import { formatDaysSinceRelease } from "@/lib/utils/format";
-import {
-  isConfidentRuntime,
-  type RuntimeConfidence,
-  type RuntimeKind,
-} from "@/lib/runtime-environment";
 import { GitHubIcon } from "@/components/BrandIcons";
 import { describeLicense } from "@/lib/license-info";
 
 /** npm search `dependents` count — badge when widely depended-on. */
 const POPULAR_MIN_DEPENDENTS = 1000;
 const VERY_POPULAR_MIN_DEPENDENTS = 10_000;
+const MAX_KEYWORD_BADGES = 10;
 
 interface PackageInfo {
   name: string;
@@ -23,12 +19,7 @@ interface PackageInfo {
   daysSinceLastRelease?: number | null;
   lastReleaseLabel?: string | null;
   dependents?: number;
-  runtime?: {
-    kind: RuntimeKind;
-    label: string;
-    confidence: RuntimeConfidence;
-    reasons: string[];
-  };
+  keywords?: string[];
 }
 
 interface PackageInfoCardProps {
@@ -79,40 +70,44 @@ function PopularBadge({ dependents }: { dependents: number }) {
   );
 }
 
-function RuntimeBadge({
-  runtime,
+function KeywordBadges({
+  keywords,
+  packageName,
 }: {
-  runtime: NonNullable<PackageInfo["runtime"]>;
+  keywords?: string[];
+  packageName: string;
 }) {
-  if (!isConfidentRuntime(runtime)) return null;
+  if (!keywords?.length) return null;
 
-  const styles =
-    runtime.kind === "client"
-      ? "bg-sky-500 text-white ring-sky-700/30 dark:bg-sky-400 dark:text-sky-950"
-      : runtime.kind === "server"
-        ? "bg-violet-600 text-white ring-violet-800/30 dark:bg-violet-400 dark:text-violet-950"
-        : "bg-teal-600 text-white ring-teal-800/30 dark:bg-teal-400 dark:text-teal-950";
+  const nameLower = packageName.toLowerCase();
+  const baseName = nameLower.includes("/")
+    ? nameLower.slice(nameLower.lastIndexOf("/") + 1)
+    : nameLower;
 
-  const shortLabel =
-    runtime.kind === "both"
-      ? "Client & Server"
-      : runtime.kind === "client"
-        ? "Client"
-        : "Server";
-
-  const titleParts = [
-    `Heuristic: ${runtime.label.toLowerCase()}`,
-    `Confidence: ${runtime.confidence}`,
-    ...runtime.reasons.map((r) => `• ${r}`),
-  ];
+  const labels = [
+    ...new Set(
+      keywords
+        .map((k) => k.trim())
+        .filter(Boolean)
+        .filter((k) => {
+          const key = k.toLowerCase();
+          return key !== nameLower && key !== baseName;
+        }),
+    ),
+  ].slice(0, MAX_KEYWORD_BADGES);
+  if (labels.length === 0) return null;
 
   return (
-    <span
-      className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide shadow-sm ring-1 ${styles}`}
-      title={titleParts.join("\n")}
-    >
-      {shortLabel}
-    </span>
+    <>
+      {labels.map((label) => (
+        <span
+          key={label}
+          className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700 ring-1 ring-gray-200 dark:bg-gray-700/70 dark:text-gray-200 dark:ring-gray-600"
+        >
+          {label}
+        </span>
+      ))}
+    </>
   );
 }
 
@@ -121,14 +116,28 @@ export function PackageInfoCard({ packageInfo }: PackageInfoCardProps) {
     packageInfo.dependents !== undefined ? (
       <PopularBadge dependents={packageInfo.dependents} />
     ) : null;
-  const runtimeBadge = packageInfo.runtime ? (
-    <RuntimeBadge runtime={packageInfo.runtime} />
-  ) : null;
+  const keywordBadges = (
+    <KeywordBadges
+      keywords={packageInfo.keywords}
+      packageName={packageInfo.name}
+    />
+  );
+  const hasKeywordBadges = Boolean(
+    packageInfo.keywords?.some((k) => {
+      const key = k.trim().toLowerCase();
+      if (!key) return false;
+      const nameLower = packageInfo.name.toLowerCase();
+      const baseName = nameLower.includes("/")
+        ? nameLower.slice(nameLower.lastIndexOf("/") + 1)
+        : nameLower;
+      return key !== nameLower && key !== baseName;
+    }),
+  );
   const badgeRow =
-    popularBadge || runtimeBadge ? (
+    popularBadge || hasKeywordBadges ? (
       <div className="flex flex-wrap items-center gap-2">
         {popularBadge}
-        {runtimeBadge}
+        {keywordBadges}
       </div>
     ) : null;
   const githubUrl = githubRepoUrl(packageInfo.repository);

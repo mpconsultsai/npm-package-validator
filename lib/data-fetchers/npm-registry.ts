@@ -81,7 +81,10 @@ export async function fetchNpmDownloadStats(packageName: string): Promise<NpmDow
 }
 
 /**
- * Fetch weekly download statistics for the last year (for trends)
+ * Daily download counts for up to the last two years.
+ * npm caps a single range request at ~365 days, so this uses two ranges.
+ * Leading zero-download days are dropped so newer packages start when
+ * they first appear in the registry stats.
  */
 export interface NpmDownloadDay {
   day: string;
@@ -92,27 +95,87 @@ export async function fetchNpmDownloadTrends(packageName: string): Promise<{
   downloads: NpmDownloadDay[];
 }> {
   try {
-    const response = await axios.get(
-      `${NPM_DOWNLOADS_URL}/range/last-year/${encodeURIComponent(packageName)}`
+    const end = new Date();
+    end.setUTCHours(0, 0, 0, 0);
+    // Exclude the most recent two weeks — current/partial weeks are noisy.
+    end.setUTCDate(end.getUTCDate() - 14);
+    const mid = new Date(end);
+    mid.setUTCDate(mid.getUTCDate() - 365);
+    const start = new Date(end);
+    start.setUTCDate(start.getUTCDate() - 730);
+
+    const toIso = (d: Date) => d.toISOString().slice(0, 10);
+    const encoded = encodeURIComponent(packageName);
+    const ranges = [
+      `${toIso(start)}:${toIso(mid)}`,
+      `${toIso(mid)}:${toIso(end)}`,
+    ];
+
+    const responses = await Promise.all(
+      ranges.map((range) =>
+        axios.get(`${NPM_DOWNLOADS_URL}/range/${range}/${encoded}`, {
+          timeout: 15_000,
+          validateStatus: (status) => status === 200 || status === 404,
+        }),
+      ),
     );
-    return response.data;
+
+    const byDay = new Map<string, number>();
+    for (const response of responses) {
+      if (response.status !== 200) continue;
+      const days = Array.isArray(response.data?.downloads)
+        ? response.data.downloads
+        : [];
+      for (const entry of days) {
+        if (typeof entry?.day !== "string") continue;
+        const value =
+          typeof entry.downloads === "number" ? entry.downloads : 0;
+        byDay.set(entry.day, value);
+      }
+    }
+
+    const downloads = [...byDay.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([day, value]) => ({ day, downloads: value }));
+
+    const firstActive = downloads.findIndex((d) => d.downloads > 0);
+    return {
+      downloads: firstActive >= 0 ? downloads.slice(firstActive) : downloads,
+    };
   } catch (error: any) {
     throw new Error(`Failed to fetch download trends: ${error.message}`);
   }
 }
 
 export function toWeeklyDownloads(days: NpmDownloadDay[]): ChartPointLike[] {
-  const today = new Date().toISOString().slice(0, 10);
-  const complete = days.filter((d) => d.day < today);
-  const weeks: ChartPointLike[] = [];
-  for (let i = 0; i + 7 <= complete.length; i += 7) {
-    const slice = complete.slice(i, i + 7);
-    weeks.push({
-      date: slice[0].day,
-      value: slice.reduce((sum, d) => sum + (d.downloads || 0), 0),
-    });
+  const end = new Date();
+  end.setUTCHours(0, 0, 0, 0);
+  end.setUTCDate(end.getUTCDate() - 14);
+  const cutoff = end.toISOString().slice(0, 10);
+  const byWeek = new Map<string, { total: number; days: number }>();
+
+  for (const day of days) {
+    if (!day.day || day.day > cutoff) continue;
+    const date = new Date(`${day.day}T00:00:00Z`);
+    if (Number.isNaN(date.getTime())) continue;
+    // Align weeks to Monday UTC so series from different packages share dates.
+    const dayIndex = (date.getUTCDay() + 6) % 7;
+    date.setUTCDate(date.getUTCDate() - dayIndex);
+    const weekKey = date.toISOString().slice(0, 10);
+    const bucket = byWeek.get(weekKey) ?? { total: 0, days: 0 };
+    bucket.total += day.downloads || 0;
+    bucket.days += 1;
+    byWeek.set(weekKey, bucket);
   }
-  return weeks;
+
+  // Drop partial weeks at the start/end — they look like false dips.
+  // Also drop the newest complete week; it can still look soft vs earlier weeks.
+  const weeks = [...byWeek.entries()]
+    .filter(([, bucket]) => bucket.days >= 7)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, bucket]) => ({ date, value: bucket.total }));
+
+  return weeks.length > 1 ? weeks.slice(0, -1) : weeks;
 }
 
 interface ChartPointLike {
@@ -490,15 +553,23 @@ async function searchNpmSimilar(text: string, size: number) {
   return response.data?.objects ?? [];
 }
 
+export type SimilarPackageCard = {
+  name: string;
+  description: string;
+  version: string;
+};
+
 /**
  * Rank related packages by distinctive keyword overlap, name similarity,
  * and npm's quality/popularity/maintenance scores — not raw search order.
+ *
+ * Returns a ranked pool (default 30) so callers can paginate with an offset cursor.
  */
 export async function fetchSimilarPackages(
   packageName: string,
   keywords?: string[] | null,
-  limit: number = 6
-): Promise<Array<{ name: string; description: string; version: string }>> {
+  limit: number = 30
+): Promise<SimilarPackageCard[]> {
   try {
     const distinctive = distinctiveKeywords(keywords);
     const queries = new Set<string>();
@@ -507,18 +578,14 @@ export async function fetchSimilarPackages(
     }
     queries.add(packageName);
 
+    const poolSize = Math.min(Math.max(limit * 2, 24), 50);
     const searches = await Promise.allSettled(
-      [...queries].map((text) => searchNpmSimilar(text, Math.max(limit * 4, 20))),
+      [...queries].map((text) => searchNpmSimilar(text, poolSize)),
     );
 
     const currentLower = packageName.toLowerCase();
     const seen = new Set<string>([currentLower]);
-    const ranked: Array<{
-      name: string;
-      description: string;
-      version: string;
-      score: number;
-    }> = [];
+    const ranked: Array<SimilarPackageCard & { score: number }> = [];
 
     for (const result of searches) {
       if (result.status !== "fulfilled") continue;

@@ -6,7 +6,11 @@ import {
 } from "@/lib/data-fetchers/npm-registry";
 import { extractPackageName, normalizeNpmPackageName, validatePackageName } from "@/lib/validation";
 
-const RELATED_LIMIT = 6;
+const FIRST_PAGE_SIZE = 6;
+const MORE_PAGE_SIZE = 5;
+const RELATED_POOL = 30;
+
+type RelatedCursor = { offset: number };
 
 function parseNameList(param: string | null): string[] {
   if (!param) return [];
@@ -23,10 +27,37 @@ function parseNameList(param: string | null): string[] {
   return names;
 }
 
+function encodeCursor(offset: number): string {
+  const payload: RelatedCursor = { offset };
+  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+}
+
+function decodeCursor(raw: string | null): number | null {
+  if (!raw) return 0;
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(raw, "base64url").toString("utf8"),
+    ) as RelatedCursor;
+    if (
+      typeof parsed?.offset !== "number" ||
+      !Number.isFinite(parsed.offset) ||
+      parsed.offset < 0
+    ) {
+      return null;
+    }
+    return Math.floor(parsed.offset);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * GET /api/similar-packages?package=react
  * GET /api/similar-packages?package=react&keywords=react,ui&competitors=vue,svelte
- * AI-named competitors first, then npm related matches.
+ * GET /api/similar-packages?package=react&cursor=<opaque>
+ *
+ * First page: AI-named packages first, then ranked related (up to 6).
+ * Later pages: next 5 from the ranked related list (cursor = related offset).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -39,6 +70,12 @@ export async function GET(request: NextRequest) {
     const competitorNames = parseNameList(
       request.nextUrl.searchParams.get("competitors"),
     ).filter((name) => name.toLowerCase() !== packageName.toLowerCase());
+    const cursorParam = request.nextUrl.searchParams.get("cursor");
+    const relatedOffset = decodeCursor(cursorParam);
+
+    if (relatedOffset === null) {
+      return NextResponse.json({ error: "Invalid cursor" }, { status: 400 });
+    }
 
     if (!packageName) {
       return NextResponse.json(
@@ -61,27 +98,52 @@ export async function GET(request: NextRequest) {
       keywordList = npmData.keywords ?? null;
     }
 
+    const isFirstPage = !cursorParam;
     const [competitorCards, related] = await Promise.all([
-      competitorNames.length
+      isFirstPage && competitorNames.length
         ? fetchNpmPackageCards(competitorNames)
         : Promise.resolve([]),
-      fetchSimilarPackages(packageName, keywordList, RELATED_LIMIT),
+      fetchSimilarPackages(packageName, keywordList, RELATED_POOL),
     ]);
 
-    const competitors = competitorCards.map((pkg) => ({
-      name: pkg.name,
-      description: pkg.description,
-      version: pkg.version,
-      competitor: true as const,
-    }));
+    const competitorSet = new Set(
+      competitorCards.map((pkg) => pkg.name.toLowerCase()),
+    );
+    const relatedOnly = related.filter(
+      (pkg) => !competitorSet.has(pkg.name.toLowerCase()),
+    );
 
-    const seen = new Set(competitors.map((pkg) => pkg.name.toLowerCase()));
-    const rest = related
-      .filter((pkg) => !seen.has(pkg.name.toLowerCase()))
-      .map((pkg) => ({ ...pkg, competitor: false as const }));
+    if (isFirstPage) {
+      const competitors = competitorCards.map((pkg) => ({
+        name: pkg.name,
+        description: pkg.description,
+        version: pkg.version,
+      }));
+      const page = [...competitors, ...relatedOnly].slice(0, FIRST_PAGE_SIZE);
+      const relatedShown = page.filter(
+        (pkg) => !competitorSet.has(pkg.name.toLowerCase()),
+      ).length;
+      const nextCursor =
+        relatedShown < relatedOnly.length ? encodeCursor(relatedShown) : null;
+
+      return NextResponse.json(
+        { packages: page, nextCursor },
+        { status: 200 },
+      );
+    }
+
+    const page = relatedOnly.slice(
+      relatedOffset,
+      relatedOffset + MORE_PAGE_SIZE,
+    );
+    const nextOffset = relatedOffset + page.length;
+    const nextCursor =
+      page.length > 0 && nextOffset < relatedOnly.length
+        ? encodeCursor(nextOffset)
+        : null;
 
     return NextResponse.json(
-      { packages: [...competitors, ...rest].slice(0, RELATED_LIMIT) },
+      { packages: page, nextCursor },
       { status: 200 },
     );
   } catch (error: any) {

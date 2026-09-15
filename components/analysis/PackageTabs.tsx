@@ -4,8 +4,15 @@ import {
   type SecurityCountSummary,
 } from "./SecuritySeverityBadges";
 
-export type AnalysisTabId = "ai" | "info" | "security";
-export type DetailsTabId = "metrics" | "charts" | "related";
+/** Top row — package facts that load with analyse */
+export type OverviewTabId = "info" | "metrics" | "charts";
+/** Bottom row — deeper review (AI is slowest) */
+export type InsightTabId = "ai" | "security" | "related";
+
+/** @deprecated Use OverviewTabId */
+export type AnalysisTabId = OverviewTabId;
+/** @deprecated Use InsightTabId */
+export type DetailsTabId = InsightTabId;
 
 type TabDef<T extends string> = {
   id: T;
@@ -126,21 +133,45 @@ function TabRow<T extends string>({
   );
 }
 
-/** Top row: AI analysis, Info, Security */
-export function AnalysisTabs({
+/** Top row: Package info, Metrics, Charts */
+export function OverviewTabs({
+  active,
+  onChange,
+}: {
+  active: OverviewTabId;
+  onChange: (tab: OverviewTabId) => void;
+}) {
+  const tabs: TabDef<OverviewTabId>[] = [
+    { id: "info", label: "Package info", shortLabel: "Info", icon: <TabIconBox /> },
+    { id: "metrics", label: "Metrics", shortLabel: "Metrics", icon: <TabIconBars /> },
+    { id: "charts", label: "Charts", shortLabel: "Charts", icon: <TabIconTrend /> },
+  ];
+
+  return (
+    <TabRow
+      label="Package overview"
+      tabs={tabs}
+      active={active}
+      onChange={onChange}
+    />
+  );
+}
+
+/** Bottom row: AI analysis, Security, Related packages */
+export function InsightTabs({
   active,
   onChange,
   aiModel,
   security,
   showAi = true,
 }: {
-  active: AnalysisTabId;
-  onChange: (tab: AnalysisTabId) => void;
+  active: InsightTabId;
+  onChange: (tab: InsightTabId) => void;
   aiModel?: string;
   security?: SecurityCountSummary | null;
   showAi?: boolean;
 }) {
-  const tabs: TabDef<AnalysisTabId>[] = [
+  const tabs: TabDef<InsightTabId>[] = [
     ...(showAi
       ? [
           {
@@ -152,37 +183,12 @@ export function AnalysisTabs({
           },
         ]
       : []),
-    { id: "info", label: "Package info", shortLabel: "Info", icon: <TabIconBox /> },
     {
       id: "security",
       label: "Security",
       shortLabel: "Security",
       icon: <TabIconShield />,
     },
-  ];
-
-  return (
-    <TabRow
-      label="Package analysis"
-      tabs={tabs}
-      active={active}
-      onChange={onChange}
-      security={security}
-    />
-  );
-}
-
-/** Bottom row: Metrics, Charts, Related */
-export function DetailsTabs({
-  active,
-  onChange,
-}: {
-  active: DetailsTabId;
-  onChange: (tab: DetailsTabId) => void;
-}) {
-  const tabs: TabDef<DetailsTabId>[] = [
-    { id: "metrics", label: "Metrics", shortLabel: "Metrics", icon: <TabIconBars /> },
-    { id: "charts", label: "Charts", shortLabel: "Charts", icon: <TabIconTrend /> },
     {
       id: "related",
       label: "Related packages",
@@ -193,10 +199,16 @@ export function DetailsTabs({
 
   return (
     <TabRow
-      label="Metrics and related"
+      label="Package insights"
       tabs={tabs}
       active={active}
       onChange={onChange}
+      security={security}
     />
   );
 }
+
+/** @deprecated Use OverviewTabs */
+export const AnalysisTabs = OverviewTabs;
+/** @deprecated Use InsightTabs */
+export const DetailsTabs = InsightTabs;

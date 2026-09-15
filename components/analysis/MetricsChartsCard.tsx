@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -47,82 +47,156 @@ function MetricLineChart({
   color,
   points,
   empty,
+  seriesName = "Current",
+  compareName,
+  compareColor = "#8b5cf6",
+  comparePoints,
 }: {
   title: string;
   color: string;
   points: ChartPoint[];
   empty: string;
+  seriesName?: string;
+  compareName?: string | null;
+  compareColor?: string;
+  comparePoints?: ChartPoint[];
 }) {
-  const data = points.map((p) => ({
-    ...p,
-    label: formatTickDate(p.date),
-  }));
+  const showCompare = Boolean(
+    compareName && comparePoints && comparePoints.length > 0,
+  );
+
+  const data = useMemo(() => {
+    const primaryMap = new Map(points.map((p) => [p.date, p.value]));
+    const compareMap = new Map(
+      (comparePoints ?? []).map((p) => [p.date, p.value]),
+    );
+    const dates = new Set<string>([
+      ...primaryMap.keys(),
+      ...(showCompare ? compareMap.keys() : []),
+    ]);
+
+    return [...dates]
+      .sort((a, b) => a.localeCompare(b))
+      .map((date) => ({
+        date,
+        value: primaryMap.get(date) ?? null,
+        compare: showCompare ? (compareMap.get(date) ?? null) : null,
+      }));
+  }, [points, comparePoints, showCompare]);
 
   return (
     <div>
       <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
         {title}
       </p>
-      {data.length < 2 ? (
+      {points.length < 2 ? (
         <p className="text-sm text-gray-500 dark:text-gray-400 py-8">
           {empty}
         </p>
       ) : (
-        <div className="h-52 w-full overflow-hidden">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#6b7280" opacity={0.25} />
-              <XAxis
-                dataKey="label"
-                tick={{ fill: "#9ca3af", fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-                interval="preserveStartEnd"
-                minTickGap={28}
-              />
-              <YAxis
-                tick={{ fill: "#9ca3af", fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-                width={48}
-                tickFormatter={(v: number) => formatCompactNumber(v)}
-              />
-              <Tooltip
-                formatter={(value) => [
-                  typeof value === "number"
-                    ? value.toLocaleString()
-                    : String(value ?? ""),
-                  title,
-                ]}
-                labelFormatter={(_, payload) =>
-                  payload?.[0]?.payload?.date
-                    ? new Date(
-                        `${payload[0].payload.date}T00:00:00`,
-                      ).toLocaleDateString("en-GB", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })
-                    : ""
-                }
-                contentStyle={{
-                  backgroundColor: "#1f2937",
-                  border: "1px solid #374151",
-                  borderRadius: 8,
-                  color: "#f3f4f6",
-                }}
-              />
-              <Line
-                type="monotone"
-                dataKey="value"
-                stroke={color}
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+        <>
+          {showCompare && (
+            <ul className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-400">
+              <li className="inline-flex items-center gap-1.5">
+                <span
+                  className="inline-block h-0.5 w-3 rounded-full"
+                  style={{ backgroundColor: color }}
+                  aria-hidden="true"
+                />
+                {seriesName}
+              </li>
+              <li className="inline-flex items-center gap-1.5">
+                <span
+                  className="inline-block h-0.5 w-3 rounded-full"
+                  style={{ backgroundColor: compareColor }}
+                  aria-hidden="true"
+                />
+                {compareName}
+              </li>
+            </ul>
+          )}
+          <div className="h-52 w-full overflow-hidden">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                key={`downloads-${compareName ?? "solo"}`}
+                data={data}
+                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="#6b7280"
+                  opacity={0.25}
+                />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fill: "#9ca3af", fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                  interval="preserveStartEnd"
+                  minTickGap={28}
+                  tickFormatter={formatTickDate}
+                />
+                <YAxis
+                  tick={{ fill: "#9ca3af", fontSize: 11 }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={48}
+                  tickFormatter={(v: number) => formatCompactNumber(v)}
+                />
+                <Tooltip
+                  formatter={(value, name) => [
+                    typeof value === "number"
+                      ? value.toLocaleString()
+                      : String(value ?? ""),
+                    name === "compare" ? compareName || "Compare" : seriesName,
+                  ]}
+                  labelFormatter={(label) =>
+                    typeof label === "string"
+                      ? new Date(`${label}T00:00:00`).toLocaleDateString(
+                          "en-GB",
+                          {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          },
+                        )
+                      : ""
+                  }
+                  contentStyle={{
+                    backgroundColor: "#1f2937",
+                    border: "1px solid #374151",
+                    borderRadius: 8,
+                    color: "#f3f4f6",
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="value"
+                  name="value"
+                  stroke={color}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                  connectNulls
+                  isAnimationActive={false}
+                />
+                {showCompare && (
+                  <Line
+                    type="monotone"
+                    dataKey="compare"
+                    name="compare"
+                    stroke={compareColor}
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                    connectNulls
+                    isAnimationActive={false}
+                  />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </>
       )}
     </div>
   );
@@ -325,13 +399,29 @@ function ChartSkeleton() {
   );
 }
 
+function DownloadsChartSkeleton() {
+  return (
+    <div>
+      <div className="mb-3 h-10 w-full md:w-1/2 rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
+      <div className="h-4 w-40 rounded bg-gray-200 dark:bg-gray-700 animate-pulse mb-3" />
+      <div className="h-52 w-full rounded-lg bg-gray-200 dark:bg-gray-700 animate-pulse" />
+    </div>
+  );
+}
+
 export function MetricsChartsCard({
   packageName,
   versionTimes,
+  keywords,
+  competitors,
 }: {
   packageName: string;
   versionTimes?: Record<string, string>;
+  keywords?: string[] | null;
+  competitors?: string[] | null;
 }) {
+  const keywordsKey = (keywords ?? []).join(",");
+  const competitorsKey = (competitors ?? []).join(",");
   const [data, setData] = useState<ChartsPayload>({
     downloads: [],
     issues: [],
@@ -339,6 +429,13 @@ export function MetricsChartsCard({
   const [error, setError] = useState<string | null>(null);
   const [loadingDownloads, setLoadingDownloads] = useState(true);
   const [loadingIssues, setLoadingIssues] = useState(true);
+  const [loadingRelated, setLoadingRelated] = useState(true);
+  const [relatedNames, setRelatedNames] = useState<string[]>([]);
+  const [compareWith, setCompareWith] = useState("");
+  const [compareDownloads, setCompareDownloads] = useState<ChartPoint[]>([]);
+  const [loadingCompare, setLoadingCompare] = useState(false);
+  const compareRequestId = useRef(0);
+  const compareCacheRef = useRef<Record<string, ChartPoint[]>>({});
 
   const releasePoints = useMemo(
     () => buildReleaseCadence(versionTimes, 36),
@@ -385,8 +482,14 @@ export function MetricsChartsCard({
 
     setLoadingDownloads(true);
     setLoadingIssues(true);
+    setLoadingRelated(true);
     setError(null);
     setData({ downloads: [], issues: [] });
+    setRelatedNames([]);
+    setCompareWith("");
+    setCompareDownloads([]);
+    compareCacheRef.current = {};
+    compareRequestId.current += 1;
 
     void load(
       "downloads",
@@ -409,21 +512,147 @@ export function MetricsChartsCard({
     };
   }, [packageName]);
 
+  useEffect(() => {
+    if (!packageName) return;
+    const controller = new AbortController();
+    const params = new URLSearchParams({ package: packageName });
+    if (keywordsKey) params.set("keywords", keywordsKey);
+    if (competitorsKey) params.set("competitors", competitorsKey);
+
+    void fetchJson<{ packages?: { name: string }[] }>(
+      `/api/similar-packages?${params}`,
+      { signal: controller.signal, timeoutMs: 45_000, retries: 2 },
+    )
+      .then(({ ok, data: payload }) => {
+        if (controller.signal.aborted) return;
+        const names = ok
+          ? (payload.packages ?? [])
+              .map((pkg) => pkg.name)
+              .filter(
+                (name) =>
+                  name.toLowerCase() !== packageName.toLowerCase(),
+              )
+          : [];
+        setRelatedNames(names);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setRelatedNames([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingRelated(false);
+      });
+
+    return () => controller.abort();
+  }, [packageName, keywordsKey, competitorsKey]);
+
+  const downloadsReady = !loadingDownloads && !loadingRelated;
+
+  useEffect(() => {
+    if (!compareWith) {
+      setCompareDownloads([]);
+      setLoadingCompare(false);
+      return;
+    }
+
+    const cacheKey = compareWith.toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(compareCacheRef.current, cacheKey)) {
+      setCompareDownloads(compareCacheRef.current[cacheKey]);
+      setLoadingCompare(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const requestId = ++compareRequestId.current;
+    setLoadingCompare(true);
+
+    void fetchJson<ChartsPayload & { error?: string }>(
+      `/api/package-charts?package=${encodeURIComponent(compareWith)}&series=downloads`,
+      {
+        signal: controller.signal,
+        timeoutMs: 60_000,
+        retries: 1,
+      },
+    )
+      .then(({ ok, data: payload }) => {
+        if (controller.signal.aborted || requestId !== compareRequestId.current) {
+          return;
+        }
+        const points = ok ? payload.downloads || [] : [];
+        // Only cache successful series so a failed attempt can be retried.
+        if (ok && points.length > 0) {
+          compareCacheRef.current[cacheKey] = points;
+        }
+        setCompareDownloads(points);
+      })
+      .catch(() => {
+        if (controller.signal.aborted || requestId !== compareRequestId.current) {
+          return;
+        }
+        setCompareDownloads([]);
+      })
+      .finally(() => {
+        if (
+          !controller.signal.aborted &&
+          requestId === compareRequestId.current
+        ) {
+          setLoadingCompare(false);
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [compareWith]);
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
       {error && (
         <p className="text-sm text-red-600 dark:text-red-400 mb-4">{error}</p>
       )}
       <div className="space-y-8">
-        {loadingDownloads ? (
-          <ChartSkeleton />
+        {!downloadsReady ? (
+          <DownloadsChartSkeleton />
         ) : (
-          <MetricLineChart
-            title="Downloads (weekly)"
-            color="#3b82f6"
-            points={data.downloads}
-            empty="No download history available."
-          />
+          <div>
+            {relatedNames.length > 0 && (
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <label htmlFor="downloadsCompareSelect" className="sr-only">
+                  Compare
+                </label>
+                <select
+                  id="downloadsCompareSelect"
+                  value={compareWith}
+                  onChange={(e) => setCompareWith(e.target.value)}
+                  className="w-full md:w-1/2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white text-sm"
+                >
+                  <option value="">Select package to compare</option>
+                  {relatedNames.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+                {loadingCompare && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    Loading…
+                  </span>
+                )}
+              </div>
+            )}
+            <MetricLineChart
+              title="Downloads (weekly)"
+              color="#3b82f6"
+              points={data.downloads}
+              seriesName={packageName}
+              compareName={
+                compareWith && !loadingCompare ? compareWith : null
+              }
+              comparePoints={
+                compareWith && !loadingCompare ? compareDownloads : undefined
+              }
+              empty="No download history available."
+            />
+          </div>
         )}
         <ReleaseCadenceChart points={releasePoints} />
         <ReleaseTypeMixChart mix={releaseTypeMix} />

@@ -182,7 +182,8 @@ const issueSnapshotDates = (): string[] => {
   const now = new Date();
   const asOfDates: string[] = [];
 
-  for (let i = 11; i >= 0; i--) {
+  // End of each of the last 24 months — align with the downloads window.
+  for (let i = 23; i >= 0; i--) {
     const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i + 1, 0));
     const endIso = end.toISOString().slice(0, 10);
     asOfDates.push(endIso < today ? endIso : yesterday);
@@ -264,7 +265,7 @@ const fetchOpenIssuesUncached = async (
 };
 
 /**
- * Open issue count at the end of each of the last 12 months.
+ * Open issue count at the end of each of the last 24 months.
  * Current month is as-of yesterday (today's counts are incomplete).
  */
 export const fetchOpenIssuesByMonth = async (
@@ -273,7 +274,7 @@ export const fetchOpenIssuesByMonth = async (
 ): Promise<ChartPoint[]> => {
   if (!isSafeGitHubName(owner) || !isSafeGitHubName(repo)) return [];
 
-  const cacheKey = `v3:${owner}/${repo}`.toLowerCase();
+  const cacheKey = `v4:${owner}/${repo}`.toLowerCase();
   pruneOpenIssueCache();
   const cached = openIssueCache.get(cacheKey);
   if (cached && cached.expires > Date.now()) {

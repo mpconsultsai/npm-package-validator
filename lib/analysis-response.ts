@@ -145,6 +145,9 @@ export function buildAnalysisResponse(
           ? formatDaysSinceRelease(daysSinceLastRelease)
           : null,
       dependents: packageData.popularity?.dependents,
+      keywords: packageData.npm?.keywords?.filter(
+        (k): k is string => typeof k === "string" && k.trim().length > 0,
+      ),
       runtime: {
         kind: runtime.kind,
         label: runtime.label,
@@ -162,12 +165,6 @@ export function buildAnalysisResponse(
         ? {
             bundleSize: packageData.bundleSize.size,
             bundleGzip: packageData.bundleSize.gzip,
-            ...(runtime.kind === "server"
-              ? {
-                  bundleNote:
-                    "Browser bundle size is less relevant for server-oriented packages.",
-                }
-              : {}),
           }
         : {}),
     },

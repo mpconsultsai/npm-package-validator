@@ -1,5 +1,10 @@
-export { AnalysisTabs, DetailsTabs } from "./PackageTabs";
-export type { AnalysisTabId, DetailsTabId } from "./PackageTabs";
+export { OverviewTabs, InsightTabs, AnalysisTabs, DetailsTabs } from "./PackageTabs";
+export type {
+  OverviewTabId,
+  InsightTabId,
+  AnalysisTabId,
+  DetailsTabId,
+} from "./PackageTabs";
 export { AdvisoryLinks } from "./AdvisoryLinks";
 export { PackageInfoCard } from "./PackageInfoCard";
 export { MetricsCard } from "./MetricsCard";

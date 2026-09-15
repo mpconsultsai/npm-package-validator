@@ -9,7 +9,6 @@ interface MetricsCardProps {
     releaseCount?: number;
     bundleSize?: number;
     bundleGzip?: number;
-    bundleNote?: string;
   };
 }
 
@@ -48,7 +47,7 @@ export function MetricsCard({ metrics }: MetricsCardProps) {
         </div>
         <div>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Quality Score
+            Quality Score*
           </p>
           <p className="text-2xl font-bold">{metrics.qualityScore}/100</p>
         </div>
@@ -83,11 +82,10 @@ export function MetricsCard({ metrics }: MetricsCardProps) {
           </>
         )}
       </div>
-      {metrics.bundleNote && (
-        <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-          {metrics.bundleNote}
-        </p>
-      )}
+      <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
+        *Quality score is calculated from GitHub stars or dependents, monthly
+        downloads, time since last publish, and known vulnerabilities.
+      </p>
     </div>
   );
 }

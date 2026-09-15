@@ -11,24 +11,6 @@ import { PackageCompareTable } from "./PackageCompareTable";
 
 const COMPARE_CAP = 2;
 
-/** Solid trophy — AI-named competitor. */
-const CompetitorIcon = () => (
-  <span
-    className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-indigo-600 text-white dark:bg-indigo-500"
-    title="Named as a competitor"
-  >
-    <svg
-      className="h-3.5 w-3.5"
-      viewBox="0 0 20 20"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <path d="M6.75 3A1.75 1.75 0 005 4.75V7a5 5 0 003.75 4.843V13.5H7.5a.75.75 0 000 1.5h5a.75.75 0 000-1.5h-1.25v-1.657A5 5 0 0015 7V4.75A1.75 1.75 0 0013.25 3h-6.5zM6.5 4.75c0-.138.112-.25.25-.25h6.5c.138 0 .25.112.25.25V7a3.5 3.5 0 11-7 0V4.75zM3.4 5.15a.75.75 0 00-1.3.75C2.55 7.2 3.7 8.4 5.2 8.85A6.4 6.4 0 014.5 7V5.7c-.4.15-.8.45-1.1.85zM16.6 5.15a.75.75 0 011.3.75c-.45 1.3-1.6 2.5-3.1 2.95A6.4 6.4 0 0015.5 7V5.7c.4.15.8.45 1.1.85zM6 16.75A.75.75 0 016.75 16h6.5a.75.75 0 010 1.5h-6.5A.75.75 0 016 16.75z" />
-    </svg>
-    <span className="sr-only">Competitor</span>
-  </span>
-);
-
 interface SimilarPackage {
   name: string;
   description: string;
@@ -81,20 +63,26 @@ export function SimilarPackagesCard({
   const keywordsKey = (keywords ?? []).join(",");
   const competitorsKey = (competitors ?? []).join(",");
   const [packages, setPackages] = useState<SimilarPackage[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(packageName));
+  const [loadingMore, setLoadingMore] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [fetched, setFetched] = useState<Record<string, CompareColumn>>({});
   const fetchedRef = useRef(fetched);
   fetchedRef.current = fetched;
   const compareAbortRef = useRef<AbortController | null>(null);
+  const moreAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setSelected([]);
     setFetched({});
+    setNextCursor(null);
     compareAbortRef.current?.abort();
     compareAbortRef.current = new AbortController();
+    moreAbortRef.current?.abort();
     return () => {
       compareAbortRef.current?.abort();
+      moreAbortRef.current?.abort();
     };
   }, [packageName]);
 
@@ -107,17 +95,24 @@ export function SimilarPackagesCard({
     if (competitorsKey) params.set("competitors", competitorsKey);
 
     setLoading(true);
+    setNextCursor(null);
     const load = async () => {
       try {
-        const { ok, data } = await fetchJson<{ packages?: SimilarPackage[] }>(
-          `/api/similar-packages?${params}`,
-          { signal: controller.signal, timeoutMs: 45_000, retries: 3 },
-        );
+        const { ok, data } = await fetchJson<{
+          packages?: SimilarPackage[];
+          nextCursor?: string | null;
+        }>(`/api/similar-packages?${params}`, {
+          signal: controller.signal,
+          timeoutMs: 45_000,
+          retries: 3,
+        });
         if (controller.signal.aborted) return;
         setPackages(ok ? (data.packages ?? []) : []);
+        setNextCursor(ok ? (data.nextCursor ?? null) : null);
       } catch {
         if (controller.signal.aborted) return;
         setPackages([]);
+        setNextCursor(null);
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -129,6 +124,50 @@ export function SimilarPackagesCard({
       controller.abort();
     };
   }, [packageName, keywordsKey, competitorsKey]);
+
+  const loadMore = async () => {
+    if (!packageName || !nextCursor || loadingMore) return;
+
+    moreAbortRef.current?.abort();
+    const controller = new AbortController();
+    moreAbortRef.current = controller;
+
+    const params = new URLSearchParams({
+      package: packageName,
+      cursor: nextCursor,
+    });
+    if (keywordsKey) params.set("keywords", keywordsKey);
+
+    setLoadingMore(true);
+    try {
+      const { ok, data } = await fetchJson<{
+        packages?: SimilarPackage[];
+        nextCursor?: string | null;
+      }>(`/api/similar-packages?${params}`, {
+        signal: controller.signal,
+        timeoutMs: 45_000,
+        retries: 2,
+      });
+      if (controller.signal.aborted) return;
+      if (!ok) {
+        setNextCursor(null);
+        return;
+      }
+      const incoming = data.packages ?? [];
+      setPackages((prev) => {
+        const seen = new Set(prev.map((pkg) => pkg.name.toLowerCase()));
+        return [
+          ...prev,
+          ...incoming.filter((pkg) => !seen.has(pkg.name.toLowerCase())),
+        ];
+      });
+      setNextCursor(data.nextCursor ?? null);
+    } catch {
+      if (!controller.signal.aborted) setNextCursor(null);
+    } finally {
+      if (!controller.signal.aborted) setLoadingMore(false);
+    }
+  };
 
   const selectedKey = selected.join("\0");
 
@@ -226,7 +265,7 @@ export function SimilarPackagesCard({
     <div className="space-y-4">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
         {atCap && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+          <p className="mb-3 hidden text-xs text-gray-500 dark:text-gray-400 md:block">
             Compare up to 2 packages
           </p>
         )}
@@ -248,11 +287,10 @@ export function SimilarPackagesCard({
                     >
                       {pkg.name}
                     </Link>
-                    {pkg.competitor && <CompetitorIcon />}
                   </div>
                   <label
                     htmlFor={compareId}
-                    className={`inline-flex shrink-0 items-center gap-1.5 text-xs ${
+                    className={`hidden shrink-0 items-center gap-1.5 text-xs md:inline-flex ${
                       disabled
                         ? "cursor-not-allowed text-gray-400 dark:text-gray-500"
                         : "cursor-pointer text-gray-600 dark:text-gray-300"
@@ -284,13 +322,27 @@ export function SimilarPackagesCard({
             );
           })}
         </div>
+        {nextCursor && selected.length === 0 && (
+          <div className="mt-4 flex justify-center">
+            <button
+              type="button"
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
+              className="text-sm font-medium text-blue-600 underline underline-offset-2 hover:text-blue-800 disabled:opacity-50 dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              {loadingMore ? "Loading…" : "View more"}
+            </button>
+          </div>
+        )}
       </div>
 
       {compareColumns.length > 1 && (
-        <PackageCompareTable
-          columns={compareColumns}
-          onClear={() => setSelected([])}
-        />
+        <div className="hidden md:block">
+          <PackageCompareTable
+            columns={compareColumns}
+            onClear={() => setSelected([])}
+          />
+        </div>
       )}
     </div>
   );

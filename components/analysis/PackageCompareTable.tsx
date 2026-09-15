@@ -50,7 +50,7 @@ const rows: {
   },
   {
     key: "downloads",
-    label: "Downloads/mo",
+    label: "Downloads (month)",
     render: (c) =>
       typeof c.downloads === "number"
         ? formatCompactNumber(c.downloads)
@@ -66,11 +66,6 @@ const rows: {
     key: "lastRelease",
     label: "Last release",
     render: (c) => c.lastRelease,
-  },
-  {
-    key: "runtime",
-    label: "Runtime",
-    render: (c) => c.runtime,
   },
   {
     key: "licence",
@@ -110,9 +105,9 @@ export function PackageCompareTable({
 
       <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
         <table className="min-w-full text-left text-sm">
-          <thead className="bg-gray-50 dark:bg-gray-900/40 text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          <thead className="bg-gray-50 dark:bg-gray-900 text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
             <tr>
-              <th className="sticky left-0 z-10 bg-gray-50 dark:bg-gray-900/40 px-3 py-2 font-semibold min-w-[7.5rem]">
+              <th className="sticky left-0 z-20 bg-gray-50 dark:bg-gray-900 px-3 py-2 font-semibold min-w-[7.5rem]">
                 <span className="sr-only">Metric</span>
               </th>
               {columns.map((column, index) => (
