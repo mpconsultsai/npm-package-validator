@@ -9,6 +9,7 @@ export { AdvisoryLinks } from "./AdvisoryLinks";
 export { PackageInfoCard } from "./PackageInfoCard";
 export { MetricsCard } from "./MetricsCard";
 export { MetricsChartsCard } from "./MetricsChartsCard";
+export { DependenciesCard } from "./DependenciesCard";
 export { SecurityCard } from "./SecurityCard";
 export { AIAnalysisCard } from "./AIAnalysisCard";
 export { SimilarPackagesCard } from "./SimilarPackagesCard";

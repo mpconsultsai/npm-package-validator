@@ -5,7 +5,7 @@ import {
 } from "./SecuritySeverityBadges";
 
 /** Top row — package facts that load with analyse */
-export type OverviewTabId = "info" | "metrics" | "charts";
+export type OverviewTabId = "info" | "charts" | "dependencies";
 /** Bottom row — deeper review (AI is slowest) */
 export type InsightTabId = "ai" | "security" | "related";
 
@@ -54,14 +54,6 @@ function TabIconShield() {
   );
 }
 
-function TabIconBars() {
-  return (
-    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-    </svg>
-  );
-}
-
 function TabIconTrend() {
   return (
     <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -74,6 +66,19 @@ function TabIconPackages() {
   return (
     <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+    </svg>
+  );
+}
+
+function TabIconDeps() {
+  return (
+    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M7 8a3 3 0 100-6 3 3 0 000 6zm10 0a3 3 0 100-6 3 3 0 000 6zM7 22a3 3 0 100-6 3 3 0 000 6zm10-3a3 3 0 100-6 3 3 0 000 6zM9.5 7.5l5 2M9.5 16.5l5-2M7 10v4m10-5v3"
+      />
     </svg>
   );
 }
@@ -133,7 +138,7 @@ function TabRow<T extends string>({
   );
 }
 
-/** Top row: Package info, Metrics, Charts */
+/** Top row: Package info, Charts, Dependencies */
 export function OverviewTabs({
   active,
   onChange,
@@ -143,8 +148,13 @@ export function OverviewTabs({
 }) {
   const tabs: TabDef<OverviewTabId>[] = [
     { id: "info", label: "Package info", shortLabel: "Info", icon: <TabIconBox /> },
-    { id: "metrics", label: "Metrics", shortLabel: "Metrics", icon: <TabIconBars /> },
     { id: "charts", label: "Charts", shortLabel: "Charts", icon: <TabIconTrend /> },
+    {
+      id: "dependencies",
+      label: "Dependencies",
+      shortLabel: "Deps",
+      icon: <TabIconDeps />,
+    },
   ];
 
   return (

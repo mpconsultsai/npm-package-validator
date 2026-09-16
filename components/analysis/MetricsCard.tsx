@@ -10,16 +10,21 @@ interface MetricsCardProps {
     bundleSize?: number;
     bundleGzip?: number;
   };
+  /** Omit the outer card chrome when nested in another panel */
+  embedded?: boolean;
 }
 
-export function MetricsCard({ metrics }: MetricsCardProps) {
+export function MetricsCard({
+  metrics,
+  embedded = false,
+}: MetricsCardProps) {
   const hasBundleSize =
     metrics.bundleSize !== undefined && metrics.bundleGzip !== undefined;
   const hasReleaseCount =
     typeof metrics.releaseCount === "number" && metrics.releaseCount > 0;
 
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
+  const body = (
+    <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-x-5 gap-y-6 sm:gap-4">
         <div>
           <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -86,6 +91,14 @@ export function MetricsCard({ metrics }: MetricsCardProps) {
         *Quality score is calculated from GitHub stars or dependents, monthly
         downloads, time since last publish, and known vulnerabilities.
       </p>
+    </>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
+      {body}
     </div>
   );
 }

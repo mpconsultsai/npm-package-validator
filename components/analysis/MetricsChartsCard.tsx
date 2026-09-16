@@ -295,7 +295,11 @@ function ReleaseTypeMixChart({ mix }: { mix: ReleaseTypeMixResult }) {
     );
   }
 
-  const pct = (n: number) => Math.round((n / totals.all) * 100);
+  const pctLabel = (n: number) => {
+    if (n <= 0 || totals.all < 1) return "0%";
+    const rounded = Math.round((n / totals.all) * 100);
+    return rounded < 1 ? "<1%" : `${rounded}%`;
+  };
   const segments = [
     {
       key: "major" as const,
@@ -331,7 +335,7 @@ function ReleaseTypeMixChart({ mix }: { mix: ReleaseTypeMixResult }) {
         className="flex h-3.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700"
         role="img"
         aria-label={segments
-          .map((s) => `${s.label}: ${pct(s.count)}%`)
+          .map((s) => `${s.label}: ${pctLabel(s.count)}`)
           .join(", ")}
       >
         {segments.map((seg, index) => (
@@ -341,7 +345,7 @@ function ReleaseTypeMixChart({ mix }: { mix: ReleaseTypeMixResult }) {
               index === 0 || index === segments.length - 1 ? "min-w-2" : ""
             }`}
             style={{ flex: `${seg.count} 1 0%` }}
-            title={`${seg.label}: ${seg.count} (${pct(seg.count)}%)`}
+            title={`${seg.label}: ${seg.count} (${pctLabel(seg.count)})`}
           />
         ))}
       </div>
@@ -359,7 +363,7 @@ function ReleaseTypeMixChart({ mix }: { mix: ReleaseTypeMixResult }) {
             <span className="leading-4">
               {seg.label}{" "}
               <span className="tabular-nums text-gray-500 dark:text-gray-400">
-                {pct(seg.count)}% · {seg.count}
+                {pctLabel(seg.count)} · {seg.count}
               </span>
             </span>
           </span>
@@ -434,6 +438,9 @@ export function MetricsChartsCard({
   const [compareWith, setCompareWith] = useState("");
   const [compareDownloads, setCompareDownloads] = useState<ChartPoint[]>([]);
   const [loadingCompare, setLoadingCompare] = useState(false);
+  const [chartSection, setChartSection] = useState<
+    "downloads" | "releases" | "issues"
+  >("downloads");
   const compareRequestId = useRef(0);
   const compareCacheRef = useRef<Record<string, ChartPoint[]>>({});
 
@@ -488,6 +495,7 @@ export function MetricsChartsCard({
     setRelatedNames([]);
     setCompareWith("");
     setCompareDownloads([]);
+    setChartSection("downloads");
     compareCacheRef.current = {};
     compareRequestId.current += 1;
 
@@ -606,11 +614,47 @@ export function MetricsChartsCard({
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
-      {error && (
+      <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+        Trends for downloads, releases, and open issues.
+      </p>
+      <div
+        role="radiogroup"
+        aria-label="Chart type"
+        className="flex gap-5 mb-4 border-b border-gray-200 dark:border-gray-600"
+      >
+        {(
+          [
+            { id: "downloads" as const, label: "Downloads" },
+            { id: "releases" as const, label: "Releases" },
+            { id: "issues" as const, label: "Issues" },
+          ] as const
+        ).map((option) => {
+          const selected = chartSection === option.id;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => setChartSection(option.id)}
+              className={`-mb-px pb-2 text-sm font-medium border-b-2 transition-colors ${
+                selected
+                  ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400"
+                  : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+              }`}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {error && chartSection !== "releases" && (
         <p className="text-sm text-red-600 dark:text-red-400 mb-4">{error}</p>
       )}
-      <div className="space-y-8">
-        {!downloadsReady ? (
+
+      {chartSection === "downloads" &&
+        (!downloadsReady ? (
           <DownloadsChartSkeleton />
         ) : (
           <div>
@@ -653,10 +697,17 @@ export function MetricsChartsCard({
               empty="No download history available."
             />
           </div>
-        )}
-        <ReleaseCadenceChart points={releasePoints} />
-        <ReleaseTypeMixChart mix={releaseTypeMix} />
-        {loadingIssues ? (
+        ))}
+
+      {chartSection === "releases" && (
+        <div className="space-y-8">
+          <ReleaseCadenceChart points={releasePoints} />
+          <ReleaseTypeMixChart mix={releaseTypeMix} />
+        </div>
+      )}
+
+      {chartSection === "issues" &&
+        (loadingIssues ? (
           <ChartSkeleton />
         ) : (
           <MetricLineChart
@@ -665,8 +716,7 @@ export function MetricsChartsCard({
             points={data.issues}
             empty="No GitHub issue history for this package."
           />
-        )}
-      </div>
+        ))}
     </div>
   );
 }

@@ -13,8 +13,8 @@ import { getAiAnalysisEnabled } from "@/lib/ai-analysis-pref";
 import type { WatchlistSummary } from "@/lib/watchlist-store";
 import {
   PackageInfoCard,
-  MetricsCard,
   MetricsChartsCard,
+  DependenciesCard,
   SecurityCard,
   AIAnalysisCard,
   SimilarPackagesCard,
@@ -66,28 +66,6 @@ function AIAnalysisSkeleton() {
         <div className="h-4 w-5/6 rounded bg-gray-200 dark:bg-gray-700" />
         <div className="h-4 w-3/4 rounded bg-gray-200 dark:bg-gray-700" />
         <div className="h-4 w-1/2 rounded bg-gray-200 dark:bg-gray-700" />
-      </div>
-    </div>
-  );
-}
-
-function MetricsSkeleton() {
-  return (
-    <div
-      className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6"
-      role="status"
-    >
-      <span className="sr-only">Loading package metrics</span>
-      <div
-        className="grid grid-cols-2 md:grid-cols-4 gap-x-5 gap-y-6 sm:gap-4 animate-pulse"
-        aria-hidden="true"
-      >
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i}>
-            <div className="h-4 w-24 rounded bg-gray-200 dark:bg-gray-700 mb-2" />
-            <div className="h-8 w-16 rounded bg-gray-200 dark:bg-gray-700" />
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -515,14 +493,11 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                 (loading || !analysisData?.packageInfo ? (
                   <PanelSkeleton label="Loading package info" />
                 ) : (
-                  <PackageInfoCard packageInfo={analysisData.packageInfo} />
-                ))}
-
-              {overviewTab === "metrics" &&
-                (loading || !analysisData?.metrics ? (
-                  <MetricsSkeleton />
-                ) : (
-                  <MetricsCard metrics={analysisData.metrics} />
+                  <PackageInfoCard
+                    packageInfo={analysisData.packageInfo}
+                    metrics={analysisData.metrics}
+                    metricsLoading={loading || !analysisData.metrics}
+                  />
                 ))}
 
               {chartsOpened && analysisData?.packageInfo && !loading && (
@@ -537,6 +512,15 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                   />
                 </div>
               )}
+
+              {overviewTab === "dependencies" &&
+                (loading || !analysisData?.packageInfo ? (
+                  <PanelSkeleton label="Loading dependencies" />
+                ) : (
+                  <DependenciesCard
+                    packageName={analysisData.packageInfo.name}
+                  />
+                ))}
 
               <InsightTabs
                 active={insightTab}
