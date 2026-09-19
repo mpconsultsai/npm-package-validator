@@ -83,6 +83,55 @@ function TabIconDeps() {
   );
 }
 
+/** Shared package title shown above all result tabs. */
+export function PackageNameHeader({
+  packageName,
+  homepage,
+}: {
+  packageName: string;
+  homepage?: string | null;
+}) {
+  if (!packageName) return null;
+
+  const nameNode = homepage ? (
+    <a
+      href={homepage}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline underline-offset-2 decoration-blue-600/30 hover:decoration-blue-600"
+    >
+      {packageName}
+    </a>
+  ) : (
+    <span className="text-gray-900 dark:text-white">{packageName}</span>
+  );
+
+  return (
+    <h2 className="flex items-start gap-2 text-xl sm:text-2xl font-bold tracking-tight break-all">
+      <svg
+        className="mt-1 w-5 h-5 sm:w-6 sm:h-6 shrink-0 text-blue-600 dark:text-blue-400"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+        />
+      </svg>
+      <span className="min-w-0">
+        <span className="font-semibold text-gray-600 dark:text-gray-300">
+          Package name:{" "}
+        </span>
+        {nameNode}
+      </span>
+    </h2>
+  );
+}
+
 function TabRow<T extends string>({
   label,
   tabs,

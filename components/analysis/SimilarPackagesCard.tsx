@@ -323,14 +323,14 @@ export function SimilarPackagesCard({
           })}
         </div>
         {nextCursor && selected.length === 0 && (
-          <div className="mt-4 flex justify-center">
+          <div className="mt-5 flex justify-center">
             <button
               type="button"
               onClick={() => void loadMore()}
               disabled={loadingMore}
-              className="text-sm font-medium text-blue-600 underline underline-offset-2 hover:text-blue-800 disabled:opacity-50 dark:text-blue-400 dark:hover:text-blue-300"
+              className="w-full sm:w-auto sm:min-w-[10rem] rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400"
             >
-              {loadingMore ? "Loading…" : "View more"}
+              {loadingMore ? "Loading…" : "Load more"}
             </button>
           </div>
         )}

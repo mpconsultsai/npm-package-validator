@@ -70,6 +70,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                 loading={searchLoading}
               />
             </div>
+            {!isHome && (
+              <div
+                className="mt-4 mb-2 sm:mt-6 sm:mb-3 border-t border-gray-200 dark:border-gray-700"
+                role="separator"
+                aria-hidden="true"
+              />
+            )}
             <div key={pathname} className="route-panel relative z-0">
               {children}
             </div>

@@ -11,14 +11,17 @@ export const parseGitHubUrl = (url: string): { owner: string; repo: string } | n
 
   // Handle various GitHub URL formats
   const patterns = [
-    /github\.com[:/]([^/]+)\/([^/\.]+)/i,
-    /github:([^/]+)\/([^/\.]+)/i,
+    /github\.com[:/]([^/]+)\/([^/\s#?]+)/i,
+    /github:([^/]+)\/([^/\s#?]+)/i,
   ];
 
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match) {
-      return { owner: match[1], repo: match[2] };
+      return {
+        owner: match[1],
+        repo: match[2].replace(/\.git$/i, ""),
+      };
     }
   }
 
@@ -90,24 +93,19 @@ export const fetchGitHubRepoData = async (
 export const fetchGitHubReleases = async (
   owner: string,
   repo: string,
-  limit: number = 5
+  limit: number = 5,
+  options?: { includeBody?: boolean },
 ): Promise<GitHubReleaseData[]> => {
   try {
     const response = await axios.get(
       `${GITHUB_API_URL}/repos/${owner}/${repo}/releases`,
       {
         headers: getGitHubHeaders(),
-        params: { per_page: limit },
+        params: { per_page: Math.min(Math.max(limit, 1), 100) },
       }
     );
 
-    return response.data.map((release: any) => ({
-      tag_name: release.tag_name,
-      name: release.name,
-      published_at: release.published_at,
-      prerelease: release.prerelease,
-      draft: release.draft,
-    }));
+    return response.data.map((release: any) => mapGitHubRelease(release, options?.includeBody));
   } catch (error: any) {
     // Releases endpoint might not exist or be empty
     if (error.response?.status === 404) {
@@ -115,6 +113,57 @@ export const fetchGitHubReleases = async (
     }
     throw new Error(`Failed to fetch GitHub releases: ${error.message}`);
   }
+};
+
+const mapGitHubRelease = (
+  release: any,
+  includeBody?: boolean,
+): GitHubReleaseData => ({
+  tag_name: release.tag_name,
+  name: release.name,
+  published_at: release.published_at,
+  prerelease: release.prerelease,
+  draft: release.draft,
+  html_url: typeof release.html_url === "string" ? release.html_url : undefined,
+  body: includeBody
+    ? typeof release.body === "string"
+      ? release.body
+      : null
+    : undefined,
+});
+
+/**
+ * Fetch a single GitHub release by tag.
+ * Tries v1.2.3, 1.2.3, and package@version (monorepo) forms.
+ */
+export const fetchGitHubReleaseByTag = async (
+  owner: string,
+  repo: string,
+  version: string,
+  packageName?: string,
+): Promise<GitHubReleaseData | null> => {
+  const cleaned = version.replace(/^v/i, "");
+  const candidates = [
+    ...(packageName ? [`${packageName}@${cleaned}`] : []),
+    `v${cleaned}`,
+    cleaned,
+  ];
+
+  for (const tag of candidates) {
+    try {
+      const response = await axios.get(
+        `${GITHUB_API_URL}/repos/${owner}/${repo}/releases/tags/${encodeURIComponent(tag)}`,
+        { headers: getGitHubHeaders(), timeout: 12_000 },
+      );
+      return mapGitHubRelease(response.data, true);
+    } catch (error: unknown) {
+      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+      if (status === 404) continue;
+      if (status === 403 || status === 429) break;
+      break;
+    }
+  }
+  return null;
 };
 
 export interface ChartPoint {

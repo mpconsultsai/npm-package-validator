@@ -148,6 +148,7 @@ export function buildAnalysisResponse(
       keywords: packageData.npm?.keywords?.filter(
         (k): k is string => typeof k === "string" && k.trim().length > 0,
       ),
+      engines: packageData.npm?.engines ?? null,
       runtime: {
         kind: runtime.kind,
         label: runtime.label,

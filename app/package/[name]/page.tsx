@@ -20,6 +20,7 @@ import {
   SimilarPackagesCard,
   OverviewTabs,
   InsightTabs,
+  PackageNameHeader,
   type OverviewTabId,
   type InsightTabId,
 } from "@/components/analysis";
@@ -476,12 +477,20 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
 
           {showResults && (
             <div className="space-y-4 sm:space-y-6 mb-4 sm:mb-8">
-              <div className="hidden justify-end sm:flex">
-                <WatchToggle
-                  packageName={packageDisplayName}
-                  summary={watchSummary}
-                  disabled={!packageDisplayName}
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <PackageNameHeader
+                  packageName={
+                    analysisData?.packageInfo?.name ?? packageDisplayName
+                  }
+                  homepage={analysisData?.packageInfo?.homepage}
                 />
+                <div className="hidden sm:block shrink-0">
+                  <WatchToggle
+                    packageName={packageDisplayName}
+                    summary={watchSummary}
+                    disabled={!packageDisplayName}
+                  />
+                </div>
               </div>
 
               <OverviewTabs
@@ -497,6 +506,8 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                     packageInfo={analysisData.packageInfo}
                     metrics={analysisData.metrics}
                     metricsLoading={loading || !analysisData.metrics}
+                    versionTimes={analysisData.npm?.time}
+                    latestSecurity={analysisData.security}
                   />
                 ))}
 
@@ -521,6 +532,12 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                     packageName={analysisData.packageInfo.name}
                   />
                 ))}
+
+              <div
+                className="border-t border-gray-200 dark:border-gray-700"
+                role="separator"
+                aria-hidden="true"
+              />
 
               <InsightTabs
                 active={insightTab}

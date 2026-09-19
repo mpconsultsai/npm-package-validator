@@ -1,4 +1,4 @@
-export { OverviewTabs, InsightTabs, AnalysisTabs, DetailsTabs } from "./PackageTabs";
+export { OverviewTabs, InsightTabs, AnalysisTabs, DetailsTabs, PackageNameHeader } from "./PackageTabs";
 export type {
   OverviewTabId,
   InsightTabId,
@@ -10,6 +10,7 @@ export { PackageInfoCard } from "./PackageInfoCard";
 export { MetricsCard } from "./MetricsCard";
 export { MetricsChartsCard } from "./MetricsChartsCard";
 export { DependenciesCard } from "./DependenciesCard";
+export { UpgradeAdvisorPanel } from "./UpgradeAdvisorPanel";
 export { SecurityCard } from "./SecurityCard";
 export { AIAnalysisCard } from "./AIAnalysisCard";
 export { SimilarPackagesCard } from "./SimilarPackagesCard";

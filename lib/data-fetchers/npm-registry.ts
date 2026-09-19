@@ -6,6 +6,27 @@ import type { NpmPackageData, NpmDownloadStats } from '../types/package-data';
 const NPM_REGISTRY_URL = 'https://registry.npmjs.org';
 const NPM_DOWNLOADS_URL = 'https://api.npmjs.org/downloads';
 
+function normalizeRepository(
+  raw: unknown,
+): NpmPackageData["repository"] | undefined {
+  if (!raw) return undefined;
+  if (typeof raw === "string") {
+    return { type: "git", url: raw };
+  }
+  if (typeof raw === "object" && raw !== null && "url" in raw) {
+    const obj = raw as { type?: string; url?: unknown; directory?: unknown };
+    if (typeof obj.url !== "string" || !obj.url.trim()) return undefined;
+    return {
+      type: typeof obj.type === "string" ? obj.type : "git",
+      url: obj.url,
+      ...(typeof obj.directory === "string" && obj.directory.trim()
+        ? { directory: obj.directory.trim().replace(/^\/+|\/+$/g, "") }
+        : {}),
+    };
+  }
+  return undefined;
+}
+
 /**
  * Fetch package metadata from npm registry (single packument GET).
  * Also returns a truncated README excerpt when present on the packument.
@@ -38,7 +59,9 @@ export async function fetchNpmPackageData(packageName: string): Promise<{
             : latestVersionData.deprecated
               ? "This package has been deprecated"
               : null,
-        repository: latestVersionData.repository,
+        repository: normalizeRepository(
+          latestVersionData.repository ?? data.repository,
+        ),
         homepage: latestVersionData.homepage,
         keywords: latestVersionData.keywords,
         dependencies: latestVersionData.dependencies,

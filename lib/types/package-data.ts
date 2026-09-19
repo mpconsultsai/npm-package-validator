@@ -14,6 +14,8 @@ export interface NpmPackageData {
   repository?: {
     type: string;
     url: string;
+    /** Monorepo package path when present (e.g. packages/graphql-yoga) */
+    directory?: string;
   };
   homepage?: string;
   keywords?: string[];
@@ -75,6 +77,9 @@ export interface GitHubReleaseData {
   published_at: string;
   prerelease: boolean;
   draft: boolean;
+  /** Release notes markdown when fetched with body */
+  body?: string | null;
+  html_url?: string;
 }
 
 export interface NpmPackagePopularity {

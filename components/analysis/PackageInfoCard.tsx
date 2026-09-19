@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { formatDaysSinceRelease } from "@/lib/utils/format";
 import { GitHubIcon } from "@/components/BrandIcons";
 import { describeLicense } from "@/lib/license-info";
 import { MetricsCard } from "./MetricsCard";
+import { UpgradeAdvisorPanel } from "./UpgradeAdvisorPanel";
+import { DependentsModal } from "./DependentsModal";
 
 /** npm search `dependents` count — badge when widely depended-on. */
 const POPULAR_MIN_DEPENDENTS = 1000;
@@ -24,6 +26,7 @@ interface PackageInfo {
   lastReleaseLabel?: string | null;
   dependents?: number;
   keywords?: string[];
+  engines?: Record<string, string> | null;
 }
 
 interface PackageInfoCardProps {
@@ -38,11 +41,19 @@ interface PackageInfoCardProps {
     bundleGzip?: number;
   } | null;
   metricsLoading?: boolean;
+  versionTimes?: Record<string, string> | null;
+  latestSecurity?: {
+    totalCount?: number;
+    critical?: number;
+    high?: number;
+    moderate?: number;
+    low?: number;
+  } | null;
 }
 
 function githubRepoUrl(repository?: string): string | null {
   if (!repository) return null;
-  const match = repository.match(/github\.com[:/]([^/]+)\/([^/\s#.]+)/i);
+  const match = repository.match(/github\.com[:/]([^/]+)\/([^/\s#?]+)/i);
   if (!match) return null;
   const repo = match[2].replace(/\.git$/i, "");
   return `https://github.com/${match[1]}/${repo}`;
@@ -129,8 +140,14 @@ export function PackageInfoCard({
   packageInfo,
   metrics,
   metricsLoading = false,
+  versionTimes,
+  latestSecurity,
 }: PackageInfoCardProps) {
-  const [section, setSection] = useState<"info" | "metrics">("info");
+  const [section, setSection] = useState<"info" | "metrics" | "upgrade">(
+    "info",
+  );
+  const [dependentsOpen, setDependentsOpen] = useState(false);
+  const closeDependents = useCallback(() => setDependentsOpen(false), []);
   const popularBadge =
     packageInfo.dependents !== undefined ? (
       <PopularBadge dependents={packageInfo.dependents} />
@@ -161,6 +178,8 @@ export function PackageInfoCard({
     ) : null;
   const githubUrl = githubRepoUrl(packageInfo.repository);
   const licenseInfo = describeLicense(packageInfo.license);
+  const nodeEngine = packageInfo.engines?.node?.trim() || null;
+  const npmEngine = packageInfo.engines?.npm?.trim() || null;
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
@@ -173,6 +192,7 @@ export function PackageInfoCard({
           [
             { id: "info" as const, label: "Info" },
             { id: "metrics" as const, label: "Metrics" },
+            { id: "upgrade" as const, label: "Upgrade" },
           ] as const
         ).map((option) => {
           const selected = section === option.id;
@@ -212,6 +232,13 @@ export function PackageInfoCard({
         ) : (
           <MetricsCard metrics={metrics} embedded />
         )
+      ) : section === "upgrade" ? (
+        <UpgradeAdvisorPanel
+          packageName={packageInfo.name}
+          latestVersion={packageInfo.latestVersion || packageInfo.version}
+          versionTimes={versionTimes}
+          latestSecurity={latestSecurity}
+        />
       ) : (
         <>
           {packageInfo.description && (
@@ -226,41 +253,6 @@ export function PackageInfoCard({
             <div className="mb-6">{badgeRow}</div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <svg
-                  className="w-5 h-5 text-blue-600 dark:text-blue-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-                  />
-                </svg>
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  Name
-                </span>
-              </div>
-              <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                {packageInfo.homepage ? (
-                  <a
-                    href={packageInfo.homepage}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline underline-offset-2"
-                  >
-                    {packageInfo.name}
-                  </a>
-                ) : (
-                  packageInfo.name
-                )}
-              </p>
-            </div>
-
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-2">
                 <svg
@@ -314,6 +306,58 @@ export function PackageInfoCard({
               </div>
             )}
 
+            {nodeEngine && (
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <svg
+                    className="w-5 h-5 text-emerald-600 dark:text-emerald-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+                    />
+                  </svg>
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Supported Node version(s)
+                  </span>
+                </div>
+                <p className="text-lg font-semibold text-gray-900 dark:text-white font-mono">
+                  {nodeEngine}
+                </p>
+              </div>
+            )}
+
+            {npmEngine && (
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <svg
+                    className="w-5 h-5 text-red-600 dark:text-red-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                    />
+                  </svg>
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Supported npm version(s)
+                  </span>
+                </div>
+                <p className="text-lg font-semibold text-gray-900 dark:text-white font-mono">
+                  {npmEngine}
+                </p>
+              </div>
+            )}
+
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-2">
                 <svg
@@ -356,23 +400,36 @@ export function PackageInfoCard({
 
             {packageInfo.dependents !== undefined && (
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <svg
-                    className="w-5 h-5 text-teal-600 dark:text-teal-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                    />
-                  </svg>
-                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                    Dependents
-                  </span>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className="w-5 h-5 text-teal-600 dark:text-teal-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                      />
+                    </svg>
+                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                      Dependents
+                    </span>
+                  </div>
+                  {packageInfo.dependents > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setDependentsOpen(true)}
+                      className="rounded-md px-1.5 py-0.5 text-xs font-medium text-teal-700 hover:bg-teal-100 hover:text-teal-900 dark:text-teal-300 dark:hover:bg-teal-900/40 dark:hover:text-teal-100"
+                      title="View dependents"
+                      aria-label="View dependents"
+                    >
+                      View
+                    </button>
+                  )}
                 </div>
                 <p className="text-lg font-semibold text-gray-900 dark:text-white">
                   {packageInfo.dependents.toLocaleString()}
@@ -382,6 +439,13 @@ export function PackageInfoCard({
                 </p>
               </div>
             )}
+
+            <DependentsModal
+              packageName={packageInfo.name}
+              dependentCount={packageInfo.dependents}
+              open={dependentsOpen}
+              onClose={closeDependents}
+            />
 
             <div className="md:col-span-2 flex flex-wrap items-center gap-x-4 gap-y-2">
               <a
