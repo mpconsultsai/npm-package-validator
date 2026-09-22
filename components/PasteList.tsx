@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import Link from "next/link";
 import semver from "semver";
 import { fetchJson } from "@/lib/fetch-client";
+import { apiPaths } from "@/lib/api/paths";
 import {
   parseDependencyList,
   PASTE_LIST_MAX_PACKAGES,
@@ -295,7 +296,7 @@ export function PasteListPanel() {
 
           try {
             const { ok, data } = await fetchJson<any>(
-              `/api/analyze?package=${encodeURIComponent(entry.name)}`,
+              `${apiPaths.analysis.metrics}?package=${encodeURIComponent(entry.name)}`,
               {
                 signal: controller.signal,
                 timeoutMs: 60_000,

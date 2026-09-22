@@ -13,7 +13,7 @@ const cache = new Map<string, CacheEntry>();
 const inflight = new Map<string, Promise<PackageAnalysisResult>>();
 
 /**
- * Short-lived in-memory cache so progressive /api/analyze → /api/analyze-ai
+ * Short-lived in-memory cache so progressive /api/v1/analysis/metrics → /api/v1/analysis/ai
  * does not re-hit npm/GitHub/Bundlephobia for the same package.
  */
 export async function analyzePackageCached(

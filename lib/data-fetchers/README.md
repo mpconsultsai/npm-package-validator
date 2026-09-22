@@ -53,30 +53,30 @@ const securityData = await checkPackageSecurity('lodash', '4.17.21');
 
 ## API Routes
 
-### `GET /api/analyze?package=package-name`
+### `GET /api/v1/analysis/metrics?package=package-name`
 Analyzes a package and returns comprehensive data from all sources.
 
 **Example:**
 ```bash
-curl "http://localhost:3000/api/analyze?package=react"
+curl "http://localhost:3000/api/v1/analysis/metrics?package=react"
 ```
 
-### `POST /api/analyze`
+### `POST /api/v1/analysis/metrics`
 Same as GET but accepts package name in request body.
 
 **Example:**
 ```bash
-curl -X POST http://localhost:3000/api/analyze \
+curl -X POST http://localhost:3000/api/v1/analysis/metrics \
   -H "Content-Type: application/json" \
   -d '{"packageName": "react"}'
 ```
 
-### `GET /api/health`
+### `GET /api/v1/health`
 Health check endpoint that shows API status and which API keys are configured.
 
 **Example:**
 ```bash
-curl http://localhost:3000/api/health
+curl http://localhost:3000/api/v1/health
 ```
 
 ## Error Handling

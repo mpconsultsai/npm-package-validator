@@ -13,23 +13,24 @@ import {
   formatInstallStep,
   type PackageManagerPreference,
 } from "@/lib/package-manager-pref";
+import { UPGRADE_AGENT_GENERIC_ERROR } from "@/lib/ai/upgrade-agent-messages";
+
+export { UPGRADE_AGENT_GENERIC_ERROR } from "@/lib/ai/upgrade-agent-messages";
 
 const briefSchema = z.object({
   headline: z.string().describe("One-line upgrade verdict"),
   bullets: z
     .array(z.string())
-    .min(1)
     .max(6)
-    .describe("Key facts grounded in tool results"),
+    .describe("Key facts grounded in tool results (1-6 items)"),
   risk: z
     .enum(["low", "moderate", "high"])
     .describe("Overall upgrade risk"),
   nextSteps: z
     .array(z.string())
-    .min(1)
     .max(5)
     .describe(
-      "Ordered upgrade checklist. Review breaking risks first, then install with the preferred package manager from the facts.",
+      "Ordered upgrade checklist (2-5 items). Review breaking risks first, then install with the preferred package manager from the facts.",
     ),
 });
 
@@ -39,6 +40,63 @@ export type UpgradeAgentResult = {
   brief: UpgradeAgentBrief;
   model: string;
   toolCalls: string[];
+};
+
+/** Keep prompts small — large Angular-style payloads make gpt-oss emit empty JSON. */
+const MAX_FACTS_CHARS = 10_000;
+
+const clampFacts = (facts: string): string => {
+  if (facts.length <= MAX_FACTS_CHARS) return facts;
+  return `${facts.slice(0, MAX_FACTS_CHARS)}\n…[facts truncated for model]`;
+};
+
+const isJsonValidateError = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return (
+    /json_validate_failed/i.test(message) ||
+    /Failed to validate JSON/i.test(message) ||
+    /failed_generation/i.test(message) ||
+    /Generated JSON does not match/i.test(message)
+  );
+};
+
+export const isUpgradeAgentProviderError = (error: unknown): boolean => {
+  if (isJsonValidateError(error)) return true;
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return (
+    /invalid_request_error/i.test(message) ||
+    /structured (output|brief)/i.test(message) ||
+    /empty JSON/i.test(message) ||
+    /did not return a structured brief/i.test(message) ||
+    message === UPGRADE_AGENT_GENERIC_ERROR
+  );
+};
+
+const ensureBriefDefaults = (
+  brief: Partial<UpgradeAgentBrief> | null | undefined,
+): UpgradeAgentBrief => {
+  const headline = brief?.headline?.trim() || "Upgrade brief unavailable";
+  const bullets =
+    brief?.bullets?.map((b) => b.trim()).filter(Boolean).slice(0, 6) ?? [];
+  const nextSteps =
+    brief?.nextSteps?.map((s) => s.trim()).filter(Boolean).slice(0, 5) ?? [];
+  const risk =
+    brief?.risk === "low" || brief?.risk === "high" || brief?.risk === "moderate"
+      ? brief.risk
+      : "moderate";
+
+  return {
+    headline,
+    bullets:
+      bullets.length > 0
+        ? bullets
+        : ["Limited structured output from the model — rely on the breaking notes and peers above."],
+    risk,
+    nextSteps:
+      nextSteps.length > 0
+        ? nextSteps
+        : ["Review the breaking-change notes and peer dependency changes for this range."],
+  };
 };
 
 const AgentState = Annotation.Root({
@@ -186,7 +244,19 @@ async function collectFacts(state: typeof AgentState.State) {
     (async () => {
       toolCalls.push("get_upgrade_details");
       const details = await loadUpgradeDetails(packageName, from, to);
-      return truncateUpgradeDetailsForAgent(details, 5, 3);
+      // Keep peer list short — Angular-style majors can list dozens of peers.
+      const truncated = truncateUpgradeDetailsForAgent(details, 4, 2);
+      if (
+        truncated.peers &&
+        typeof truncated.peers === "object" &&
+        "changes" in truncated.peers &&
+        Array.isArray((truncated.peers as { changes: unknown[] }).changes)
+      ) {
+        (truncated.peers as { changes: unknown[] }).changes = (
+          truncated.peers as { changes: unknown[] }
+        ).changes.slice(0, 12);
+      }
+      return truncated;
     })(),
     (async () => {
       toolCalls.push("get_version_security:from");
@@ -231,35 +301,55 @@ async function synthesizeBrief(state: typeof AgentState.State) {
   requireGroqKey();
 
   const model = getGroqUpgradeAgentModel();
+  // gpt-oss spends tokens on reasoning; a low budget often yields empty failed_generation.
   const llm = new ChatGroq({
     model,
-    temperature: 0.2,
-    maxTokens: 1024,
+    temperature: 0.1,
+    maxTokens: 4096,
+    reasoningEffort: "low",
     apiKey: process.env.GROQ_API_KEY,
   });
 
-  const structured = llm.withStructuredOutput(briefSchema, {
-    name: "upgrade_brief",
-  });
+  const messages = [
+    {
+      role: "system" as const,
+      content: `You are an npm upgrade advisor. Reply with a short structured brief using ONLY the JSON facts provided. Do not invent versions, advisory counts, or breaking changes. If notes are empty, say so. Keep bullets and nextSteps concise (short sentences).\n\n${nextStepsGuidance(state.packageManager)}`,
+    },
+    {
+      role: "user" as const,
+      content: `Upgrade brief for ${state.packageName}: ${state.from} → ${state.to}.\n\nFacts:\n${clampFacts(state.facts)}`,
+    },
+  ];
 
-  const brief = await withRateLimitRetry(() =>
-    structured.invoke([
-      {
-        role: "system",
-        content: `You are an npm upgrade advisor. Write a short brief using ONLY the JSON facts provided. Do not invent versions, advisory counts, or breaking changes. If notes are empty, say so.\n\n${nextStepsGuidance(state.packageManager)}`,
-      },
-      {
-        role: "user",
-        content: `Upgrade brief for ${state.packageName}: ${state.from} → ${state.to}.\n\nFacts:\n${state.facts}`,
-      },
-    ]),
-  );
+  const invokeStructured = async (method?: "jsonSchema" | "jsonMode") => {
+    const structured = llm.withStructuredOutput(briefSchema, {
+      name: "upgrade_brief",
+      ...(method ? { method } : {}),
+    });
+    return withRateLimitRetry(() => structured.invoke(messages));
+  };
+
+  let raw: Partial<UpgradeAgentBrief>;
+  try {
+    raw = await invokeStructured();
+  } catch (error) {
+    if (!isJsonValidateError(error)) throw error;
+    // gpt-oss sometimes returns empty JSON under jsonSchema; jsonMode is more forgiving.
+    try {
+      raw = await invokeStructured("jsonMode");
+    } catch (retryError) {
+      if (!isJsonValidateError(retryError)) throw retryError;
+      throw new Error(UPGRADE_AGENT_GENERIC_ERROR);
+    }
+  }
+
+  const brief = ensureBriefDefaults(raw);
 
   return {
     brief: {
       ...brief,
       nextSteps: normalizeNextSteps(
-        brief.nextSteps ?? [],
+        brief.nextSteps,
         state.packageName,
         state.to,
         state.packageManager,
@@ -291,34 +381,41 @@ export async function runUpgradeAgent(input: {
   const { packageName, from, to, packageManager = "auto" } = input;
   requireGroqKey();
 
-  const graph = buildUpgradeAgentGraph();
-  const result = await graph.invoke({
-    packageName,
-    from,
-    to,
-    packageManager,
-    facts: "",
-    toolCalls: [],
-    brief: null,
-  });
+  try {
+    const graph = buildUpgradeAgentGraph();
+    const result = await graph.invoke({
+      packageName,
+      from,
+      to,
+      packageManager,
+      facts: "",
+      toolCalls: [],
+      brief: null,
+    });
 
-  if (!result.brief?.headline) {
-    throw new Error("Upgrade agent did not return a structured brief");
+    if (!result.brief?.headline) {
+      throw new Error(UPGRADE_AGENT_GENERIC_ERROR);
+    }
+
+    const brief = ensureBriefDefaults(result.brief);
+
+    return {
+      brief: {
+        ...brief,
+        nextSteps: normalizeNextSteps(
+          brief.nextSteps,
+          packageName,
+          to,
+          packageManager,
+        ),
+      },
+      model: groqModelLabel(getGroqUpgradeAgentModel()),
+      toolCalls: result.toolCalls ?? [],
+    };
+  } catch (error: unknown) {
+    if (isUpgradeAgentProviderError(error)) {
+      throw new Error(UPGRADE_AGENT_GENERIC_ERROR);
+    }
+    throw error;
   }
-
-  return {
-    brief: {
-      headline: result.brief.headline,
-      bullets: result.brief.bullets ?? [],
-      risk: result.brief.risk ?? "moderate",
-      nextSteps: normalizeNextSteps(
-        result.brief.nextSteps ?? [],
-        packageName,
-        to,
-        packageManager,
-      ),
-    },
-    model: groqModelLabel(getGroqUpgradeAgentModel()),
-    toolCalls: result.toolCalls ?? [],
-  };
 }

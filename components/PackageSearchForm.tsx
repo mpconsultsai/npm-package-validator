@@ -20,6 +20,7 @@ import { PasteListPanel } from "@/components/PasteList";
 import { useWatchlist } from "@/lib/use-watchlist";
 import { useWatchlistRefresh } from "@/lib/use-watchlist-refresh";
 import { summarizeWatchlistAlerts } from "@/lib/watchlist-store";
+import { apiPaths } from "@/lib/api/paths";
 
 const THEME_OPTIONS: { value: "light" | "dark"; label: string }[] = [
   { value: "light", label: "Light" },
@@ -261,7 +262,7 @@ export function PackageSearchForm({
       setIsSearching(true);
       try {
         const res = await fetch(
-          `/api/package-search?q=${encodeURIComponent(query)}&limit=8`,
+          `${apiPaths.packages.search}?q=${encodeURIComponent(query)}&limit=8`,
           { signal: controller.signal },
         );
         const data = await res.json();

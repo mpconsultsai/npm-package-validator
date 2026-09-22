@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { fetchJson, friendlyFetchError } from "@/lib/fetch-client";
+import { apiPaths } from "@/lib/api/paths";
 
 type DependentRow = {
   name: string;
@@ -65,7 +66,7 @@ export function DependentsModal({
           page?: number;
           error?: string;
         }>(
-          `/api/package-dependents?package=${encodeURIComponent(packageName)}&page=${nextPage}`,
+          `${apiPaths.packages.dependents}?package=${encodeURIComponent(packageName)}&page=${nextPage}`,
           { signal: controller.signal, timeoutMs: 55_000 },
         );
 

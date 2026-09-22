@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { formatCompactNumber, formatPublishDate } from "@/lib/utils/format";
 import { fetchJson } from "@/lib/fetch-client";
+import { apiPaths } from "@/lib/api/paths";
 import {
   buildReleaseCadence,
   buildReleaseTypeMix,
@@ -466,7 +467,7 @@ export function MetricsChartsCard({
         const { ok, data: payload } = await fetchJson<
           ChartsPayload & { error?: string }
         >(
-          `/api/package-charts?package=${encodeURIComponent(packageName)}&series=${series}`,
+          `${apiPaths.packages.charts}?package=${encodeURIComponent(packageName)}&series=${series}`,
           {
             signal: controller.signal,
             timeoutMs: 60_000,
@@ -528,7 +529,7 @@ export function MetricsChartsCard({
     if (competitorsKey) params.set("competitors", competitorsKey);
 
     void fetchJson<{ packages?: { name: string }[] }>(
-      `/api/similar-packages?${params}`,
+      `${apiPaths.packages.similar}?${params}`,
       { signal: controller.signal, timeoutMs: 45_000, retries: 2 },
     )
       .then(({ ok, data: payload }) => {
@@ -574,7 +575,7 @@ export function MetricsChartsCard({
     setLoadingCompare(true);
 
     void fetchJson<ChartsPayload & { error?: string }>(
-      `/api/package-charts?package=${encodeURIComponent(compareWith)}&series=downloads`,
+      `${apiPaths.packages.charts}?package=${encodeURIComponent(compareWith)}&series=downloads`,
       {
         signal: controller.signal,
         timeoutMs: 60_000,

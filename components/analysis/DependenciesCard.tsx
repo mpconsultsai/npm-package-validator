@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { fetchJson } from "@/lib/fetch-client";
+import { apiPaths } from "@/lib/api/paths";
 import type { PackageDependency } from "@/lib/package-deps";
 import { describeDependencySpec } from "@/lib/describe-dependency-spec";
 
@@ -45,7 +46,7 @@ function DependencyRow({
     void fetchJson<{
       dependencies?: PackageDependency[];
       error?: string;
-    }>(`/api/package-deps?package=${encodeURIComponent(dep.name)}`, {
+    }>(`${apiPaths.packages.dependencies}?package=${encodeURIComponent(dep.name)}`, {
       signal: controller.signal,
       timeoutMs: 20_000,
       retries: 1,
@@ -330,7 +331,7 @@ export function DependenciesCard({ packageName }: { packageName: string }) {
     void fetchJson<{
       dependencies?: PackageDependency[];
       error?: string;
-    }>(`/api/package-deps?package=${encodeURIComponent(packageName)}`, {
+    }>(`${apiPaths.packages.dependencies}?package=${encodeURIComponent(packageName)}`, {
       signal: controller.signal,
       timeoutMs: 20_000,
       retries: 1,

@@ -113,36 +113,38 @@ npm-package-validator/
 
 ## API Endpoints
 
+Routes live under `/api/v1` (see `lib/api/paths.ts`).
+
 ### Analysis Endpoints
 
-- **`GET /api/analyze-ai?package=<name>`** - Full analysis with AI insights
+- **`GET /api/v1/analysis/ai?package=<name>`** - Full analysis with AI insights
   - Returns: Package info, metrics, security vulnerabilities, AI recommendations
   - Requires: `GOOGLE_API_KEY` environment variable
   - Features: Automatic Gemini Flash → Flash-Lite fallback on rate limits
   
-- **`GET /api/analyze?package=<name>`** - Standard analysis (no AI)
+- **`GET /api/v1/analysis/metrics?package=<name>`** - Standard analysis (no AI)
   - Returns: Package info, metrics, security vulnerabilities
   - No API keys required (uses public APIs)
 
-- **`GET /api/security-check?package=<name>&version=<ver>`** - Security advisories for a specific version
+- **`GET /api/v1/packages/security?package=<name>&version=<ver>`** - Security advisories for a specific version
   - Returns: Security vulnerabilities affecting the specified version
   - Use when you need to check security for a particular version (e.g. an older version in use)
   - Example: `?package=react&version=18.2.0`
   
-- **`GET /api/health`** - Health check
+- **`GET /api/v1/health`** - Health check
   - Returns: API status and configured environment variables
 
 ### Example Requests
 
 ```bash
 # Full analysis with AI
-curl "http://localhost:3000/api/analyze-ai?package=react"
+curl "http://localhost:3000/api/v1/analysis/ai?package=react"
 
 # Security check for a specific version
-curl "http://localhost:3000/api/security-check?package=react&version=18.2.0"
+curl "http://localhost:3000/api/v1/packages/security?package=react&version=18.2.0"
 
 # Or via POST
-curl -X POST http://localhost:3000/api/security-check \
+curl -X POST http://localhost:3000/api/v1/packages/security \
   -H "Content-Type: application/json" \
   -d '{"packageName": "react", "version": "18.2.0"}'
 ```

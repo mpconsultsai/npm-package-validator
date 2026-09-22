@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { fetchJson } from "@/lib/fetch-client";
+import { apiPaths } from "@/lib/api/paths";
 import {
   snapshotFromAnalysis,
   type CompareColumn,
@@ -101,7 +102,7 @@ export function SimilarPackagesCard({
         const { ok, data } = await fetchJson<{
           packages?: SimilarPackage[];
           nextCursor?: string | null;
-        }>(`/api/similar-packages?${params}`, {
+        }>(`${apiPaths.packages.similar}?${params}`, {
           signal: controller.signal,
           timeoutMs: 45_000,
           retries: 3,
@@ -143,7 +144,7 @@ export function SimilarPackagesCard({
       const { ok, data } = await fetchJson<{
         packages?: SimilarPackage[];
         nextCursor?: string | null;
-      }>(`/api/similar-packages?${params}`, {
+      }>(`${apiPaths.packages.similar}?${params}`, {
         signal: controller.signal,
         timeoutMs: 45_000,
         retries: 2,
@@ -193,7 +194,7 @@ export function SimilarPackagesCard({
     const loadOne = async (name: string) => {
       try {
         const { ok, data } = await fetchJson(
-          `/api/analyze?package=${encodeURIComponent(name)}`,
+          `${apiPaths.analysis.metrics}?package=${encodeURIComponent(name)}`,
           {
             signal,
             timeoutMs: 60_000,

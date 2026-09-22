@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { fetchJson, friendlyFetchError } from "@/lib/fetch-client";
+import { fetchJson, FetchTimeoutError, friendlyFetchError } from "@/lib/fetch-client";
 import { formatPublishDate } from "@/lib/utils/format";
 import {
   buildUpgradeAdvice,
@@ -16,6 +16,8 @@ import type {
 import { usePackageManagerPreference } from "@/lib/use-package-manager-pref";
 import { LinkifiedText } from "@/components/LinkifiedText";
 import { severityBadgeClass } from "@/lib/utils/severity";
+import { apiPaths } from "@/lib/api/paths";
+import { UPGRADE_AGENT_GENERIC_ERROR } from "@/lib/ai/upgrade-agent-messages";
 
 const VERSION_OPTIONS = 40;
 
@@ -191,7 +193,7 @@ export function UpgradeAdvisorPanel({
     setDetailsError(null);
 
     void fetchJson<UpgradeDetailsPayload>(
-      `/api/upgrade-details?package=${encodeURIComponent(packageName)}&from=${encodeURIComponent(fromVersion)}&to=${encodeURIComponent(latest)}`,
+      `${apiPaths.upgrade.details}?package=${encodeURIComponent(packageName)}&from=${encodeURIComponent(fromVersion)}&to=${encodeURIComponent(latest)}`,
       {
         signal: controller.signal,
         timeoutMs: 45_000,
@@ -231,7 +233,7 @@ export function UpgradeAdvisorPanel({
     setFromSecurityLoading(true);
 
     void fetchJson<{ security?: SecuritySummary; error?: string }>(
-      `/api/security-check?package=${encodeURIComponent(packageName)}&version=${encodeURIComponent(fromVersion)}`,
+      `${apiPaths.packages.security}?package=${encodeURIComponent(packageName)}&version=${encodeURIComponent(fromVersion)}`,
       {
         signal: controller.signal,
         timeoutMs: 45_000,
@@ -281,7 +283,7 @@ export function UpgradeAdvisorPanel({
         model?: string;
         toolCalls?: string[];
         error?: string;
-      }>("/api/upgrade-agent", {
+      }>(apiPaths.upgrade.agent, {
         init: {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -296,14 +298,20 @@ export function UpgradeAdvisorPanel({
         retries: 0,
       });
       if (!ok || !data.brief) {
-        throw new Error(data.error || "Agent brief failed");
+        setAgentBrief(null);
+        setAgentError(UPGRADE_AGENT_GENERIC_ERROR);
+        return;
       }
       setAgentBrief(data.brief);
       setAgentModel(data.model ?? null);
       setAgentTools(data.toolCalls ?? []);
     } catch (err) {
       setAgentBrief(null);
-      setAgentError(friendlyFetchError(err));
+      setAgentError(
+        err instanceof FetchTimeoutError
+          ? friendlyFetchError(err)
+          : UPGRADE_AGENT_GENERIC_ERROR,
+      );
     } finally {
       setAgentLoading(false);
     }

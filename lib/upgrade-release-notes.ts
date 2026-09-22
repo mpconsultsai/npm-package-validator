@@ -18,10 +18,10 @@ export interface BreakingReleaseNote {
 }
 
 /** Strip a leading v from tags like v18.2.0; also supports package@version tags. */
-export function versionFromTag(
+export const versionFromTag = (
   tag: string,
   packageName?: string,
-): string | null {
+): string | null => {
   const t = tag.trim();
   if (!t) return null;
 
@@ -51,18 +51,18 @@ export function versionFromTag(
   }
 
   return clean(t.replace(/^v/i, ""));
-}
+};
 
 /** Heading like `## eslint-plugin-react-hooks@6.1.0` or `## @scope/pkg@1.0.0`. */
-function packageHeadingName(line: string): string | null {
+const packageHeadingName = (line: string): string | null => {
   const m = line.match(
     /^#{1,6}\s+(@?[A-Za-z0-9_.~/-]+)@\d+\.\d+\.\d+\S*\s*$/,
   );
   return m?.[1] ?? null;
-}
+};
 
-function stripMarkdownDecorations(text: string): string {
-  return text
+const stripMarkdownDecorations = (text: string): string =>
+  text
     .replace(/!\[[^\]]*\]\([^)]+\)/g, "") // images / badges
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // links → label
     .replace(/<\/?[^>]+>/g, "") // bare HTML
@@ -73,9 +73,8 @@ function stripMarkdownDecorations(text: string): string {
     .replace(/`/g, "")
     .replace(/\s+/g, " ")
     .trim();
-}
 
-function extractMarkdownUrl(text: string): string | undefined {
+const extractMarkdownUrl = (text: string): string | undefined => {
   const nested = text.match(
     /\[(?:!\[[^\]]*\]\([^)]+\)|[^\]]+)\]\((https?:\/\/[^)\s]+)\)/,
   );
@@ -84,18 +83,15 @@ function extractMarkdownUrl(text: string): string | undefined {
     /\((https?:\/\/(?:github\.com|angular\.dev)[^)\s]+)\)/i,
   );
   return plain?.[1];
-}
+};
 
-function isBadgeLabel(text: string): boolean {
-  return (
-    /^fix\b/i.test(text) ||
-    /^[a-f0-9]{7,40}$/i.test(text) ||
-    /img\.shields\.io/i.test(text) ||
-    /^badge$/i.test(text)
-  );
-}
+const isBadgeLabel = (text: string): boolean =>
+  /^fix\b/i.test(text) ||
+  /^[a-f0-9]{7,40}$/i.test(text) ||
+  /img\.shields\.io/i.test(text) ||
+  /^badge$/i.test(text);
 
-function isNoise(text: string): boolean {
+const isNoise = (text: string): boolean => {
   if (text.length < 8) return true;
   if (/^#{1,6}\s/.test(text)) return true;
   if (
@@ -108,9 +104,9 @@ function isNoise(text: string): boolean {
   if (isBadgeLabel(text)) return true;
   if (/^:?-+:?$/.test(text)) return true;
   return false;
-}
+};
 
-function parseTableRow(line: string): BreakingNoteItem | null {
+const parseTableRow = (line: string): BreakingNoteItem | null => {
   if (!line.includes("|")) return null;
   if (/^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?$/.test(line)) return null;
 
@@ -143,9 +139,9 @@ function parseTableRow(line: string): BreakingNoteItem | null {
   const text = labels[labels.length - 1];
   if (!text) return null;
   return { text, url };
-}
+};
 
-function cleanLine(line: string): BreakingNoteItem | null {
+const cleanLine = (line: string): BreakingNoteItem | null => {
   const tableItem = parseTableRow(line);
   if (tableItem) return tableItem;
 
@@ -153,17 +149,17 @@ function cleanLine(line: string): BreakingNoteItem | null {
   const text = stripMarkdownDecorations(line);
   if (!text || isNoise(text)) return null;
   return { text, url };
-}
+};
 
 /**
  * Pull likely breaking-change bullets from a GitHub release body.
  * When `packageName` is set, skip monorepo sections for other packages
  * (e.g. `## eslint-plugin-react-hooks@6.1.0` inside a React release).
  */
-export function extractBreakingItems(
+export const extractBreakingItems = (
   body: string | null | undefined,
   packageName?: string,
-): BreakingNoteItem[] {
+): BreakingNoteItem[] => {
   if (!body || !body.trim()) return [];
 
   const lines = body.replace(/\r\n/g, "\n").split("\n");
@@ -234,9 +230,9 @@ export function extractBreakingItems(
     if (unique.length >= 24) break;
   }
   return unique;
-}
+};
 
-export function collectBreakingNotes(input: {
+export const collectBreakingNotes = (input: {
   from: string;
   to: string;
   releases: GitHubReleaseData[];
@@ -245,7 +241,7 @@ export function collectBreakingNotes(input: {
   notes: BreakingReleaseNote[];
   matchedReleases: number;
   scannedReleases: number;
-} {
+} => {
   const from = semver.clean(input.from) ?? (semver.valid(input.from) ? input.from : null);
   const to = semver.clean(input.to) ?? (semver.valid(input.to) ? input.to : null);
   if (!from || !to || !semver.lt(from, to)) {
@@ -291,17 +287,17 @@ export function collectBreakingNotes(input: {
     matchedReleases,
     scannedReleases: input.releases.length,
   };
-}
+};
 
 export type PeerChange =
   | { kind: "added"; name: string; range: string }
   | { kind: "removed"; name: string; range: string }
   | { kind: "changed"; name: string; from: string; to: string };
 
-export function diffPeerDependencies(
+export const diffPeerDependencies = (
   fromPeers?: Record<string, string> | null,
   toPeers?: Record<string, string> | null,
-): PeerChange[] {
+): PeerChange[] => {
   const a = fromPeers ?? {};
   const b = toPeers ?? {};
   const names = new Set([...Object.keys(a), ...Object.keys(b)]);
@@ -321,4 +317,4 @@ export function diffPeerDependencies(
     }
   }
   return changes;
-}
+};

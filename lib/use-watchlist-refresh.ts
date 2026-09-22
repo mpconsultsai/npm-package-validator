@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { fetchJson } from "@/lib/fetch-client";
+import { apiPaths } from "@/lib/api/paths";
 import {
   applyWatchlistFreshStatuses,
   getWatchlistEntriesNeedingCheck,
@@ -40,7 +41,7 @@ export function useWatchlistRefresh(enabled: boolean) {
     void (async () => {
       try {
         const { ok, data } = await fetchJson<CheckResponse>(
-          "/api/watchlist-check",
+          apiPaths.watchlist.check,
           {
             init: {
               method: "POST",

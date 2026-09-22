@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import semver from "semver";
 import { fetchJson, friendlyFetchError } from "@/lib/fetch-client";
+import { apiPaths } from "@/lib/api/paths";
 import { useShellSearchLoading } from "@/components/AppShell";
 import { InfoCards } from "@/components/InfoCards";
 import { WatchToggle } from "@/components/Watchlist";
@@ -124,7 +125,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
     setAiError(null);
     try {
       const { ok, data } = await fetchJson<any>(
-        `/api/analyze-ai?package=${encodeURIComponent(name)}`,
+        `${apiPaths.analysis.ai}?package=${encodeURIComponent(name)}`,
         {
           signal,
           timeoutMs: 120_000,
@@ -216,7 +217,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
 
       try {
         const { ok, data } = await fetchJson<any>(
-          `/api/analyze?package=${encodeURIComponent(name)}`,
+          `${apiPaths.analysis.metrics}?package=${encodeURIComponent(name)}`,
           {
             signal: controller.signal,
             timeoutMs: 60_000,
@@ -338,7 +339,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
     if (!name) return;
     const controller = new AbortController();
     fetch(
-      `/api/package-charts?package=${encodeURIComponent(name)}&series=issues`,
+      `${apiPaths.packages.charts}?package=${encodeURIComponent(name)}&series=issues`,
       { signal: controller.signal },
     ).catch(() => {});
     return () => controller.abort();
@@ -367,7 +368,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
       setVersionSecurityData(null);
       try {
         const { ok, data } = await fetchJson<any>(
-          `/api/security-check?package=${encodeURIComponent(pkgName)}&version=${encodeURIComponent(version)}`,
+          `${apiPaths.packages.security}?package=${encodeURIComponent(pkgName)}&version=${encodeURIComponent(version)}`,
           {
             signal: controller.signal,
             timeoutMs: 45_000,
