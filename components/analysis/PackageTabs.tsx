@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useState, type ReactNode } from "react";
 import {
   SecuritySeverityBadges,
   type SecurityCountSummary,
@@ -91,6 +93,8 @@ export function PackageNameHeader({
   packageName: string;
   homepage?: string | null;
 }) {
+  const [copied, setCopied] = useState(false);
+
   if (!packageName) return null;
 
   const nameNode = homepage ? (
@@ -105,6 +109,16 @@ export function PackageNameHeader({
   ) : (
     <span className="text-gray-900 dark:text-white">{packageName}</span>
   );
+
+  const copyName = async () => {
+    try {
+      await navigator.clipboard.writeText(packageName);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   return (
     <h2 className="flex items-start gap-2 text-xl sm:text-2xl font-bold tracking-tight break-all">
@@ -122,7 +136,48 @@ export function PackageNameHeader({
           d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
         />
       </svg>
-      <span className="min-w-0">{nameNode}</span>
+      <span className="min-w-0 inline-flex items-start gap-1.5">
+        {nameNode}
+        <button
+          type="button"
+          onClick={() => void copyName()}
+          className="mt-1 shrink-0 rounded-md p-1 text-gray-500 hover:bg-gray-200/80 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+          title={copied ? "Copied" : "Copy package name"}
+          aria-label={copied ? "Copied" : "Copy package name"}
+        >
+          {copied ? (
+            <svg
+              className="h-4 w-4 text-emerald-600 dark:text-emerald-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          ) : (
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+              />
+            </svg>
+          )}
+        </button>
+      </span>
     </h2>
   );
 }
