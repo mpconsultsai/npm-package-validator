@@ -33,9 +33,17 @@ export function versionFromTag(
     if (t.toLowerCase().startsWith(prefix.toLowerCase())) {
       return clean(t.slice(prefix.length));
     }
+    // When analysing a specific package, ignore other packages' monorepo tags
+    // (e.g. eslint-plugin-react-hooks@6.1.0 while looking at react).
+    if (t.includes("@") && !t.toLowerCase().startsWith("v")) {
+      const at = t.lastIndexOf("@");
+      if (at > 0 && semver.valid(t.slice(at + 1).replace(/^v/i, ""))) {
+        return null;
+      }
+    }
   }
 
-  // name@version or @scope/name@version
+  // name@version or @scope/name@version (only when no package filter)
   const at = t.lastIndexOf("@");
   if (at > 0) {
     const maybe = clean(t.slice(at + 1));
@@ -43,6 +51,14 @@ export function versionFromTag(
   }
 
   return clean(t.replace(/^v/i, ""));
+}
+
+/** Heading like `## eslint-plugin-react-hooks@6.1.0` or `## @scope/pkg@1.0.0`. */
+function packageHeadingName(line: string): string | null {
+  const m = line.match(
+    /^#{1,6}\s+(@?[A-Za-z0-9_.~/-]+)@\d+\.\d+\.\d+\S*\s*$/,
+  );
+  return m?.[1] ?? null;
 }
 
 function stripMarkdownDecorations(text: string): string {
@@ -141,19 +157,33 @@ function cleanLine(line: string): BreakingNoteItem | null {
 
 /**
  * Pull likely breaking-change bullets from a GitHub release body.
+ * When `packageName` is set, skip monorepo sections for other packages
+ * (e.g. `## eslint-plugin-react-hooks@6.1.0` inside a React release).
  */
 export function extractBreakingItems(
   body: string | null | undefined,
+  packageName?: string,
 ): BreakingNoteItem[] {
   if (!body || !body.trim()) return [];
 
   const lines = body.replace(/\r\n/g, "\n").split("\n");
   const items: BreakingNoteItem[] = [];
   let inBreakingSection = false;
+  let inPackageSection = true;
 
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
+
+    const headingPkg = packageHeadingName(line);
+    if (headingPkg && packageName) {
+      inPackageSection =
+        headingPkg.toLowerCase() === packageName.toLowerCase();
+      inBreakingSection = false;
+      continue;
+    }
+
+    if (!inPackageSection) continue;
 
     if (
       /^#{1,6}\s+.*breaking/i.test(line) ||
@@ -232,7 +262,7 @@ export function collectBreakingNotes(input: {
     if (!semver.gt(version, from) || !semver.lte(version, to)) continue;
     matchedReleases += 1;
 
-    const items = extractBreakingItems(release.body);
+    const items = extractBreakingItems(release.body, input.packageName);
     const isMajorLine =
       semver.minor(version) === 0 && semver.patch(version) === 0;
 

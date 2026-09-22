@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { getSiteUrl } from "@/lib/site-url";
 import { AppShell } from "@/components/AppShell";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { THEME_BOOT_SCRIPT } from "@/lib/theme-pref";
 import "./globals.css";
 
 const siteName = "NPM Package Validator";
@@ -72,8 +74,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en-GB" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body className="antialiased" suppressHydrationWarning>
-        <AppShell>{children}</AppShell>
+        <ThemeProvider>
+          <AppShell>{children}</AppShell>
+        </ThemeProvider>
       </body>
     </html>
   );

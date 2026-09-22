@@ -207,7 +207,7 @@ Use the included `render.yaml` or configure manually:
 - **Type**: Web Service (not Static Site)
 - **Build**: `npm install && npm run build`
 - **Start**: `npm start`
-- **Environment**: Add `GOOGLE_API_KEY`, `GROQ_API_KEY` (optional), and `GITHUB_TOKEN`
+- **Environment**: Add `GOOGLE_API_KEY`, `GROQ_API_KEY`, `GROQ_MODEL`, `GROQ_UPGRADE_AGENT_MODEL`, and `GITHUB_TOKEN`
 
 ### Vercel
 Automatic detection with `vercel.json` included. Add environment variables in project settings.

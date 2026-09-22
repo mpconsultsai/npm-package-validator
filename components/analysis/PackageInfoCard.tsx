@@ -7,6 +7,7 @@ import { describeLicense } from "@/lib/license-info";
 import { MetricsCard } from "./MetricsCard";
 import { UpgradeAdvisorPanel } from "./UpgradeAdvisorPanel";
 import { DependentsModal } from "./DependentsModal";
+import { CopyButton } from "@/components/CopyButton";
 
 /** npm search `dependents` count — badge when widely depended-on. */
 const POPULAR_MIN_DEPENDENTS = 1000;
@@ -272,8 +273,16 @@ export function PackageInfoCard({
                   Latest Version
                 </span>
               </div>
-              <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                {packageInfo.latestVersion || packageInfo.version}
+              <p className="text-lg font-semibold text-gray-900 dark:text-white inline-flex items-center gap-1.5">
+                <span>{packageInfo.latestVersion || packageInfo.version}</span>
+                {(packageInfo.latestVersion || packageInfo.version) && (
+                  <CopyButton
+                    value={
+                      packageInfo.latestVersion || packageInfo.version || ""
+                    }
+                    label="Copy version"
+                  />
+                )}
               </p>
             </div>
 

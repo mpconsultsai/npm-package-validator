@@ -5,11 +5,37 @@ import { usePathname, useRouter } from "next/navigation";
 import { extractPackageName } from "@/lib/validation";
 import { smoothNavigate } from "@/lib/smooth-navigate";
 import { useAiAnalysisPref } from "@/lib/use-ai-analysis-pref";
+import {
+  useThemePreference,
+  useThemePrefReady,
+  useSystemDark,
+} from "@/lib/use-theme-pref";
+import { resolveTheme, setThemePreference } from "@/lib/theme-pref";
+import {
+  type PackageManagerPreference,
+} from "@/lib/package-manager-pref";
+import { usePackageManagerPref } from "@/lib/use-package-manager-pref";
 import { WatchlistSection } from "@/components/Watchlist";
 import { PasteListPanel } from "@/components/PasteList";
 import { useWatchlist } from "@/lib/use-watchlist";
 import { useWatchlistRefresh } from "@/lib/use-watchlist-refresh";
 import { summarizeWatchlistAlerts } from "@/lib/watchlist-store";
+
+const THEME_OPTIONS: { value: "light" | "dark"; label: string }[] = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
+
+const PACKAGE_MANAGER_OPTIONS: {
+  value: PackageManagerPreference;
+  label: string;
+}[] = [
+  { value: "auto", label: "Auto" },
+  { value: "npm", label: "npm" },
+  { value: "pnpm", label: "pnpm" },
+  { value: "yarn", label: "Yarn" },
+  { value: "bun", label: "Bun" },
+];
 
 export interface PackageSearchSuggestion {
   name: string;
@@ -391,6 +417,15 @@ export function PackageSearchForm({
   const isHome = pathname === "/";
   const { enabled: aiEnabled, setEnabled: setAiEnabled, ready: aiPrefReady } =
     useAiAnalysisPref();
+  const themePreference = useThemePreference();
+  const systemDark = useSystemDark();
+  const themePrefReady = useThemePrefReady();
+  const resolvedTheme = resolveTheme(themePreference, systemDark);
+  const {
+    preference: packageManager,
+    setPreference: setPackageManager,
+    ready: packageManagerReady,
+  } = usePackageManagerPref();
   const watchlist = useWatchlist();
   const watchCount = watchlist.length;
   const alertSummary = summarizeWatchlistAlerts(watchlist);
@@ -714,6 +749,84 @@ export function PackageSearchForm({
             ) : (
               <span
                 className="inline-block h-6 w-11 shrink-0 rounded-full bg-gray-200 dark:bg-gray-700"
+                aria-hidden="true"
+              />
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <p
+              id="theme-preference-label"
+              className="text-sm font-medium text-gray-900 dark:text-white"
+            >
+              Theme
+            </p>
+            {themePrefReady ? (
+              <div
+                role="radiogroup"
+                aria-labelledby="theme-preference-label"
+                className="inline-flex rounded-lg border border-gray-200 p-0.5 dark:border-gray-600"
+              >
+                {THEME_OPTIONS.map(({ value, label }) => {
+                  const selected = resolvedTheme === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setThemePreference(value)}
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 ${
+                        selected
+                          ? "bg-blue-600 text-white"
+                          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <span
+                className="inline-block h-9 w-32 shrink-0 rounded-lg bg-gray-200 dark:bg-gray-700"
+                aria-hidden="true"
+              />
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div>
+              <p
+                id="package-manager-preference-label"
+                className="text-sm font-medium text-gray-900 dark:text-white"
+              >
+                Package manager
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Used for upgrade install commands. Auto shows npm, pnpm, and
+                Yarn.
+              </p>
+            </div>
+            {packageManagerReady ? (
+              <select
+                id="package-manager-preference"
+                aria-labelledby="package-manager-preference-label"
+                value={packageManager}
+                onChange={(e) =>
+                  setPackageManager(e.target.value as PackageManagerPreference)
+                }
+                className="w-full sm:w-40 shrink-0 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                {PACKAGE_MANAGER_OPTIONS.map(({ value, label }) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span
+                className="inline-block h-9 w-40 shrink-0 rounded-lg bg-gray-200 dark:bg-gray-700"
                 aria-hidden="true"
               />
             )}

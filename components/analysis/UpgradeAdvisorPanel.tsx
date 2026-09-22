@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { fetchJson } from "@/lib/fetch-client";
+import { fetchJson, friendlyFetchError } from "@/lib/fetch-client";
 import { formatPublishDate } from "@/lib/utils/format";
 import {
   buildUpgradeAdvice,
@@ -13,8 +13,18 @@ import type {
   BreakingReleaseNote,
   PeerChange,
 } from "@/lib/upgrade-release-notes";
+import { usePackageManagerPreference } from "@/lib/use-package-manager-pref";
+import { LinkifiedText } from "@/components/LinkifiedText";
+import { severityBadgeClass } from "@/lib/utils/severity";
 
 const VERSION_OPTIONS = 40;
+
+type AgentBrief = {
+  headline: string;
+  bullets: string[];
+  risk: "low" | "moderate" | "high";
+  nextSteps: string[];
+};
 
 interface UpgradeDetailsPayload {
   error?: string;
@@ -133,13 +143,30 @@ export function UpgradeAdvisorPanel({
     null,
   );
   const [fromSecurityLoading, setFromSecurityLoading] = useState(false);
+  const [agentBrief, setAgentBrief] = useState<AgentBrief | null>(null);
+  const [agentModel, setAgentModel] = useState<string | null>(null);
+  const [agentTools, setAgentTools] = useState<string[]>([]);
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [agentError, setAgentError] = useState<string | null>(null);
+  const packageManager = usePackageManagerPreference();
 
   useEffect(() => {
     setFromVersion("");
     setDetails(null);
     setDetailsError(null);
     setFromSecurity(null);
+    setAgentBrief(null);
+    setAgentModel(null);
+    setAgentTools([]);
+    setAgentError(null);
   }, [packageName]);
+
+  useEffect(() => {
+    setAgentBrief(null);
+    setAgentModel(null);
+    setAgentTools([]);
+    setAgentError(null);
+  }, [fromVersion, latest]);
 
   const advice = useMemo(() => {
     if (!latest || !fromVersion) return null;
@@ -243,6 +270,44 @@ export function UpgradeAdvisorPanel({
   const peerChanges = details?.peers?.changes ?? [];
   const needsUpgrade =
     advice && advice.verdict !== "current" && advice.verdict !== "invalid";
+
+  const runAgentBrief = async () => {
+    if (!latest || !fromVersion || fromVersion === latest) return;
+    setAgentLoading(true);
+    setAgentError(null);
+    try {
+      const { ok, data } = await fetchJson<{
+        brief?: AgentBrief;
+        model?: string;
+        toolCalls?: string[];
+        error?: string;
+      }>("/api/upgrade-agent", {
+        init: {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            packageName,
+            from: fromVersion,
+            to: latest,
+            packageManager,
+          }),
+        },
+        timeoutMs: 55_000,
+        retries: 0,
+      });
+      if (!ok || !data.brief) {
+        throw new Error(data.error || "Agent brief failed");
+      }
+      setAgentBrief(data.brief);
+      setAgentModel(data.model ?? null);
+      setAgentTools(data.toolCalls ?? []);
+    } catch (err) {
+      setAgentBrief(null);
+      setAgentError(friendlyFetchError(err));
+    } finally {
+      setAgentLoading(false);
+    }
+  };
 
   const factLine = (() => {
     if (!advice || !needsUpgrade) return null;
@@ -542,6 +607,84 @@ export function UpgradeAdvisorPanel({
                 </p>
               </div>
             </details>
+          )}
+        </div>
+      )}
+
+      {needsUpgrade && (
+        <div className="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 sm:p-5 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                Agent brief
+              </p>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                Experimental · LangGraph
+                {agentModel ? ` · ${agentModel}` : ""}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void runAgentBrief()}
+              disabled={agentLoading}
+              className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400"
+            >
+              {agentLoading
+                ? "Generating…"
+                : agentBrief
+                  ? "Regenerate"
+                  : "Generate agent brief"}
+            </button>
+          </div>
+
+          {agentError && (
+            <p className="text-sm text-red-600 dark:text-red-400">{agentError}</p>
+          )}
+
+          {agentBrief && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                  {agentBrief.headline}
+                </p>
+                <span
+                  className={`shrink-0 px-2 py-0.5 rounded text-xs font-medium text-white capitalize ${severityBadgeClass(agentBrief.risk)}`}
+                >
+                  {agentBrief.risk} risk
+                </span>
+              </div>
+              {agentBrief.bullets.length > 0 && (
+                <ul className="list-disc pl-5 space-y-1 text-sm text-gray-700 dark:text-gray-200">
+                  {agentBrief.bullets.map((bullet) => (
+                    <li key={bullet}>
+                      <LinkifiedText text={bullet} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {agentBrief.nextSteps.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
+                    Next steps
+                  </p>
+                  <ol className="list-decimal pl-5 space-y-1 text-sm text-gray-700 dark:text-gray-200">
+                    {agentBrief.nextSteps.map((step) => (
+                      <li key={step}>
+                        <LinkifiedText text={step} />
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+              {agentTools.length > 0 && (
+                <details className="text-xs text-gray-500 dark:text-gray-400">
+                  <summary className="cursor-pointer hover:text-gray-700 dark:hover:text-gray-200">
+                    Tools used
+                  </summary>
+                  <p className="mt-1 font-mono">{agentTools.join(" · ")}</p>
+                </details>
+              )}
+            </div>
           )}
         </div>
       )}

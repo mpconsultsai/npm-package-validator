@@ -5,10 +5,7 @@ import { formatBytes } from '../utils/format';
 import { extractPackageName, normalizeNpmPackageName, validatePackageName } from '../validation';
 import { classifyRuntimeEnvironment } from '../runtime-environment';
 import type { RuntimeKind } from '../runtime-environment';
-
-/** Groq retired llama-3.3-70b-versatile on 16 Aug 2026; gpt-oss-120b is the documented replacement. */
-const GROQ_MODEL = 'openai/gpt-oss-120b';
-const GROQ_MODEL_LABEL = 'GPT-OSS 120B (Groq)';
+import { getGroqModel, groqModelLabel } from './groq-config';
 
 /**
  * AI-generated package analysis and recommendations
@@ -535,20 +532,21 @@ async function analyzeWithGroq(
   data: PackageAnalysisResult,
 ): Promise<AIPackageAnalysis> {
   const groqClient = getGroqClient();
+  const model = getGroqModel();
   const chatCompletion = await groqClient.chat.completions.create({
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: prompt },
     ],
-    model: GROQ_MODEL,
+    model,
     temperature: 0.7,
     max_tokens: 2048,
   });
 
   const text = chatCompletion.choices[0]?.message?.content || '';
   const aiAnalysis = parseAIResponse(text, data.packageName);
-  aiAnalysis.model = GROQ_MODEL_LABEL;
-  console.log(`✓ Analysis completed with Groq (${GROQ_MODEL_LABEL})`);
+  aiAnalysis.model = groqModelLabel(model);
+  console.log(`✓ Analysis completed with Groq (${aiAnalysis.model})`);
   return finalizeAiAnalysis(aiAnalysis, data);
 }
 
