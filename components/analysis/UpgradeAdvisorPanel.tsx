@@ -15,6 +15,7 @@ import type {
 } from "@/lib/upgrade-release-notes";
 import { usePackageManagerPreference } from "@/lib/use-package-manager-pref";
 import { LinkifiedText } from "@/components/LinkifiedText";
+import { AgentGraphSteps } from "@/components/analysis/AgentGraphSteps";
 import { severityBadgeClass } from "@/lib/utils/severity";
 import { apiPaths } from "@/lib/api/paths";
 import { UPGRADE_AGENT_GENERIC_ERROR } from "@/lib/ai/upgrade-agent-messages";
@@ -685,12 +686,7 @@ export function UpgradeAdvisorPanel({
                 </div>
               )}
               {agentTools.length > 0 && (
-                <details className="text-xs text-gray-500 dark:text-gray-400">
-                  <summary className="cursor-pointer hover:text-gray-700 dark:hover:text-gray-200">
-                    Tools used
-                  </summary>
-                  <p className="mt-1 font-mono">{agentTools.join(" · ")}</p>
-                </details>
+                <AgentGraphSteps toolCalls={agentTools} />
               )}
             </div>
           )}
