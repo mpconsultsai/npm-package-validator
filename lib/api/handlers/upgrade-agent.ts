@@ -1,8 +1,10 @@
 import {
   runUpgradeAgent,
+  streamUpgradeAgent,
   UPGRADE_AGENT_GENERIC_ERROR,
   isUpgradeAgentProviderError,
 } from "@/lib/ai/upgrade-agent";
+import type { UpgradeAgentStreamEvent } from "@/lib/ai/upgrade-agent-events";
 import { AppError } from "@/lib/api/errors";
 import { jsonOk, withHandler } from "@/lib/api/http";
 import {
@@ -11,8 +13,19 @@ import {
   requireFromTo,
   requirePackageName,
 } from "@/lib/api/params";
+import { NextResponse } from "next/server";
 
-/** POST /api/v1/upgrade/agent */
+const sseHeaders = {
+  "Content-Type": "text/event-stream; charset=utf-8",
+  "Cache-Control": "no-cache, no-transform",
+  Connection: "keep-alive",
+  "X-Accel-Buffering": "no",
+} as const;
+
+const encodeSse = (encoder: TextEncoder, event: UpgradeAgentStreamEvent) =>
+  encoder.encode(`data: ${JSON.stringify(event)}\n\n`);
+
+/** POST /api/v1/upgrade/agent — JSON by default; SSE when `stream: true` or Accept includes event-stream. */
 export const POST = withHandler(
   async (request) => {
     const body = await readJsonBody(request);
@@ -28,6 +41,10 @@ export const POST = withHandler(
       typeof body.to === "string" ? body.to : "",
     );
     const packageManager = optionalPackageManager(body.packageManager);
+    const force = body.force === true;
+    const wantsStream =
+      body.stream === true ||
+      (request.headers.get("accept") ?? "").includes("text/event-stream");
 
     if (!process.env.GROQ_API_KEY?.trim()) {
       throw new AppError(UPGRADE_AGENT_GENERIC_ERROR, 503);
@@ -36,12 +53,49 @@ export const POST = withHandler(
       throw new AppError(UPGRADE_AGENT_GENERIC_ERROR, 503);
     }
 
+    if (wantsStream) {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            for await (const event of streamUpgradeAgent({
+              packageName,
+              from,
+              to,
+              packageManager,
+              force,
+            })) {
+              if (request.signal.aborted) break;
+              controller.enqueue(encodeSse(encoder, event));
+            }
+          } catch (error: unknown) {
+            console.error("upgrade/agent stream:", error);
+            controller.enqueue(
+              encodeSse(encoder, {
+                type: "error",
+                message: UPGRADE_AGENT_GENERIC_ERROR,
+              }),
+            );
+          } finally {
+            try {
+              controller.close();
+            } catch {
+              // already closed
+            }
+          }
+        },
+      });
+
+      return new NextResponse(stream, { headers: sseHeaders });
+    }
+
     try {
       const result = await runUpgradeAgent({
         packageName,
         from,
         to,
         packageManager,
+        force,
       });
 
       return jsonOk({
@@ -52,7 +106,6 @@ export const POST = withHandler(
         ...result,
       });
     } catch (error: unknown) {
-      // Log provider noise server-side only; clients get a generic message.
       console.error("upgrade/agent:", error);
       if (error instanceof AppError) {
         throw new AppError(UPGRADE_AGENT_GENERIC_ERROR, error.status);

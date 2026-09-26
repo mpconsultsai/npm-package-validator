@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { fetchJson, FetchTimeoutError, friendlyFetchError } from "@/lib/fetch-client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { fetchJson } from "@/lib/fetch-client";
 import { formatPublishDate } from "@/lib/utils/format";
 import {
   buildUpgradeAdvice,
@@ -19,6 +19,7 @@ import { AgentGraphSteps } from "@/components/analysis/AgentGraphSteps";
 import { severityBadgeClass } from "@/lib/utils/severity";
 import { apiPaths } from "@/lib/api/paths";
 import { UPGRADE_AGENT_GENERIC_ERROR } from "@/lib/ai/upgrade-agent-messages";
+import { consumeUpgradeAgentSse } from "@/lib/upgrade-agent-stream-client";
 
 const VERSION_OPTIONS = 40;
 
@@ -149,27 +150,29 @@ export function UpgradeAdvisorPanel({
   const [agentBrief, setAgentBrief] = useState<AgentBrief | null>(null);
   const [agentModel, setAgentModel] = useState<string | null>(null);
   const [agentTools, setAgentTools] = useState<string[]>([]);
+  const [agentStage, setAgentStage] = useState<string | null>(null);
+  const [agentCached, setAgentCached] = useState(false);
   const [agentLoading, setAgentLoading] = useState(false);
   const [agentError, setAgentError] = useState<string | null>(null);
   const packageManager = usePackageManagerPreference();
+  const agentAbortRef = useRef<AbortController | null>(null);
+
+  const resetAgentState = () => {
+    setAgentBrief(null);
+    setAgentModel(null);
+    setAgentTools([]);
+    setAgentStage(null);
+    setAgentCached(false);
+    setAgentError(null);
+  };
 
   useEffect(() => {
     setFromVersion("");
     setDetails(null);
     setDetailsError(null);
     setFromSecurity(null);
-    setAgentBrief(null);
-    setAgentModel(null);
-    setAgentTools([]);
-    setAgentError(null);
+    resetAgentState();
   }, [packageName]);
-
-  useEffect(() => {
-    setAgentBrief(null);
-    setAgentModel(null);
-    setAgentTools([]);
-    setAgentError(null);
-  }, [fromVersion, latest]);
 
   const advice = useMemo(() => {
     if (!latest || !fromVersion) return null;
@@ -255,6 +258,111 @@ export function UpgradeAdvisorPanel({
     return () => controller.abort();
   }, [packageName, fromVersion, latest]);
 
+  const runAgentBrief = async (opts?: {
+    force?: boolean;
+    signal?: AbortSignal;
+  }) => {
+    if (!latest || !fromVersion || fromVersion === latest) return;
+    const force = opts?.force === true;
+    const signal = opts?.signal;
+
+    setAgentLoading(true);
+    setAgentError(null);
+    setAgentStage("collect");
+    setAgentCached(false);
+    if (force) {
+      setAgentBrief(null);
+      setAgentTools([]);
+      setAgentModel(null);
+    }
+
+    try {
+      const response = await fetch(apiPaths.upgrade.agent, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify({
+          packageName,
+          from: fromVersion,
+          to: latest,
+          packageManager,
+          stream: true,
+          force,
+        }),
+        signal,
+      });
+
+      if (!response.ok) {
+        if (signal?.aborted) return;
+        setAgentBrief(null);
+        setAgentError(UPGRADE_AGENT_GENERIC_ERROR);
+        return;
+      }
+
+      let sawBrief = false;
+      let sawError = false;
+
+      await consumeUpgradeAgentSse(
+        response,
+        (event) => {
+          if (signal?.aborted) return;
+          if (event.type === "status") {
+            setAgentStage(event.stage);
+            return;
+          }
+          if (event.type === "tools") {
+            setAgentTools(event.toolCalls);
+            return;
+          }
+          if (event.type === "brief") {
+            sawBrief = true;
+            setAgentBrief(event.brief);
+            return;
+          }
+          if (event.type === "done") {
+            setAgentModel(event.model);
+            setAgentTools(event.toolCalls);
+            setAgentCached(event.cached);
+            setAgentStage(null);
+            return;
+          }
+          if (event.type === "error") {
+            sawError = true;
+            setAgentBrief(null);
+            setAgentError(event.message || UPGRADE_AGENT_GENERIC_ERROR);
+            setAgentStage(null);
+          }
+        },
+        signal,
+      );
+
+      if (signal?.aborted) return;
+      if (!sawBrief && !sawError) {
+        setAgentError(UPGRADE_AGENT_GENERIC_ERROR);
+      }
+    } catch (err) {
+      if (signal?.aborted) return;
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setAgentBrief(null);
+      setAgentError(UPGRADE_AGENT_GENERIC_ERROR);
+    } finally {
+      if (!signal?.aborted) {
+        setAgentLoading(false);
+        setAgentStage(null);
+      }
+    }
+  };
+
+  // Clear brief when the upgrade range or package manager changes.
+  useEffect(() => {
+    agentAbortRef.current?.abort();
+    agentAbortRef.current = null;
+    resetAgentState();
+    setAgentLoading(false);
+  }, [packageName, fromVersion, latest, packageManager]);
+
   if (!latest) {
     return (
       <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -273,50 +381,6 @@ export function UpgradeAdvisorPanel({
   const peerChanges = details?.peers?.changes ?? [];
   const needsUpgrade =
     advice && advice.verdict !== "current" && advice.verdict !== "invalid";
-
-  const runAgentBrief = async () => {
-    if (!latest || !fromVersion || fromVersion === latest) return;
-    setAgentLoading(true);
-    setAgentError(null);
-    try {
-      const { ok, data } = await fetchJson<{
-        brief?: AgentBrief;
-        model?: string;
-        toolCalls?: string[];
-        error?: string;
-      }>(apiPaths.upgrade.agent, {
-        init: {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            packageName,
-            from: fromVersion,
-            to: latest,
-            packageManager,
-          }),
-        },
-        timeoutMs: 55_000,
-        retries: 0,
-      });
-      if (!ok || !data.brief) {
-        setAgentBrief(null);
-        setAgentError(UPGRADE_AGENT_GENERIC_ERROR);
-        return;
-      }
-      setAgentBrief(data.brief);
-      setAgentModel(data.model ?? null);
-      setAgentTools(data.toolCalls ?? []);
-    } catch (err) {
-      setAgentBrief(null);
-      setAgentError(
-        err instanceof FetchTimeoutError
-          ? friendlyFetchError(err)
-          : UPGRADE_AGENT_GENERIC_ERROR,
-      );
-    } finally {
-      setAgentLoading(false);
-    }
-  };
 
   const factLine = (() => {
     if (!advice || !needsUpgrade) return null;
@@ -622,21 +686,42 @@ export function UpgradeAdvisorPanel({
 
       {needsUpgrade && (
         <div className="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 sm:p-5 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <div className="min-w-0">
               <p className="text-sm font-semibold text-gray-900 dark:text-white">
                 Agent brief
               </p>
               <p className="text-[11px] text-gray-500 dark:text-gray-400">
                 Experimental · LangGraph
                 {agentModel ? ` · ${agentModel}` : ""}
+                {agentCached ? " · cached" : ""}
+                {agentLoading && agentStage ? ` · ${agentStage}` : ""}
               </p>
+              <span className="sr-only" aria-live="polite" aria-atomic="true">
+                {agentLoading
+                  ? agentStage
+                    ? `Generating agent brief, ${agentStage}`
+                    : "Generating agent brief"
+                  : agentError
+                    ? agentError
+                    : agentBrief
+                      ? "Agent brief ready"
+                      : ""}
+              </span>
             </div>
             <button
               type="button"
-              onClick={() => void runAgentBrief()}
+              onClick={() => {
+                agentAbortRef.current?.abort();
+                const controller = new AbortController();
+                agentAbortRef.current = controller;
+                void runAgentBrief({
+                  force: Boolean(agentBrief),
+                  signal: controller.signal,
+                });
+              }}
               disabled={agentLoading}
-              className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-400"
+              className="w-full shrink-0 whitespace-nowrap rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 sm:w-auto sm:min-w-[11.5rem] dark:bg-blue-500 dark:hover:bg-blue-400"
             >
               {agentLoading
                 ? "Generating…"
@@ -650,6 +735,13 @@ export function UpgradeAdvisorPanel({
             <p className="text-sm text-red-600 dark:text-red-400">{agentError}</p>
           )}
 
+          {(agentLoading || agentTools.length > 0) && (
+            <AgentGraphSteps
+              toolCalls={agentTools}
+              activeStage={agentLoading ? agentStage : null}
+            />
+          )}
+
           {agentBrief && (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -657,7 +749,7 @@ export function UpgradeAdvisorPanel({
                   {agentBrief.headline}
                 </p>
                 <span
-                  className={`shrink-0 px-2 py-0.5 rounded text-xs font-medium text-white capitalize ${severityBadgeClass(agentBrief.risk)}`}
+                  className={`shrink-0 px-2 py-0.5 rounded text-xs font-medium capitalize ${severityBadgeClass(agentBrief.risk)}`}
                 >
                   {agentBrief.risk} risk
                 </span>
@@ -685,10 +777,13 @@ export function UpgradeAdvisorPanel({
                   </ol>
                 </div>
               )}
-              {agentTools.length > 0 && (
-                <AgentGraphSteps toolCalls={agentTools} />
-              )}
             </div>
+          )}
+
+          {agentLoading && !agentBrief && (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Generating upgrade brief…
+            </p>
           )}
         </div>
       )}

@@ -34,8 +34,8 @@ const PACKAGE_MANAGER_OPTIONS: {
   { value: "auto", label: "Auto" },
   { value: "npm", label: "npm" },
   { value: "pnpm", label: "pnpm" },
-  { value: "yarn", label: "Yarn" },
-  { value: "bun", label: "Bun" },
+  { value: "yarn", label: "yarn" },
+  { value: "bun", label: "bun" },
 ];
 
 export interface PackageSearchSuggestion {
@@ -505,7 +505,11 @@ export function PackageSearchForm({
               !utilityPanel &&
               isSearching &&
               value.trim().length >= MIN_QUERY_LENGTH && (
-                <p className="mt-2.5 text-xs text-gray-500 dark:text-gray-400">
+                <p
+                  className="mt-2.5 text-xs text-gray-500 dark:text-gray-400"
+                  role="status"
+                  aria-live="polite"
+                >
                   Searching npm…
                 </p>
               )}
@@ -805,8 +809,7 @@ export function PackageSearchForm({
                 Package manager
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                Used for upgrade install commands. Auto shows npm, pnpm, and
-                Yarn.
+                Used for upgrade install commands.
               </p>
             </div>
             {packageManagerReady ? (

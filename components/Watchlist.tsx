@@ -168,7 +168,11 @@ export function WatchlistSection({
       }
     >
       {checking && (
-        <li className="px-0.5 py-2 text-xs text-gray-500 dark:text-gray-400">
+        <li
+          className="px-0.5 py-2 text-xs text-gray-500 dark:text-gray-400"
+          role="status"
+          aria-live="polite"
+        >
           Checking for updates…
         </li>
       )}

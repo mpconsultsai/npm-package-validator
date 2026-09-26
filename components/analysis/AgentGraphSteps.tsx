@@ -33,7 +33,7 @@ const STATIONS: StationDef[] = [
     id: "securityDelta",
     label: "Security",
     hint: "Advisory count change between versions",
-    color: "#f59e0b",
+    color: "#b45309",
   },
   {
     id: "migration",
@@ -87,14 +87,34 @@ function stationDetail(toolCalls: string[], id: StationId): string | null {
   return hit.slice(prefix.length);
 }
 
-/** Pipeline of graph stations — clearer than a Sankey for this linear decision path. */
-export function AgentGraphSteps({ toolCalls }: { toolCalls: string[] }) {
-  const { pathIds } = useMemo(() => {
-    const pathIds = buildVisitedPath(toolCalls);
-    return { pathIds };
-  }, [toolCalls]);
+const STAGE_IDS = new Set<string>(STATIONS.map((s) => s.id));
 
-  if (toolCalls.length === 0) return null;
+/** Pipeline of graph stations — clearer than a Sankey for this linear decision path. */
+export function AgentGraphSteps({
+  toolCalls,
+  activeStage,
+}: {
+  toolCalls: string[];
+  /** Live SSE stage while the graph is running */
+  activeStage?: string | null;
+}) {
+  const { pathIds } = useMemo(() => {
+    if (toolCalls.length > 0) {
+      return { pathIds: buildVisitedPath(toolCalls) };
+    }
+    if (activeStage && STAGE_IDS.has(activeStage)) {
+      const upto = STATIONS.findIndex((s) => s.id === activeStage);
+      if (upto >= 0) {
+        return { pathIds: STATIONS.slice(0, upto + 1).map((s) => s.id) };
+      }
+    }
+    if (activeStage === "cache" || activeStage === "collect") {
+      return { pathIds: ["collect" as StationId] };
+    }
+    return { pathIds: [] as StationId[] };
+  }, [toolCalls, activeStage]);
+
+  if (toolCalls.length === 0 && !activeStage) return null;
 
   return (
     <div className="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/40 p-3 space-y-3">
@@ -105,6 +125,7 @@ export function AgentGraphSteps({ toolCalls }: { toolCalls: string[] }) {
       <ol className="flex flex-wrap items-stretch gap-y-2">
         {STATIONS.map((station, index) => {
           const taken = pathIds.includes(station.id);
+          const active = activeStage === station.id;
           const detail = stationDetail(toolCalls, station.id);
           const isLast = index === STATIONS.length - 1;
 
@@ -114,7 +135,7 @@ export function AgentGraphSteps({ toolCalls }: { toolCalls: string[] }) {
                 title={station.hint}
                 className={`flex min-w-[5.5rem] max-w-[7.5rem] flex-col rounded-lg border px-2.5 py-2 ${
                   taken
-                    ? "border-transparent text-white shadow-sm"
+                    ? `border-transparent text-white shadow-sm ${active ? "ring-2 ring-offset-1 ring-blue-400 dark:ring-offset-gray-900" : ""}`
                     : "border-dashed border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-800/40 text-gray-400 dark:text-gray-500"
                 }`}
                 style={taken ? { backgroundColor: station.color } : undefined}
@@ -125,7 +146,11 @@ export function AgentGraphSteps({ toolCalls }: { toolCalls: string[] }) {
                 <span
                   className={`mt-0.5 text-[10px] leading-tight ${taken ? "text-white/85" : "opacity-80"}`}
                 >
-                  {taken ? detail ?? "ran" : "skipped"}
+                  {active
+                    ? "running…"
+                    : taken
+                      ? detail ?? "ran"
+                      : "skipped"}
                 </span>
               </div>
               {!isLast && (

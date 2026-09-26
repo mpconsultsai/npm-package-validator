@@ -14,8 +14,18 @@ import {
   type PackageManagerPreference,
 } from "@/lib/package-manager-pref";
 import { UPGRADE_AGENT_GENERIC_ERROR } from "@/lib/ai/upgrade-agent-messages";
+import type { UpgradeAgentStreamEvent } from "@/lib/ai/upgrade-agent-events";
+import {
+  getCachedUpgradeBrief,
+  getInflightUpgradeBrief,
+  setCachedUpgradeBrief,
+  setInflightUpgradeBrief,
+  upgradeAgentCacheKey,
+  type CachedUpgradeBrief,
+} from "@/lib/upgrade-agent-cache";
 
 export { UPGRADE_AGENT_GENERIC_ERROR } from "@/lib/ai/upgrade-agent-messages";
+export type { UpgradeAgentStreamEvent } from "@/lib/ai/upgrade-agent-events";
 
 const briefSchema = z.object({
   headline: z.string().describe("One-line upgrade verdict"),
@@ -685,52 +695,170 @@ function buildUpgradeAgentGraph() {
 /**
  * LangGraph upgrade agent with a decision-tree style route:
  * collect → (peers? → securityDelta? → migration?) → synthesize.
- * Conditional edges skip enrich nodes when facts do not justify them (still one LLM call).
+ * Yields progress events for SSE; caches successful briefs.
  */
+export async function* streamUpgradeAgent(input: {
+  packageName: string;
+  from: string;
+  to: string;
+  packageManager?: PackageManagerPreference;
+  force?: boolean;
+}): AsyncGenerator<UpgradeAgentStreamEvent> {
+  const { packageName, from, to, packageManager = "auto", force = false } =
+    input;
+  requireGroqKey();
+
+  const key = upgradeAgentCacheKey(packageName, from, to, packageManager);
+
+  if (!force) {
+    const cached = getCachedUpgradeBrief(key);
+    if (cached) {
+      yield { type: "status", stage: "cache" };
+      yield { type: "tools", toolCalls: cached.toolCalls };
+      yield { type: "brief", brief: cached.brief };
+      yield {
+        type: "done",
+        model: cached.model,
+        toolCalls: cached.toolCalls,
+        cached: true,
+      };
+      return;
+    }
+
+    const pending = getInflightUpgradeBrief(key);
+    if (pending) {
+      yield { type: "status", stage: "collect" };
+      try {
+        const shared = await pending;
+        yield { type: "tools", toolCalls: shared.toolCalls };
+        yield { type: "brief", brief: shared.brief };
+        yield {
+          type: "done",
+          model: shared.model,
+          toolCalls: shared.toolCalls,
+          cached: true,
+        };
+      } catch {
+        yield { type: "error", message: UPGRADE_AGENT_GENERIC_ERROR };
+      }
+      return;
+    }
+  }
+
+  let resolveInflight!: (value: CachedUpgradeBrief) => void;
+  let rejectInflight!: (reason?: unknown) => void;
+  const inflightPromise = new Promise<CachedUpgradeBrief>((resolve, reject) => {
+    resolveInflight = resolve;
+    rejectInflight = reject;
+  });
+  setInflightUpgradeBrief(key, inflightPromise);
+
+  try {
+    yield { type: "status", stage: "collect" };
+
+    const graph = buildUpgradeAgentGraph();
+    const stream = await graph.stream(
+      {
+        packageName,
+        from,
+        to,
+        packageManager,
+        facts: "",
+        toolCalls: [],
+        brief: null,
+      },
+      { streamMode: "updates" },
+    );
+
+    let toolCalls: string[] = [];
+    let brief: UpgradeAgentBrief | null = null;
+
+    for await (const update of stream) {
+      const entries = Object.entries(update ?? {});
+      for (const [stage, partial] of entries) {
+        yield { type: "status", stage };
+        const slice = partial as {
+          toolCalls?: string[];
+          brief?: UpgradeAgentBrief | null;
+        };
+        if (Array.isArray(slice.toolCalls) && slice.toolCalls.length > 0) {
+          toolCalls = slice.toolCalls;
+          yield { type: "tools", toolCalls };
+        }
+        if (slice.brief?.headline) {
+          brief = ensureBriefDefaults(slice.brief);
+          brief = {
+            ...brief,
+            nextSteps: normalizeNextSteps(
+              brief.nextSteps,
+              packageName,
+              to,
+              packageManager,
+            ),
+          };
+          yield { type: "brief", brief };
+        }
+      }
+    }
+
+    if (!brief?.headline) {
+      throw new Error(UPGRADE_AGENT_GENERIC_ERROR);
+    }
+
+    const model = groqModelLabel(getGroqUpgradeAgentModel());
+    const stored = setCachedUpgradeBrief(key, {
+      packageName,
+      from,
+      to,
+      packageManager,
+      brief,
+      model,
+      toolCalls,
+    });
+    resolveInflight(stored);
+
+    yield {
+      type: "done",
+      model,
+      toolCalls,
+      cached: false,
+    };
+  } catch (error: unknown) {
+    rejectInflight(error);
+    yield {
+      type: "error",
+      message: UPGRADE_AGENT_GENERIC_ERROR,
+    };
+  }
+}
+
 export async function runUpgradeAgent(input: {
   packageName: string;
   from: string;
   to: string;
   packageManager?: PackageManagerPreference;
+  force?: boolean;
 }): Promise<UpgradeAgentResult> {
-  const { packageName, from, to, packageManager = "auto" } = input;
-  requireGroqKey();
+  let brief: UpgradeAgentBrief | null = null;
+  let model = "";
+  let toolCalls: string[] = [];
 
-  try {
-    const graph = buildUpgradeAgentGraph();
-    const result = await graph.invoke({
-      packageName,
-      from,
-      to,
-      packageManager,
-      facts: "",
-      toolCalls: [],
-      brief: null,
-    });
-
-    if (!result.brief?.headline) {
-      throw new Error(UPGRADE_AGENT_GENERIC_ERROR);
+  for await (const event of streamUpgradeAgent(input)) {
+    if (event.type === "error") {
+      throw new Error(event.message);
     }
-
-    const brief = ensureBriefDefaults(result.brief);
-
-    return {
-      brief: {
-        ...brief,
-        nextSteps: normalizeNextSteps(
-          brief.nextSteps,
-          packageName,
-          to,
-          packageManager,
-        ),
-      },
-      model: groqModelLabel(getGroqUpgradeAgentModel()),
-      toolCalls: result.toolCalls ?? [],
-    };
-  } catch (error: unknown) {
-    if (isUpgradeAgentProviderError(error)) {
-      throw new Error(UPGRADE_AGENT_GENERIC_ERROR);
+    if (event.type === "brief") {
+      brief = event.brief;
     }
-    throw error;
+    if (event.type === "done") {
+      model = event.model;
+      toolCalls = event.toolCalls;
+    }
   }
+
+  if (!brief?.headline) {
+    throw new Error(UPGRADE_AGENT_GENERIC_ERROR);
+  }
+
+  return { brief, model, toolCalls };
 }

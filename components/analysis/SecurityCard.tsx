@@ -56,7 +56,7 @@ const SEVERITY_SEGMENTS = [
   { key: "critical" as const, label: "Critical", className: "bg-purple-500" },
   { key: "high" as const, label: "High", className: "bg-red-500" },
   { key: "moderate" as const, label: "Moderate", className: "bg-orange-500" },
-  { key: "low" as const, label: "Low", className: "bg-yellow-500" },
+  { key: "low" as const, label: "Low", className: "bg-yellow-400" },
 ];
 
 function SeverityMix({ security }: { security: SecurityResult }) {
@@ -333,7 +333,7 @@ export function SecurityCard({
                     <div className="flex items-start justify-between gap-3">
                       <h4 className="font-semibold">{vuln.title}</h4>
                       <span
-                        className={`shrink-0 px-2 py-0.5 rounded text-xs font-medium text-white ${severityBadgeClass(vuln.severity)}`}
+                        className={`shrink-0 px-2 py-0.5 rounded text-xs font-medium ${severityBadgeClass(vuln.severity)}`}
                       >
                         {vuln.severity}
                       </span>

@@ -14,17 +14,18 @@ export function sortBySeverity<T extends { severity: string }>(items: T[]): T[] 
   });
 }
 
+/** Background + text — low uses dark text for WCAG contrast on yellow. */
 export function severityBadgeClass(severity: string): string {
   switch (severity.toLowerCase()) {
     case "critical":
-      return "bg-purple-500";
+      return "bg-purple-500 text-white";
     case "high":
-      return "bg-red-500";
+      return "bg-red-500 text-white";
     case "moderate":
     case "medium":
-      return "bg-orange-500";
+      return "bg-orange-500 text-white";
     default:
-      return "bg-yellow-500";
+      return "bg-yellow-400 text-yellow-950";
   }
 }
 

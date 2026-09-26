@@ -20,7 +20,7 @@ function splitTrailingPunctuation(raw: string): {
 /** Render plain text with http(s) URLs as external links. */
 export function LinkifiedText({
   text,
-  className = "text-blue-600 dark:text-blue-400 hover:underline break-all",
+  className = "text-blue-600 underline underline-offset-2 dark:text-blue-400 break-all",
 }: {
   text: string;
   className?: string;
