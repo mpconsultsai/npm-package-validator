@@ -1,5 +1,16 @@
 import axios from 'axios';
 import type { GitHubRepoData, GitHubReleaseData } from '../types/package-data';
+import { axiosResponseStatus, errorMessage } from '@/lib/utils/error-message';
+
+type GitHubReleaseApi = {
+  tag_name?: string;
+  name?: string;
+  published_at?: string;
+  prerelease?: boolean;
+  draft?: boolean;
+  html_url?: string;
+  body?: string;
+};
 
 const GITHUB_API_URL = 'https://api.github.com';
 
@@ -76,14 +87,15 @@ export const fetchGitHubRepoData = async (
       archived: data.archived,
       default_branch: data.default_branch,
     };
-  } catch (error: any) {
-    if (error.response?.status === 404) {
+  } catch (error: unknown) {
+    const status = axiosResponseStatus(error);
+    if (status === 404) {
       throw new Error(`GitHub repository "${owner}/${repo}" not found`);
     }
-    if (error.response?.status === 403) {
+    if (status === 403) {
       throw new Error('GitHub API rate limit exceeded. Please add a GITHUB_TOKEN to your .env.local file.');
     }
-    throw new Error(`Failed to fetch GitHub data: ${error.message}`);
+    throw new Error(`Failed to fetch GitHub data: ${errorMessage(error)}`);
   }
 };
 
@@ -105,25 +117,27 @@ export const fetchGitHubReleases = async (
       }
     );
 
-    return response.data.map((release: any) => mapGitHubRelease(release, options?.includeBody));
-  } catch (error: any) {
+    return (response.data as GitHubReleaseApi[]).map((release) =>
+      mapGitHubRelease(release, options?.includeBody),
+    );
+  } catch (error: unknown) {
     // Releases endpoint might not exist or be empty
-    if (error.response?.status === 404) {
+    if (axiosResponseStatus(error) === 404) {
       return [];
     }
-    throw new Error(`Failed to fetch GitHub releases: ${error.message}`);
+    throw new Error(`Failed to fetch GitHub releases: ${errorMessage(error)}`);
   }
 };
 
 const mapGitHubRelease = (
-  release: any,
+  release: GitHubReleaseApi,
   includeBody?: boolean,
 ): GitHubReleaseData => ({
-  tag_name: release.tag_name,
-  name: release.name,
-  published_at: release.published_at,
-  prerelease: release.prerelease,
-  draft: release.draft,
+  tag_name: release.tag_name ?? "",
+  name: release.name ?? release.tag_name ?? "",
+  published_at: release.published_at ?? "",
+  prerelease: Boolean(release.prerelease),
+  draft: Boolean(release.draft),
   html_url: typeof release.html_url === "string" ? release.html_url : undefined,
   body: includeBody
     ? typeof release.body === "string"

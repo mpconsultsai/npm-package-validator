@@ -26,8 +26,16 @@ import {
   type InsightTabId,
 } from "@/components/analysis";
 import { snapshotFromAnalysis } from "@/lib/package-compare";
+import type { ClientAnalysisResponse } from "@/lib/analysis-response";
+import type { SecuritySummary } from "@/lib/data-fetchers/security";
 
-function summaryFromAnalysis(data: any): WatchlistSummary {
+type ApiErrorBody = { error?: string };
+type VersionSecurityPayload = {
+  security?: SecuritySummary;
+  error?: string;
+};
+
+function summaryFromAnalysis(data: ClientAnalysisResponse): WatchlistSummary {
   return {
     version:
       data?.packageInfo?.latestVersion &&
@@ -95,11 +103,13 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
   const aiPrefReady = useAiAnalysisPrefReady();
   const [loading, setLoading] = useState(Boolean(nameFromPath));
   const [aiLoading, setAiLoading] = useState(false);
-  const [analysisData, setAnalysisData] = useState<any>(null);
+  const [analysisData, setAnalysisData] =
+    useState<ClientAnalysisResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [versionToCheck, setVersionToCheck] = useState("");
-  const [versionSecurityData, setVersionSecurityData] = useState<any>(null);
+  const [versionSecurityData, setVersionSecurityData] =
+    useState<VersionSecurityPayload | null>(null);
   const [versionSecurityLoading, setVersionSecurityLoading] = useState(false);
   const [overviewTab, setOverviewTab] = useState<OverviewTabId>("info");
   const [insightTab, setInsightTab] = useState<InsightTabId>("ai");
@@ -124,7 +134,9 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
     setAiLoading(true);
     setAiError(null);
     try {
-      const { ok, data } = await fetchJson<any>(
+      const { ok, data } = await fetchJson<
+        ClientAnalysisResponse & ApiErrorBody
+      >(
         `${apiPaths.analysis.ai}?package=${encodeURIComponent(name)}`,
         {
           signal,
@@ -145,12 +157,12 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
           ai.summary.startsWith("Unable to generate AI analysis"));
       if (softFail) {
         setAiError("Failed to generate AI analysis");
-        setAnalysisData((prev: any) => {
-          if (!prev) return { ...data, ai: undefined };
+        setAnalysisData((prev) => {
+          if (!prev) return { ...data, ai: null };
           return {
             ...prev,
             ...data,
-            ai: undefined,
+            ai: null,
             metrics: {
               ...prev.metrics,
               ...data.metrics,
@@ -164,7 +176,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
         });
         return;
       }
-      setAnalysisData((prev: any) => {
+      setAnalysisData((prev) => {
         if (!prev) return data;
         return {
           ...prev,
@@ -216,7 +228,9 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
       }
 
       try {
-        const { ok, data } = await fetchJson<any>(
+        const { ok, data } = await fetchJson<
+          ClientAnalysisResponse & ApiErrorBody
+        >(
           `${apiPaths.analysis.metrics}?package=${encodeURIComponent(name)}`,
           {
             signal: controller.signal,
@@ -243,7 +257,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
         }
 
         // Preserve AI if it finished first (race with parallel analyze-ai).
-        setAnalysisData((prev: any) => {
+        setAnalysisData((prev) => {
           if (prev?.ai && !data.ai) {
             return {
               ...data,
@@ -346,7 +360,11 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
   }, [analysisData?.packageInfo?.name]);
 
   const loadVersionSecurity = useCallback(
-    async (pkgName: string, version: string, reuseLatestSecurity?: any) => {
+    async (
+      pkgName: string,
+      version: string,
+      reuseLatestSecurity?: SecuritySummary,
+    ) => {
       const cacheKey = `${pkgName}@${version}`;
       if (checkedVersionRef.current === cacheKey) {
         return;
@@ -367,7 +385,9 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
       setVersionSecurityLoading(true);
       setVersionSecurityData(null);
       try {
-        const { ok, data } = await fetchJson<any>(
+        const { ok, data } = await fetchJson<
+          VersionSecurityPayload & ApiErrorBody
+        >(
           `${apiPaths.packages.security}?package=${encodeURIComponent(pkgName)}&version=${encodeURIComponent(version)}`,
           {
             signal: controller.signal,
@@ -605,6 +625,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
 
               {relatedOpened &&
                 insightTab === "related" &&
+                analysisData &&
                 !loading &&
                 !(aiEnabled && aiLoading) && (
                   <SimilarPackagesCard

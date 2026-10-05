@@ -12,6 +12,7 @@ import {
 import { describeDependencySpec } from "@/lib/describe-dependency-spec";
 import { useWatchlistActions } from "@/lib/use-watchlist";
 import type { WatchlistSummary } from "@/lib/watchlist-store";
+import type { ClientAnalysisResponse } from "@/lib/analysis-response";
 
 type RowStatus = "pending" | "loading" | "done" | "error";
 
@@ -295,7 +296,9 @@ export function PasteListPanel() {
           );
 
           try {
-            const { ok, data } = await fetchJson<any>(
+            const { ok, data } = await fetchJson<
+              ClientAnalysisResponse & { error?: string }
+            >(
               `${apiPaths.analysis.metrics}?package=${encodeURIComponent(entry.name)}`,
               {
                 signal: controller.signal,

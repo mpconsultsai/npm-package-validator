@@ -145,11 +145,10 @@ function CheckRow({
 export function OpenSSFScorecardStrip({
   packageName,
   repository,
-  embedded: _embedded = false,
 }: {
   packageName: string;
   repository?: string | null;
-  /** Nested inside Package info — omit outer chrome */
+  /** Reserved for nested layout (Package info tab) */
   embedded?: boolean;
 }) {
   const [data, setData] = useState<ScorecardPayload | null>(null);

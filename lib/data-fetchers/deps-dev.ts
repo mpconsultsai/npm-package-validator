@@ -228,7 +228,7 @@ export async function fetchTransitiveDependencyGraph(
       .filter(Boolean) as TransitiveDepEdge[],
   );
 
-  let nodes = await enrichAdvisories(nodesBase);
+  const nodes = await enrichAdvisories(nodesBase);
 
   const direct = nodes.filter((n) => n.relation === "DIRECT").length;
   const indirect = nodes.filter((n) => n.relation === "INDIRECT").length;

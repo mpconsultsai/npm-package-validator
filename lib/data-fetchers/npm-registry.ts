@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { errorMessage } from '@/lib/utils/error-message';
 import { sanitizeDescription } from '../sanitize';
 import { extractPackageName, validatePackageName } from '../validation';
 import type { NpmPackageData, NpmDownloadStats } from '../types/package-data';
@@ -81,11 +82,11 @@ export async function fetchNpmPackageData(packageName: string): Promise<{
       },
       readme,
     };
-  } catch (error: any) {
-    if (error.response?.status === 404) {
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
       throw new Error(`Package "${packageName}" not found on npm registry`);
     }
-    throw new Error(`Failed to fetch npm data: ${error.message}`);
+    throw new Error(`Failed to fetch npm data: ${errorMessage(error)}`);
   }
 }
 
@@ -98,8 +99,8 @@ export async function fetchNpmDownloadStats(packageName: string): Promise<NpmDow
       `${NPM_DOWNLOADS_URL}/point/last-month/${packageName}`
     );
     return response.data;
-  } catch (error: any) {
-    throw new Error(`Failed to fetch download stats: ${error.message}`);
+  } catch (error: unknown) {
+    throw new Error(`Failed to fetch download stats: ${errorMessage(error)}`);
   }
 }
 
@@ -165,8 +166,8 @@ export async function fetchNpmDownloadTrends(packageName: string): Promise<{
     return {
       downloads: firstActive >= 0 ? downloads.slice(firstActive) : downloads,
     };
-  } catch (error: any) {
-    throw new Error(`Failed to fetch download trends: ${error.message}`);
+  } catch (error: unknown) {
+    throw new Error(`Failed to fetch download trends: ${errorMessage(error)}`);
   }
 }
 
@@ -477,8 +478,11 @@ export async function fetchNpmPackagePopularity(packageName: string): Promise<{
       qualityScore: match.score?.detail?.quality ?? 0,
       maintenanceScore: match.score?.detail?.maintenance ?? 0,
     };
-  } catch (error: any) {
-    console.warn(`Could not fetch npm popularity for ${packageName}:`, error.message);
+  } catch (error: unknown) {
+    console.warn(
+      `Could not fetch npm popularity for ${packageName}:`,
+      errorMessage(error),
+    );
     return null;
   }
 }
@@ -641,8 +645,8 @@ export async function fetchSimilarPackages(
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
       .map(({ name, description, version }) => ({ name, description, version }));
-  } catch (error: any) {
-    console.warn("Could not fetch similar packages:", error.message);
+  } catch (error: unknown) {
+    console.warn("Could not fetch similar packages:", errorMessage(error));
     return [];
   }
 }
@@ -655,8 +659,11 @@ export async function fetchNpmReadme(packageName: string): Promise<string | null
   try {
     const { readme } = await fetchNpmPackageData(packageName);
     return readme;
-  } catch (error: any) {
-    console.error(`Failed to fetch README for ${packageName}:`, error.message);
+  } catch (error: unknown) {
+    console.error(
+      `Failed to fetch README for ${packageName}:`,
+      errorMessage(error),
+    );
     return null;
   }
 }

@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import Groq from 'groq-sdk';
 import type { PackageAnalysisResult } from '../types/package-data';
 import { formatBytes } from '../utils/format';
-import { extractPackageName, normalizeNpmPackageName, validatePackageName } from '../validation';
+import { normalizeNpmPackageName, validatePackageName } from '../validation';
 import { classifyRuntimeEnvironment } from '../runtime-environment';
 import type { RuntimeKind } from '../runtime-environment';
 import { getGroqModel, groqModelLabel } from './groq-config';
@@ -898,10 +898,12 @@ export async function analyzePackageWithAI(
     aiAnalysis.model = 'Gemini 2.5 Flash';
     console.log('✓ Analysis completed with Gemini 2.5 Flash');
     return finalizeAiAnalysis(aiAnalysis, data);
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (!isGeminiCapacityError(error)) {
       console.error('AI analysis failed:', error);
-      throw new Error(`Failed to analyze package with AI: ${error.message}`);
+      throw new Error(
+        `Failed to analyze package with AI: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
 
     console.warn('⚠ Gemini Flash unavailable (rate/capacity), falling back to Flash-Lite...');
@@ -916,20 +918,22 @@ export async function analyzePackageWithAI(
       aiAnalysis.model = 'Gemini 2.5 Flash Lite';
       console.log('✓ Analysis completed with Gemini 2.5 Flash-Lite');
       return finalizeAiAnalysis(aiAnalysis, data);
-    } catch (flashLiteError: any) {
+    } catch (flashLiteError: unknown) {
       if (!isGeminiCapacityError(flashLiteError)) {
         console.error('Flash-Lite failed (non-capacity):', flashLiteError);
-        throw new Error(`Failed to analyze package with AI: ${flashLiteError.message}`);
+        throw new Error(
+          `Failed to analyze package with AI: ${flashLiteError instanceof Error ? flashLiteError.message : 'Unknown error'}`,
+        );
       }
 
       console.warn('⚠ Flash-Lite unavailable (rate/capacity), falling back to Groq...');
 
       try {
         return await analyzeWithGroq(systemPrompt, prompt, data);
-      } catch (groqError: any) {
+      } catch (groqError: unknown) {
         console.error('Groq also failed:', groqError);
         throw new Error(
-          `Failed to analyze package with AI (all providers): ${groqError.message}`,
+          `Failed to analyze package with AI (all providers): ${groqError instanceof Error ? groqError.message : 'Unknown error'}`,
         );
       }
     }

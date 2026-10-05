@@ -171,3 +171,6 @@ export function buildAnalysisResponse(
     },
   };
 }
+
+/** JSON shape returned by `/api/v1/analysis/metrics` and `/api/v1/analysis/ai`. */
+export type ClientAnalysisResponse = ReturnType<typeof buildAnalysisResponse>;

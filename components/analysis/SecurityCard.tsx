@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AdvisoryLinks } from "./AdvisoryLinks";
 import { AdvisoryDescription } from "./AdvisoryDescription";
 import {
@@ -130,12 +130,17 @@ export function SecurityCard({
 
   const kevCount = sortedVulns.filter((v) => v.knownExploited).length;
 
-  const versions =
-    availableVersions.length > 0
-      ? availableVersions
-      : latestVersion
-        ? [latestVersion]
-        : [];
+  const availableVersionsKey = availableVersions.join("\0");
+  const versions = useMemo(
+    () =>
+      availableVersions.length > 0
+        ? availableVersions
+        : latestVersion
+          ? [latestVersion]
+          : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by availableVersionsKey
+    [availableVersionsKey, latestVersion],
+  );
   const versionsKey = versions.join("\0");
 
   const [mode, setMode] = useState<"listed" | "custom">("listed");
