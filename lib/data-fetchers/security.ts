@@ -1,4 +1,6 @@
 import axios, { AxiosError } from 'axios';
+import { enrichSecurityThreatIntel } from '@/lib/data-fetchers/vuln-threat-intel';
+import { sortByThreatPriority } from '@/lib/utils/vuln-priority';
 
 /**
  * Security vulnerability information
@@ -14,6 +16,14 @@ export interface SecurityVulnerability {
   withdrawnAt?: string;
   vulnerableVersionRange?: string;
   patchedVersions?: string;
+  /** CVE from GitHub advisory or OSV alias lookup */
+  cveId?: string;
+  osvUrl?: string;
+  /** CISA Known Exploited Vulnerabilities catalog */
+  knownExploited?: boolean;
+  /** EPSS probability of exploitation in the next 30 days (0–1) */
+  epssScore?: number;
+  epssPercentile?: number;
 }
 
 export interface SecuritySummary {
@@ -41,6 +51,7 @@ interface GitHubAdvisoryVuln {
 
 interface GitHubAdvisory {
   ghsa_id: string;
+  cve_id?: string | null;
   summary: string;
   description: string;
   severity: string;
@@ -172,6 +183,8 @@ export async function checkPackageSecurity(
 
       const severity = mapSeverity(advisory.severity);
 
+      const cveId = advisory.cve_id?.trim().toUpperCase() || undefined;
+
       summary.vulnerabilities.push({
         id: advisory.ghsa_id,
         title: advisory.summary,
@@ -183,6 +196,7 @@ export async function checkPackageSecurity(
         withdrawnAt: advisory.withdrawn_at ?? undefined,
         vulnerableVersionRange: packageVuln?.vulnerable_version_range ?? undefined,
         patchedVersions: packageVuln?.first_patched_version ?? undefined,
+        cveId,
       });
 
       summary[severity]++;
@@ -190,6 +204,17 @@ export async function checkPackageSecurity(
     }
 
     summary.hasVulnerabilities = summary.totalCount > 0;
+
+    if (summary.vulnerabilities.length > 0) {
+      try {
+        summary.vulnerabilities = sortByThreatPriority(
+          await enrichSecurityThreatIntel(summary.vulnerabilities),
+        );
+      } catch (error) {
+        console.warn(`Threat intel enrichment failed for ${packageName}:`, error);
+      }
+    }
+
     return summary;
   } catch (error: unknown) {
     const message =

@@ -6,8 +6,11 @@ import { AdvisoryDescription } from "./AdvisoryDescription";
 import {
   severityBadgeClass,
   severityBorderClass,
-  sortBySeverity,
 } from "@/lib/utils/severity";
+import {
+  formatEpssPercent,
+  sortByThreatPriority,
+} from "@/lib/utils/vuln-priority";
 import { formatPublishDate } from "@/lib/utils/format";
 
 interface VersionVuln {
@@ -18,6 +21,11 @@ interface VersionVuln {
   url?: string;
   vulnerableVersionRange?: string;
   patchedVersions?: string;
+  cveId?: string;
+  osvUrl?: string;
+  knownExploited?: boolean;
+  epssScore?: number;
+  epssPercentile?: number;
 }
 
 interface SecurityResult {
@@ -117,8 +125,10 @@ export function SecurityCard({
 }: SecurityCardProps) {
   const hasSecurity = Boolean(securityData?.security && !securityData?.error);
   const sortedVulns = hasSecurity
-    ? sortBySeverity(securityData!.security!.vulnerabilities)
+    ? sortByThreatPriority(securityData!.security!.vulnerabilities)
     : [];
+
+  const kevCount = sortedVulns.filter((v) => v.knownExploited).length;
 
   const versions =
     availableVersions.length > 0
@@ -191,7 +201,8 @@ export function SecurityCard({
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
       <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
-        Security advisories for the selected package version.
+        GitHub advisories plus OSV, CISA KEV, and EPSS — ordered by known
+        exploitation, severity, then exploit likelihood.
       </p>
       <div
         role="radiogroup"
@@ -322,6 +333,12 @@ export function SecurityCard({
                   ? "vulnerability"
                   : "vulnerabilities"}{" "}
                 found
+                {kevCount > 0 && (
+                  <span className="text-red-800 dark:text-red-300 font-semibold">
+                    {" "}
+                    · {kevCount} on CISA KEV
+                  </span>
+                )}
               </p>
               <SeverityMix security={securityData!.security!} />
               <div className="space-y-3 mt-4">
@@ -332,17 +349,44 @@ export function SecurityCard({
                   >
                     <div className="flex items-start justify-between gap-3">
                       <h4 className="font-semibold">{vuln.title}</h4>
-                      <span
-                        className={`shrink-0 px-2 py-0.5 rounded text-xs font-medium ${severityBadgeClass(vuln.severity)}`}
-                      >
-                        {vuln.severity}
-                      </span>
+                      <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                        {vuln.knownExploited && (
+                          <span
+                            className="px-2 py-0.5 rounded text-xs font-semibold bg-red-800 text-white"
+                            title="Listed in CISA Known Exploited Vulnerabilities catalog"
+                          >
+                            KEV
+                          </span>
+                        )}
+                        {formatEpssPercent(vuln.epssScore) && (
+                          <span
+                            className="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-950 dark:bg-amber-900/50 dark:text-amber-100"
+                            title={
+                              vuln.epssPercentile != null
+                                ? `EPSS ${formatEpssPercent(vuln.epssScore)} · ${(vuln.epssPercentile * 100).toFixed(0)}th percentile vs all CVEs`
+                                : "EPSS 30-day exploitation probability (FIRST.org)"
+                            }
+                          >
+                            EPSS {formatEpssPercent(vuln.epssScore)}
+                          </span>
+                        )}
+                        <span
+                          className={`px-2 py-0.5 rounded text-xs font-medium ${severityBadgeClass(vuln.severity)}`}
+                        >
+                          {vuln.severity}
+                        </span>
+                      </div>
                     </div>
                     <AdvisoryDescription markdown={vuln.description} />
                     <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-gray-600 dark:text-gray-400 mt-2">
                       {vuln.id && (
                         <span>
                           <strong>ID:</strong> {vuln.id}
+                        </span>
+                      )}
+                      {vuln.cveId && vuln.cveId !== vuln.id && (
+                        <span>
+                          <strong>CVE:</strong> {vuln.cveId}
                         </span>
                       )}
                       {vuln.vulnerableVersionRange && (
@@ -360,6 +404,7 @@ export function SecurityCard({
                     </div>
                     <AdvisoryLinks
                       githubUrl={vuln.url}
+                      osvUrl={vuln.osvUrl}
                       packageName={packageName}
                       version={selectedVersion}
                     />

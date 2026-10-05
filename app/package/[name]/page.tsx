@@ -516,6 +516,7 @@ function PackagePageContent({ nameFromPath }: { nameFromPath: string }) {
                 <div hidden={overviewTab !== "charts"}>
                   <MetricsChartsCard
                     packageName={analysisData.packageInfo.name}
+                    repository={analysisData.packageInfo.repository}
                     versionTimes={analysisData.npm?.time}
                     keywords={analysisData.npm?.keywords}
                     competitors={

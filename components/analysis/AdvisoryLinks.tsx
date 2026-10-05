@@ -3,12 +3,14 @@ import { GitHubIcon, SnykIcon } from "@/components/BrandIcons";
 
 interface AdvisoryLinksProps {
   githubUrl?: string;
+  osvUrl?: string;
   packageName?: string;
   version?: string;
 }
 
 export function AdvisoryLinks({
   githubUrl,
+  osvUrl,
   packageName,
   version,
 }: AdvisoryLinksProps) {
@@ -16,7 +18,7 @@ export function AdvisoryLinks({
     ? snykPackageUrl(packageName, version)
     : null;
 
-  if (!githubUrl && !snykHref) return null;
+  if (!githubUrl && !osvUrl && !snykHref) return null;
 
   const linkClass =
     "inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:underline";
@@ -32,6 +34,16 @@ export function AdvisoryLinks({
         >
           <GitHubIcon className="w-4 h-4 shrink-0" />
           GitHub advisory
+        </a>
+      )}
+      {osvUrl && (
+        <a
+          href={osvUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={linkClass}
+        >
+          OSV
         </a>
       )}
       {snykHref && (

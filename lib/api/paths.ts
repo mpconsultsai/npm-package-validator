@@ -16,6 +16,10 @@ export const apiPaths = {
     similar: "/api/v1/packages/similar",
     /** Direct + peer dependencies of the package */
     dependencies: "/api/v1/packages/dependencies",
+    /** Transitive graph + advisory overlay (deps.dev) */
+    dependenciesGraph: "/api/v1/packages/dependencies/graph",
+    /** OpenSSF Scorecard for linked GitHub repo (deps.dev) */
+    scorecard: "/api/v1/packages/scorecard",
     /** Other packages that depend on this one */
     dependents: "/api/v1/packages/dependents",
   },

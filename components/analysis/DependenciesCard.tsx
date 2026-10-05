@@ -6,6 +6,7 @@ import { fetchJson } from "@/lib/fetch-client";
 import { apiPaths } from "@/lib/api/paths";
 import type { PackageDependency } from "@/lib/package-deps";
 import { describeDependencySpec } from "@/lib/describe-dependency-spec";
+import { TransitiveDepsPanel } from "@/components/analysis/TransitiveDepsPanel";
 
 const GRAPH_CAP = 18;
 
@@ -319,7 +320,7 @@ export function DependenciesCard({ packageName }: { packageName: string }) {
   const [deps, setDeps] = useState<PackageDependency[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"chart" | "list">("chart");
+  const [view, setView] = useState<"chart" | "list" | "transitive">("chart");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -384,21 +385,28 @@ export function DependenciesCard({ packageName }: { packageName: string }) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Direct dependencies for the latest release
-          {" · "}
-          {runtimeCount} runtime
-          {peerCount > 0 ? ` · ${peerCount} peer` : ""}
-        </p>
+        {view !== "transitive" ? (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Direct dependencies for the latest release
+            {" · "}
+            {runtimeCount} runtime
+            {peerCount > 0 ? ` · ${peerCount} peer` : ""}
+          </p>
+        ) : (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Resolved install tree (direct + transitive)
+          </p>
+        )}
         <div
           role="radiogroup"
           aria-label="Dependencies view"
-          className="hidden md:flex gap-4 border-b border-gray-200 dark:border-gray-600"
+          className="flex flex-wrap gap-4 border-b border-gray-200 dark:border-gray-600"
         >
           {(
             [
               { id: "chart" as const, label: "Chart" },
               { id: "list" as const, label: "List" },
+              { id: "transitive" as const, label: "Full tree" },
             ] as const
           ).map((option) => {
             const selected = view === option.id;
@@ -422,19 +430,29 @@ export function DependenciesCard({ packageName }: { packageName: string }) {
         </div>
       </div>
 
-      {/* Mobile: always list */}
-      <div className="md:hidden">
-        <DependencyList deps={deps} />
-      </div>
+      {view === "transitive" ? (
+        <TransitiveDepsPanel packageName={packageName} />
+      ) : (
+        <>
+          {/* Mobile: list when not chart */}
+          <div className="md:hidden">
+            {view === "list" ? (
+              <DependencyList deps={deps} />
+            ) : (
+              <DependenciesGraph packageName={packageName} dependencies={deps} />
+            )}
+          </div>
 
-      {/* Desktop: chart or list */}
-      <div className="hidden md:block">
-        {view === "chart" ? (
-          <DependenciesGraph packageName={packageName} dependencies={deps} />
-        ) : (
-          <DependencyList deps={deps} />
-        )}
-      </div>
+          {/* Desktop: chart or list */}
+          <div className="hidden md:block">
+            {view === "chart" ? (
+              <DependenciesGraph packageName={packageName} dependencies={deps} />
+            ) : (
+              <DependencyList deps={deps} />
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

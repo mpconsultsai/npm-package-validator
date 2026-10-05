@@ -5,6 +5,7 @@ import { formatDaysSinceRelease } from "@/lib/utils/format";
 import { GitHubIcon } from "@/components/BrandIcons";
 import { describeLicense } from "@/lib/license-info";
 import { MetricsCard } from "./MetricsCard";
+import { OpenSSFScorecardStrip } from "./OpenSSFScorecardStrip";
 import { UpgradeAdvisorPanel } from "./UpgradeAdvisorPanel";
 import { DependentsModal } from "./DependentsModal";
 import { CopyButton } from "@/components/CopyButton";
@@ -144,9 +145,9 @@ export function PackageInfoCard({
   versionTimes,
   latestSecurity,
 }: PackageInfoCardProps) {
-  const [section, setSection] = useState<"info" | "metrics" | "upgrade">(
-    "info",
-  );
+  const [section, setSection] = useState<
+    "info" | "metrics" | "scorecard" | "upgrade"
+  >("info");
   const [dependentsOpen, setDependentsOpen] = useState(false);
   const closeDependents = useCallback(() => setDependentsOpen(false), []);
   const popularBadge =
@@ -193,6 +194,7 @@ export function PackageInfoCard({
           [
             { id: "info" as const, label: "Info" },
             { id: "metrics" as const, label: "Metrics" },
+            { id: "scorecard" as const, label: "Scorecard" },
             { id: "upgrade" as const, label: "Upgrade" },
           ] as const
         ).map((option) => {
@@ -233,6 +235,12 @@ export function PackageInfoCard({
         ) : (
           <MetricsCard metrics={metrics} embedded />
         )
+      ) : section === "scorecard" ? (
+        <OpenSSFScorecardStrip
+          packageName={packageInfo.name}
+          repository={packageInfo.repository}
+          embedded
+        />
       ) : section === "upgrade" ? (
         <UpgradeAdvisorPanel
           packageName={packageInfo.name}

@@ -43,6 +43,40 @@ function formatTooltipDate(iso: string) {
   });
 }
 
+function githubChartLinks(repository?: string | null): {
+  releases: string;
+  issues: string;
+} | null {
+  if (!repository) return null;
+  const match = repository.match(/github\.com[:/]([^/]+)\/([^/\s#?]+)/i);
+  if (!match) return null;
+  const repo = match[2].replace(/\.git$/i, "");
+  const base = `https://github.com/${match[1]}/${repo}`;
+  return {
+    releases: `${base}/releases`,
+    issues: `${base}/issues`,
+  };
+}
+
+function ChartExternalLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: string;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-sm text-blue-600 underline underline-offset-2 dark:text-blue-400 shrink-0"
+    >
+      {children}
+    </a>
+  );
+}
+
 function MetricLineChart({
   title,
   color,
@@ -52,6 +86,7 @@ function MetricLineChart({
   compareName,
   compareColor = "#8b5cf6",
   comparePoints,
+  externalLink,
 }: {
   title: string;
   color: string;
@@ -61,6 +96,7 @@ function MetricLineChart({
   compareName?: string | null;
   compareColor?: string;
   comparePoints?: ChartPoint[];
+  externalLink?: { href: string; label: string };
 }) {
   const showCompare = Boolean(
     compareName && comparePoints && comparePoints.length > 0,
@@ -87,9 +123,16 @@ function MetricLineChart({
 
   return (
     <div>
-      <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
-        {title}
-      </p>
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+          {title}
+        </p>
+        {externalLink ? (
+          <ChartExternalLink href={externalLink.href}>
+            {externalLink.label}
+          </ChartExternalLink>
+        ) : null}
+      </div>
       {points.length < 2 ? (
         <p className="text-sm text-gray-500 dark:text-gray-400 py-8">
           {empty}
@@ -416,11 +459,13 @@ function DownloadsChartSkeleton() {
 
 export function MetricsChartsCard({
   packageName,
+  repository,
   versionTimes,
   keywords,
   competitors,
 }: {
   packageName: string;
+  repository?: string | null;
   versionTimes?: Record<string, string>;
   keywords?: string[] | null;
   competitors?: string[] | null;
@@ -452,6 +497,10 @@ export function MetricsChartsCard({
   const releaseTypeMix = useMemo(
     () => buildReleaseTypeMix(versionTimes, 36),
     [versionTimes],
+  );
+  const githubLinks = useMemo(
+    () => githubChartLinks(repository),
+    [repository],
   );
 
   useEffect(() => {
@@ -702,6 +751,13 @@ export function MetricsChartsCard({
 
       {chartSection === "releases" && (
         <div className="space-y-8">
+          {githubLinks ? (
+            <div className="flex flex-wrap justify-end gap-x-4 gap-y-1">
+              <ChartExternalLink href={githubLinks.releases}>
+                GitHub releases
+              </ChartExternalLink>
+            </div>
+          ) : null}
           <ReleaseCadenceChart points={releasePoints} />
           <ReleaseTypeMixChart mix={releaseTypeMix} />
         </div>
@@ -716,6 +772,11 @@ export function MetricsChartsCard({
             color="#f97316"
             points={data.issues}
             empty="No GitHub issue history for this package."
+            externalLink={
+              githubLinks
+                ? { href: githubLinks.issues, label: "GitHub issues" }
+                : undefined
+            }
           />
         ))}
     </div>
