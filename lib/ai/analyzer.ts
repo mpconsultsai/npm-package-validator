@@ -6,6 +6,11 @@ import { normalizeNpmPackageName, validatePackageName } from '../validation';
 import { classifyRuntimeEnvironment } from '../runtime-environment';
 import type { RuntimeKind } from '../runtime-environment';
 import { getGroqModel, groqModelLabel } from './groq-config';
+import {
+  fetchOpenSSFScorecard,
+  resolveGithubProjectId,
+  type OpenSSFScorecard,
+} from '../data-fetchers/openssf-scorecard';
 
 /**
  * AI-generated package analysis and recommendations
@@ -84,6 +89,7 @@ function detectPackageHealthFlags(data: PackageAnalysisResult): PackageHealthFla
     data.popularity?.dependents,
   );
   const maintenanceScore = data.popularity?.maintenanceScore;
+  const completeUtility = isLikelyCompleteUtility(data);
 
   const longSilent =
     daysSincePublish !== null &&
@@ -95,8 +101,9 @@ function detectPackageHealthFlags(data: PackageAnalysisResult): PackageHealthFla
     !deprecated &&
     !archived &&
     (readmeWarning ||
-      (longSilent && adoption !== "widely-adopted") ||
-      (longSilent && lowMaintenance));
+      (!completeUtility &&
+        ((longSilent && adoption !== "widely-adopted") ||
+          (longSilent && lowMaintenance))));
 
   if (unmaintained && !readmeWarning) {
     const daysPart =
@@ -557,6 +564,24 @@ function daysSince(iso?: string | null): number | null {
   return Number.isFinite(days) ? days : null;
 }
 
+const COMPLETE_UTILITY_TEXT =
+  /\b(math|mathematic|algorithm|numeric|number|precision|decimal|bigint|statistics|statistical|ieee|754|floating|matrix|vector|hash|crc|checksum|constant|encode|decode|uuid|slug|semver|normalize|is-even|is-odd|prime|factorial|combinator|probability|tensor|linear algebra|trigonometry|geometry)\b/i;
+
+/** Narrow, often "done" libraries (math, tiny utils) — slow releases are normal. */
+function isLikelyCompleteUtility(data: PackageAnalysisResult): boolean {
+  const npm = data.npm;
+  const text = [
+    npm?.description ?? "",
+    ...(npm?.keywords ?? []),
+    data.packageName.replace(/^@[^/]+\//, ""),
+  ]
+    .join(" ")
+    .toLowerCase();
+  if (!COMPLETE_UTILITY_TEXT.test(text)) return false;
+  const runtimeDeps = Object.keys(npm?.dependencies ?? {}).length;
+  return runtimeDeps <= 10;
+}
+
 function adoptionLevel(
   monthlyDownloads?: number,
   stars?: number,
@@ -579,10 +604,34 @@ function adoptionLevel(
   return 'niche';
 }
 
+function formatScorecardForPrompt(scorecard: OpenSSFScorecard): string {
+  const applicable = scorecard.checks.filter((c) => c.score >= 0);
+  const weak = applicable.filter((c) => c.score < 5).slice(0, 4);
+  const strong = [...applicable]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((c) => `${c.name} (${c.score})`);
+  const overall =
+    scorecard.overallScore != null
+      ? `${scorecard.overallScore.toFixed(1)}/10`
+      : "n/a";
+  const parts = [`overall=${overall}`];
+  if (weak.length) {
+    parts.push(
+      `weaker checks: ${weak.map((c) => `${c.name} (${c.score})`).join(", ")}`,
+    );
+  }
+  if (strong.length) {
+    parts.push(`stronger checks: ${strong.join(", ")}`);
+  }
+  return parts.join("; ");
+}
+
 function maintenanceContext(
   daysSincePublish: number | null,
   daysSinceCommit: number | null,
-  adoption: ReturnType<typeof adoptionLevel>
+  adoption: ReturnType<typeof adoptionLevel>,
+  completeUtility: boolean,
 ): string {
   const publish = daysSincePublish;
   const commit = daysSinceCommit;
@@ -600,13 +649,22 @@ function maintenanceContext(
       : `acceptable (${publish}d). Not stale; mild note only if other risks exist.`;
   }
   if (publish < 365) {
+    if (completeUtility) {
+      return `mature narrow utility (${publish}d). Single-purpose/math-style packages are often feature-complete; slow cadence is expected.`;
+    }
     if (popular && (commit === null || commit < 180)) {
       return `mature/stable (${publish}d). Months between releases OK for widely adopted; treat as maintained unless README says otherwise.`;
     }
     return `slow (${publish}d). Caution only with vulns, deprecation, or no commits.`;
   }
+  if (completeUtility && !popular) {
+    return `long gap (${publish}d) but likely complete micro-library — judge on security/adoption, not release frequency alone.`;
+  }
   if (popular && commit !== null && commit < 90) {
     return `long publish gap (${publish}d) but recent git — often stable major, not abandonment.`;
+  }
+  if (completeUtility && popular) {
+    return `long gap (${publish}d) on widely used narrow utility — often stable/finished; excellent/good maintenance OK if secure.`;
   }
   if (publish >= 365 && (commit === null || commit >= 180) && !popular) {
     return `likely unmaintained (${publish}d since publish) — may justify caution or do-not-use.`;
@@ -617,7 +675,10 @@ function maintenanceContext(
 /**
  * Create a prompt for package analysis (kept compact to limit tokens).
  */
-function createAnalysisPrompt(data: PackageAnalysisResult): string {
+function createAnalysisPrompt(
+  data: PackageAnalysisResult,
+  scorecard: OpenSSFScorecard | null,
+): string {
   const { packageName, npm, downloads, github, security, readme, popularity, bundleSize } = data;
 
   const lastPublished =
@@ -630,10 +691,12 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
     github?.stars,
     popularity?.dependents,
   );
+  const completeUtility = isLikelyCompleteUtility(data);
   const cadenceNote = maintenanceContext(
     daysSincePublish,
     daysSinceCommit,
     adoption,
+    completeUtility,
   );
 
   const lines: string[] = [
@@ -688,6 +751,15 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
   }
 
   lines.push(`Maintenance (authoritative): ${cadenceNote}`);
+  if (completeUtility) {
+    lines.push(
+      "Profile: likely complete/narrow utility (math, algorithm, or single-purpose). Do not penalize maintenance for lack of frequent releases unless security/README say otherwise.",
+    );
+  }
+
+  if (scorecard) {
+    lines.push(`OpenSSF Scorecard (GitHub repo hygiene): ${formatScorecardForPrompt(scorecard)}`);
+  }
 
   if (security) {
     lines.push(
@@ -746,6 +818,8 @@ function createAnalysisPrompt(data: PackageAnalysisResult): string {
     "- High open issues on huge repos ≠ red flag alone.",
     "- No cadence padding in concerns when healthy; use [\"None\"] if none. Score: no penalty for normal cadence on widely adopted.",
     "- Maintenance rating: excellent ~<90d or widely adopted + recent commits; good ~6mo (or longer if popular+secure); fair/poor only for real inactivity.",
+    "- Complete micro-libraries (math, algorithms, tiny single-purpose utils): maintenance can be good/excellent when stable, adopted, and secure — no ongoing feature work expected.",
+    "- When OpenSSF Scorecard is present: factor repo hygiene into securityRating/quality/strengths/concerns; low score alone is not do-not-use if advisories are clean and package is mature.",
     "",
     "Fields:",
     "- summary: 3-4 sentences — what it is, who for / how used, notable capabilities. From desc/keywords/README. No metrics lead (downloads, stars, vulns, publish age).",
@@ -874,15 +948,29 @@ function parseAIResponse(
  * Analyze a package using AI with automatic fallback:
  * Gemini Flash → Flash-Lite → Groq on rate limits / capacity errors (429, 503, etc.)
  */
+async function loadScorecardForAnalysis(
+  data: PackageAnalysisResult,
+): Promise<OpenSSFScorecard | null> {
+  const projectId = resolveGithubProjectId(data.npm?.repository?.url);
+  if (!projectId) return null;
+  try {
+    return await fetchOpenSSFScorecard(projectId);
+  } catch {
+    return null;
+  }
+}
+
 export async function analyzePackageWithAI(
   data: PackageAnalysisResult
 ): Promise<AIPackageAnalysis> {
-  const prompt = createAnalysisPrompt(data);
+  const scorecard = await loadScorecardForAnalysis(data);
+  const prompt = createAnalysisPrompt(data, scorecard);
 
   const systemPrompt =
     'Expert engineer advising on npm package adoption. ' +
     'Summary = what it is/for (from desc/README), not a metrics recap. ' +
-    'Normal publish gaps on popular libs are not caution. JSON only.';
+    'Normal publish gaps on popular or feature-complete narrow libraries are not caution. ' +
+    'Use OpenSSF Scorecard when provided for repo hygiene, alongside npm advisories. JSON only.';
 
   const fullPrompt = `${systemPrompt}\n\n${prompt}`;
 
