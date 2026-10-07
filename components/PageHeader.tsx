@@ -19,7 +19,7 @@ export function PageHeader({ showHomeLink = false }: PageHeaderProps) {
       <h1 className="font-bold overflow-visible">
         <Link
           href="/"
-          className="inline-flex items-center gap-2.5 hover:opacity-90 transition-opacity text-3xl sm:text-4xl"
+          className="inline-flex items-center gap-3 hover:opacity-90 transition-opacity text-[2.125rem] sm:text-5xl md:text-[3.25rem]"
           aria-label={showHomeLink ? "Back to home" : `${SITE_NAME} home`}
           onClick={(e) => {
             if (!showHomeLink) return;
@@ -27,7 +27,7 @@ export function PageHeader({ showHomeLink = false }: PageHeaderProps) {
             smoothNavigate(() => router.push("/"));
           }}
         >
-          <AppLogo className="block w-8 h-8 sm:w-10 sm:h-10 shrink-0" />
+          <AppLogo className="block w-11 h-11 sm:w-[3.25rem] sm:h-[3.25rem] shrink-0" />
           <span className="inline-block font-[family-name:var(--font-wordmark)] font-semibold tracking-tight text-gray-900 dark:text-gray-50 leading-none">
             {SITE_NAME}
           </span>

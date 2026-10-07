@@ -50,8 +50,8 @@ function ScorecardAbout() {
         <strong className="font-medium text-gray-700 dark:text-gray-300">
           OpenSSF Scorecard
         </strong>{" "}
-        scores the linked GitHub repo&apos;s maintainer practices (0–10), not npm
-        advisories alone.{" "}
+        scores the linked GitHub repo&apos;s maintainer practices (0–10), not
+        package security advisories alone.{" "}
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -226,7 +226,7 @@ export function OpenSSFScorecardStrip({
   if (!repository?.trim()) {
     return shell(
       <p className="text-xs text-gray-500 dark:text-gray-400">
-        No GitHub repository in npm metadata — Scorecard needs a public repo URL.
+        No GitHub repository in package metadata — Scorecard needs a public repo URL.
       </p>,
     );
   }
