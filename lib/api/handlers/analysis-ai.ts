@@ -3,15 +3,19 @@ import { buildAnalysisResponse } from "@/lib/analysis-response";
 import { analyzePackageWithAI } from "@/lib/ai/analyzer";
 import { jsonOk, withHandler } from "@/lib/api/http";
 import {
+  parseEcosystem,
   readJsonBody,
-  requirePackageFromQuery,
-  requirePackageName,
+  requirePackageFromQueryWithEcosystem,
+  requirePackageNameForEcosystem,
 } from "@/lib/api/params";
 
-const analyzeAi = async (packageName: string) => {
-  console.log(`Analyzing package with AI: ${packageName}`);
+const analyzeAi = async (
+  packageName: string,
+  ecosystem: import("@/lib/package-routes").PackageEcosystem,
+) => {
+  console.log(`Analyzing package with AI: ${ecosystem}|${packageName}`);
   const t0 = Date.now();
-  const packageData = await analyzePackageCached(packageName);
+  const packageData = await analyzePackageCached(packageName, ecosystem);
   const dataMs = Date.now() - t0;
 
   let aiAnalysis = null;
@@ -39,8 +43,9 @@ const analyzeAi = async (packageName: string) => {
 /** GET /api/v1/analysis/ai?package= */
 export const GET = withHandler(
   async (request) => {
-    const packageName = requirePackageFromQuery(request);
-    return analyzeAi(packageName);
+    const { packageName, ecosystem } =
+      requirePackageFromQueryWithEcosystem(request);
+    return analyzeAi(packageName, ecosystem);
   },
   {
     logLabel: "analysis/ai",
@@ -52,10 +57,14 @@ export const GET = withHandler(
 export const POST = withHandler(
   async (request) => {
     const body = await readJsonBody(request);
-    const packageName = requirePackageName(
-      typeof body.packageName === "string" ? body.packageName : "",
+    const ecosystem = parseEcosystem(
+      typeof body.ecosystem === "string" ? body.ecosystem : undefined,
     );
-    return analyzeAi(packageName);
+    const packageName = requirePackageNameForEcosystem(
+      typeof body.packageName === "string" ? body.packageName : "",
+      ecosystem,
+    );
+    return analyzeAi(packageName, ecosystem);
   },
   {
     logLabel: "analysis/ai",

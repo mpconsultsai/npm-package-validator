@@ -132,6 +132,11 @@ const LICENSES: Record<string, Omit<LicenseInfo, "id">> = {
       "Not an open-source grant — the publisher has not licensed the package for reuse.",
     href: "https://docs.npmjs.com/cli/v10/configuring-npm/package-json#license",
   },
+  "PSF-2.0": {
+    summary:
+      "Permissive — Python Software Foundation licence; keep copyright notices.",
+    href: "https://docs.python.org/3/license.html#psf-license",
+  },
 };
 
 const ALIASES: Record<string, string> = {
@@ -156,15 +161,123 @@ const ALIASES: Record<string, string> = {
   UNLICENSE: "Unlicense",
 };
 
+/** PyPI wheels often embed full licence text for bundled deps — keep UI labels short. */
+export const MAX_INLINE_LICENSE_LEN = 120;
+
+const PYPI_CLASSIFIER_TO_SPDX: Record<string, string> = {
+  "MIT License": "MIT",
+  "MIT": "MIT",
+  "BSD License": "BSD-3-Clause",
+  "Apache Software License": "Apache-2.0",
+  "Apache License 2.0 (Apache-2.0)": "Apache-2.0",
+  "GNU General Public License v2 (GPLv2)": "GPL-2.0-only",
+  "GNU General Public License v3 (GPLv3)": "GPL-3.0-only",
+  "GNU Lesser General Public License v2 or later (LGPLv2+)":
+    "LGPL-2.1-or-later",
+  "GNU Lesser General Public License v3 (LGPLv3)": "LGPL-3.0-only",
+  "Mozilla Public License 2.0 (MPL 2.0)": "MPL-2.0",
+  "ISC License (ISCL)": "ISC",
+  "Python Software Foundation License": "PSF-2.0",
+  "The Unlicense (Unlicense)": "Unlicense",
+};
+
+export function licenseFromPypiClassifiers(
+  classifiers: string[] | undefined,
+): string | null {
+  if (!classifiers?.length) return null;
+  for (const c of classifiers) {
+    if (!c.startsWith("License :: ")) continue;
+    const tail = c.split(" :: ").pop()?.trim();
+    if (!tail) continue;
+    if (PYPI_CLASSIFIER_TO_SPDX[tail]) return PYPI_CLASSIFIER_TO_SPDX[tail];
+    if (tail.startsWith("OSI Approved")) continue;
+  }
+  return null;
+}
+
+/** Guess SPDX from the start of a licence block (pandas-style bundled text). */
+export function inferSpdxFromLicenseText(text: string): string | null {
+  const head = text.slice(0, 4000);
+  if (
+    /\bBSD\s+3[- ]?Clause\b/i.test(head) ||
+    /Redistribution and use in source and binary forms[\s\S]{0,800}Neither the name of the copyright holder/i.test(
+      head,
+    )
+  ) {
+    return "BSD-3-Clause";
+  }
+  if (/\bBSD\s+2[- ]?Clause\b/i.test(head)) return "BSD-2-Clause";
+  if (
+    /\bMIT License\b/i.test(head) ||
+    /Permission is hereby granted, free of charge, to any person obtaining a copy of this software/i.test(
+      head,
+    )
+  ) {
+    return "MIT";
+  }
+  if (
+    /\bApache License\b[\s\S]{0,120}\bVersion 2\.0\b/i.test(head) ||
+    /Licensed under the Apache License, Version 2\.0/i.test(head)
+  ) {
+    return "Apache-2.0";
+  }
+  if (/PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2/i.test(head)) {
+    return "PSF-2.0";
+  }
+  if (/\bISC License\b/i.test(head)) return "ISC";
+  if (/\bGNU GENERAL PUBLIC LICENSE\b[\s\S]{0,200}\bVersion 3\b/i.test(head)) {
+    return "GPL-3.0-only";
+  }
+  if (/\bGNU GENERAL PUBLIC LICENSE\b[\s\S]{0,200}\bVersion 2\b/i.test(head)) {
+    return "GPL-2.0-only";
+  }
+  return null;
+}
+
+export function resolvePypiLicense(info: {
+  license?: string | null;
+  license_expression?: string | null;
+  classifiers?: string[];
+}): string {
+  const expr =
+    typeof info.license_expression === "string"
+      ? info.license_expression.trim()
+      : "";
+  if (expr) return expr;
+
+  const fromClassifier = licenseFromPypiClassifiers(info.classifiers);
+  const raw =
+    typeof info.license === "string" ? info.license.trim() : "";
+
+  if (raw.length > 0 && raw.length <= MAX_INLINE_LICENSE_LEN) return raw;
+
+  const fromText = raw ? inferSpdxFromLicenseText(raw) : null;
+  if (fromText) return fromText;
+  if (fromClassifier) return fromClassifier;
+
+  if (raw.length > MAX_INLINE_LICENSE_LEN) {
+    return "Multiple / bundled (see package metadata)";
+  }
+
+  return raw || "Unknown";
+}
+
 export const licenseDisplayName = (license: unknown): string => {
   if (license == null) return "Unknown";
   if (typeof license === "string") {
     const trimmed = license.trim();
-    return trimmed || "Unknown";
+    if (!trimmed) return "Unknown";
+    if (trimmed.length <= MAX_INLINE_LICENSE_LEN) return trimmed;
+    return (
+      inferSpdxFromLicenseText(trimmed) ??
+      "Multiple / bundled (see package metadata)"
+    );
   }
   if (typeof license === "object" && license && "type" in license) {
     const type = (license as { type?: unknown }).type;
-    if (typeof type === "string" && type.trim()) return type.trim();
+    if (typeof type === "string" && type.trim()) {
+      return licenseDisplayName(type);
+    }
   }
   return "Unknown";
 };

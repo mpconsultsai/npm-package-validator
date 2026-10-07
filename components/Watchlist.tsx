@@ -2,11 +2,34 @@
 
 import Link from "next/link";
 import semver from "semver";
-import { useWatchlist, useWatchlistActions } from "@/lib/use-watchlist";
+import {
+  useWatchlist,
+  useWatchlistActions,
+  useIsWatched,
+} from "@/lib/use-watchlist";
 import {
   getWatchlistAlerts,
   type WatchlistEntry,
 } from "@/lib/watchlist-store";
+import {
+  packagePagePath,
+  type PackageEcosystem,
+} from "@/lib/package-routes";
+
+function EcosystemBadge({ ecosystem }: { ecosystem: PackageEcosystem }) {
+  const isPypi = ecosystem === "pypi";
+  return (
+    <span
+      className={`inline-flex shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+        isPypi
+          ? "bg-amber-200 text-amber-950 ring-1 ring-amber-300/80 dark:bg-amber-500/30 dark:text-amber-50 dark:ring-amber-400/50"
+          : "bg-blue-600 text-white ring-1 ring-blue-500/80 dark:bg-blue-500 dark:text-white dark:ring-blue-400/60"
+      }`}
+    >
+      {isPypi ? "PyPI" : "NPM"}
+    </span>
+  );
+}
 
 type VersionBumpKind = "major" | "minor" | "patch";
 
@@ -178,17 +201,18 @@ export function WatchlistSection({
       )}
       {entries.map((entry) => (
         <li
-          key={entry.name}
+          key={`${entry.ecosystem ?? "npm"}:${entry.name}`}
           className={`flex items-center gap-3 py-3 ${
             embedded ? "px-0.5 first:pt-1 last:pb-1" : "px-3 sm:px-4"
           }`}
         >
           <Link
-            href={`/package/${encodeURIComponent(entry.name)}`}
+            href={packagePagePath(entry.ecosystem ?? "npm", entry.name)}
             className="min-w-0 flex-1 hover:opacity-90"
           >
-            <p className="font-medium text-gray-900 dark:text-white truncate">
-              {entry.name}
+            <p className="font-medium text-gray-900 dark:text-white truncate flex items-center gap-2">
+              <EcosystemBadge ecosystem={entry.ecosystem ?? "npm"} />
+              <span className="truncate">{entry.name}</span>
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
               {statusLine(entry)}
@@ -199,7 +223,7 @@ export function WatchlistSection({
           </Link>
           <button
             type="button"
-            onClick={() => remove(entry.name)}
+            onClick={() => remove(entry.name, entry.ecosystem ?? "npm")}
             title={`Remove ${entry.name} from watchlist`}
             aria-label={`Remove ${entry.name} from watchlist`}
             className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-gray-400 dark:hover:bg-gray-700/80 dark:hover:text-red-400"
@@ -230,16 +254,16 @@ export function WatchlistSection({
 
 export function WatchToggle({
   packageName,
+  ecosystem = "npm",
   summary,
   disabled = false,
 }: {
   packageName: string;
+  ecosystem?: import("@/lib/package-routes").PackageEcosystem;
   summary?: import("@/lib/watchlist-store").WatchlistSummary;
   disabled?: boolean;
 }) {
-  const watched = useWatchlist().some(
-    (entry) => entry.name.toLowerCase() === packageName.toLowerCase(),
-  );
+  const watched = useIsWatched(packageName, ecosystem);
   const { toggle } = useWatchlistActions();
 
   if (!packageName) return null;
@@ -248,7 +272,7 @@ export function WatchToggle({
     <button
       type="button"
       disabled={disabled}
-      onClick={() => toggle(packageName, summary)}
+      onClick={() => toggle(packageName, summary, ecosystem)}
       aria-pressed={watched}
       className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
     >

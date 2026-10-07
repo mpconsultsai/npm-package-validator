@@ -10,6 +10,8 @@ import {
   type ThemePreference,
 } from "@/lib/theme-pref";
 
+let systemDarkHydrated = false;
+
 function subscribeSystemDark(onStoreChange: () => void): () => void {
   if (typeof window === "undefined" || !window.matchMedia) {
     return () => {};
@@ -17,11 +19,18 @@ function subscribeSystemDark(onStoreChange: () => void): () => void {
   const mq = window.matchMedia("(prefers-color-scheme: dark)");
   const handler = () => onStoreChange();
   mq.addEventListener("change", handler);
+  if (!systemDarkHydrated) {
+    queueMicrotask(() => {
+      systemDarkHydrated = true;
+      onStoreChange();
+    });
+  }
   return () => mq.removeEventListener("change", handler);
 }
 
 function getSystemDark(): boolean {
   if (typeof window === "undefined" || !window.matchMedia) return false;
+  if (!systemDarkHydrated) return false;
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 

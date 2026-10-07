@@ -9,6 +9,8 @@ import { OpenSSFScorecardStrip } from "./OpenSSFScorecardStrip";
 import { UpgradeAdvisorPanel } from "./UpgradeAdvisorPanel";
 import { DependentsModal } from "./DependentsModal";
 import { CopyButton } from "@/components/CopyButton";
+import type { PackageEcosystem } from "@/lib/package-routes";
+import { featuresForEcosystem } from "@/lib/ecosystem-features";
 
 /** npm search `dependents` count — badge when widely depended-on. */
 const POPULAR_MIN_DEPENDENTS = 1000;
@@ -41,9 +43,13 @@ interface PackageInfoCardProps {
     releaseCount?: number;
     bundleSize?: number;
     bundleGzip?: number;
+    distributionSize?: number;
+    distributionSizeKind?: string;
+    distributionFilename?: string;
   } | null;
   metricsLoading?: boolean;
   versionTimes?: Record<string, string> | null;
+  ecosystem?: PackageEcosystem;
   latestSecurity?: {
     totalCount?: number;
     critical?: number;
@@ -144,7 +150,10 @@ export function PackageInfoCard({
   metricsLoading = false,
   versionTimes,
   latestSecurity,
+  ecosystem = "npm",
 }: PackageInfoCardProps) {
+  const features = featuresForEcosystem(ecosystem);
+  const registryLabel = ecosystem === "pypi" ? "PyPI" : "npm";
   const [section, setSection] = useState<
     "info" | "metrics" | "scorecard" | "upgrade"
   >("info");
@@ -195,7 +204,9 @@ export function PackageInfoCard({
             { id: "info" as const, label: "Info" },
             { id: "metrics" as const, label: "Metrics" },
             { id: "scorecard" as const, label: "Scorecard" },
-            { id: "upgrade" as const, label: "Upgrade" },
+            ...(features.upgradeAdvisor
+              ? [{ id: "upgrade" as const, label: "Upgrade" }]
+              : []),
           ] as const
         ).map((option) => {
           const selected = section === option.id;
@@ -233,7 +244,11 @@ export function PackageInfoCard({
             ))}
           </div>
         ) : (
-          <MetricsCard metrics={metrics} embedded />
+          <MetricsCard
+            metrics={metrics}
+            showDownloads={features.downloadMetrics}
+            embedded
+          />
         )
       ) : section === "scorecard" ? (
         <OpenSSFScorecardStrip
@@ -407,10 +422,10 @@ export function PackageInfoCard({
                     rel="noopener noreferrer"
                     className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline underline-offset-2"
                   >
-                    {packageInfo.license}
+                    {licenseInfo.id}
                   </a>
                 ) : (
-                  packageInfo.license
+                  licenseInfo?.id ?? packageInfo.license
                 )}
               </p>
               {licenseInfo?.summary && (
@@ -420,7 +435,8 @@ export function PackageInfoCard({
               )}
             </div>
 
-            {packageInfo.dependents !== undefined && (
+            {features.relatedPackages &&
+              packageInfo.dependents !== undefined && (
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-2">
@@ -463,12 +479,14 @@ export function PackageInfoCard({
               </div>
             )}
 
-            <DependentsModal
-              packageName={packageInfo.name}
-              dependentCount={packageInfo.dependents}
-              open={dependentsOpen}
-              onClose={closeDependents}
-            />
+            {features.relatedPackages && (
+              <DependentsModal
+                packageName={packageInfo.name}
+                dependentCount={packageInfo.dependents}
+                open={dependentsOpen}
+                onClose={closeDependents}
+              />
+            )}
 
             <div className="md:col-span-2 flex flex-wrap items-center gap-x-4 gap-y-2">
               <a
@@ -491,7 +509,7 @@ export function PackageInfoCard({
                     d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
                   />
                 </svg>
-                View on npm
+                View on {registryLabel}
               </a>
               {githubUrl && (
                 <a

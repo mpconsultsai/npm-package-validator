@@ -2,7 +2,11 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import Groq from 'groq-sdk';
 import type { PackageAnalysisResult } from '../types/package-data';
 import { formatBytes } from '../utils/format';
-import { normalizeNpmPackageName, validatePackageName } from '../validation';
+import {
+  normalizeNpmPackageName,
+  validatePackageNameForEcosystem,
+} from '../validation';
+import type { PackageEcosystem } from '../types/package-data';
 import { classifyRuntimeEnvironment } from '../runtime-environment';
 import type { RuntimeKind } from '../runtime-environment';
 import { getGroqModel, groqModelLabel } from './groq-config';
@@ -59,8 +63,8 @@ function detectPackageHealthFlags(data: PackageAnalysisResult): PackageHealthFla
   if (deprecated) {
     reasons.push(
       deprecatedMessage!.length > 160
-        ? `npm marks this package as deprecated: ${deprecatedMessage!.slice(0, 157)}…`
-        : `npm marks this package as deprecated: ${deprecatedMessage}`,
+        ? `Registry marks this package as deprecated: ${deprecatedMessage!.slice(0, 157)}…`
+        : `Registry marks this package as deprecated: ${deprecatedMessage}`,
     );
   }
 
@@ -471,6 +475,31 @@ function tokenOverlap(a: string, b: string): number {
   return hit / Math.min(as.size, bs.size);
 }
 
+/** User-facing AI copy should not spotlight OpenSSF Scorecard by name. */
+const SCORECARD_PROSE =
+  /\b(open\s*ssf|ossf|scorecard\.dev|openssf scorecard|scorecard (?:score|check|rating|result|grade))\b/i;
+
+function mentionsScorecard(text: string): boolean {
+  return SCORECARD_PROSE.test(text);
+}
+
+function softenScorecardProse(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed || !mentionsScorecard(trimmed)) return trimmed;
+  const sentences = trimmed.split(/(?<=[.!?])\s+/);
+  const kept = sentences.filter((sentence) => !mentionsScorecard(sentence));
+  if (kept.length > 0) return kept.join(" ").trim();
+  return trimmed
+    .replace(/\bOpenSSF Scorecard\b/gi, "repository hygiene")
+    .replace(/\bscorecard\.dev\b/gi, "repository signals")
+    .replace(/\bScorecard\b/gi, "repository hygiene");
+}
+
+function filterScorecardBullets(items: string[] | undefined): string[] {
+  if (!items?.length) return [];
+  return items.filter((item) => !mentionsScorecard(item));
+}
+
 function finalizeAiAnalysis(
   analysis: AIPackageAnalysis,
   data: PackageAnalysisResult,
@@ -480,11 +509,19 @@ function finalizeAiAnalysis(
     detectPackageHealthFlags(data),
   );
   const withBundle = applyBundleSizeNotes(withHealth, data);
-  const concerns = dedupeConcerns(withBundle.concerns).slice(0, 5);
+  const concerns = dedupeConcerns(filterScorecardBullets(withBundle.concerns)).slice(
+    0,
+    5,
+  );
   return {
     ...withBundle,
+    summary: softenScorecardProse(withBundle.summary),
+    strengths: filterScorecardBullets(withBundle.strengths),
     concerns,
-    reasoning: stripReasoningOverlap(withBundle.reasoning || "", concerns),
+    reasoning: stripReasoningOverlap(
+      softenScorecardProse(withBundle.reasoning || ""),
+      concerns,
+    ),
   };
 }
 
@@ -551,7 +588,11 @@ async function analyzeWithGroq(
   });
 
   const text = chatCompletion.choices[0]?.message?.content || '';
-  const aiAnalysis = parseAIResponse(text, data.packageName);
+  const aiAnalysis = parseAIResponse(
+    text,
+    data.packageName,
+    data.ecosystem ?? "npm",
+  );
   aiAnalysis.model = groqModelLabel(model);
   console.log(`✓ Analysis completed with Groq (${aiAnalysis.model})`);
   return finalizeAiAnalysis(aiAnalysis, data);
@@ -606,25 +647,12 @@ function adoptionLevel(
 
 function formatScorecardForPrompt(scorecard: OpenSSFScorecard): string {
   const applicable = scorecard.checks.filter((c) => c.score >= 0);
-  const weak = applicable.filter((c) => c.score < 5).slice(0, 4);
-  const strong = [...applicable]
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3)
-    .map((c) => `${c.name} (${c.score})`);
+  const weakCount = applicable.filter((c) => c.score < 5).length;
   const overall =
     scorecard.overallScore != null
       ? `${scorecard.overallScore.toFixed(1)}/10`
       : "n/a";
-  const parts = [`overall=${overall}`];
-  if (weak.length) {
-    parts.push(
-      `weaker checks: ${weak.map((c) => `${c.name} (${c.score})`).join(", ")}`,
-    );
-  }
-  if (strong.length) {
-    parts.push(`stronger checks: ${strong.join(", ")}`);
-  }
-  return parts.join("; ");
+  return `overall=${overall}; weakSignals=${weakCount}/${applicable.length}`;
 }
 
 function maintenanceContext(
@@ -679,7 +707,18 @@ function createAnalysisPrompt(
   data: PackageAnalysisResult,
   scorecard: OpenSSFScorecard | null,
 ): string {
-  const { packageName, npm, downloads, github, security, readme, popularity, bundleSize } = data;
+  const {
+    packageName,
+    ecosystem = "npm",
+    npm,
+    downloads,
+    github,
+    security,
+    readme,
+    popularity,
+    bundleSize,
+  } = data;
+  const registryLabel = ecosystem === "pypi" ? "PyPI" : "npm";
 
   const lastPublished =
     npm?.time && npm.version ? npm.time[npm.version] : null;
@@ -700,7 +739,7 @@ function createAnalysisPrompt(
   );
 
   const lines: string[] = [
-    `Analyse npm package "${packageName}". JSON only.`,
+    `Analyse ${registryLabel} package "${packageName}". JSON only.`,
     "",
     `v${npm?.version || "?"}; license ${npm?.license || "?"}`,
     `Desc: ${npm?.description || "none"}`,
@@ -726,7 +765,7 @@ function createAnalysisPrompt(
   if (popularity?.dependents !== undefined) {
     adoptionBits.push(`dependents=${popularity.dependents.toLocaleString()}`);
   }
-  if (popularity) {
+  if (popularity && ecosystem === "npm") {
     adoptionBits.push(
       `npm scores p/q/m=${popularity.popularityScore}/${popularity.qualityScore}/${popularity.maintenanceScore}`,
     );
@@ -758,7 +797,9 @@ function createAnalysisPrompt(
   }
 
   if (scorecard) {
-    lines.push(`OpenSSF Scorecard (GitHub repo hygiene): ${formatScorecardForPrompt(scorecard)}`);
+    lines.push(
+      `Background repo hygiene (internal only, do not name in output): ${formatScorecardForPrompt(scorecard)}`,
+    );
   }
 
   if (security) {
@@ -819,17 +860,19 @@ function createAnalysisPrompt(
     "- No cadence padding in concerns when healthy; use [\"None\"] if none. Score: no penalty for normal cadence on widely adopted.",
     "- Maintenance rating: excellent ~<90d or widely adopted + recent commits; good ~6mo (or longer if popular+secure); fair/poor only for real inactivity.",
     "- Complete micro-libraries (math, algorithms, tiny single-purpose utils): maintenance can be good/excellent when stable, adopted, and secure — no ongoing feature work expected.",
-    "- When OpenSSF Scorecard is present: factor repo hygiene into securityRating/quality/strengths/concerns; low score alone is not do-not-use if advisories are clean and package is mature.",
+    "- Background repo hygiene may lightly inform securityRating/quality only. Do NOT mention OpenSSF, Scorecard, scorecard.dev, or named hygiene checks in summary, strengths, concerns, or reasoning. Low hygiene alone is not do-not-use if advisories are clean and the package is mature.",
     "",
     "Fields:",
-    "- summary: 3-4 sentences — what it is, who for / how used, notable capabilities. From desc/keywords/README. No metrics lead (downloads, stars, vulns, publish age).",
+    "- summary: 3-4 sentences — what it is, who for / how used, notable capabilities. From desc/keywords/README. No metrics lead (downloads, stars, vulns, publish age). No scorecard product names.",
     "- recommendation: recommended|use-with-caution|not-recommended|do-not-use",
     "- strengths: 3-5 short bullets",
     "- concerns: 2-4 short distinct risk bullets (or [\"None\"]). Facts only — do NOT restate them in reasoning.",
     "- overallScore: 0-100",
     "- securityRating, qualityRating, maintenanceRating: excellent|good|fair|poor",
     "- reasoning: 1-2 sentences WHY the recommendation — tradeoffs / decision. Do NOT repeat concern wording or themes.",
-    `- competitors: 4-6 real npm alternatives (same job, not plugins/wrappers of this). Exact registry names with @ if scoped. Lowercase, no versions. Never "${packageName}".`,
+    ecosystem === "pypi"
+      ? `- competitors: 4-6 real PyPI alternatives (same job, not plugins/wrappers of this). Exact PyPI project names. Lowercase, no versions. Never "${packageName}".`
+      : `- competitors: 4-6 real npm alternatives (same job, not plugins/wrappers of this). Exact registry names with @ if scoped. Lowercase, no versions. Never "${packageName}".`,
     "",
     "JSON shape:",
     '{"summary":"","recommendation":"","strengths":[],"concerns":[],"overallScore":0,"securityRating":"","qualityRating":"","maintenanceRating":"","reasoning":"","competitors":[]}',
@@ -861,13 +904,23 @@ function normalizeAiString(value: unknown): string {
 function parseCompetitorNames(
   value: unknown,
   packageName: string,
+  ecosystem: PackageEcosystem = "npm",
 ): string[] {
   const raw = Array.isArray(value) ? value : [];
   const seen = new Set<string>([packageName.toLowerCase()]);
   const names: string[] = [];
   for (const entry of raw) {
-    const name = normalizeNpmPackageName(normalizeAiString(entry));
-    if (!name || seen.has(name) || !validatePackageName(name).valid) continue;
+    const normalized =
+      ecosystem === "pypi"
+        ? normalizeAiString(entry).toLowerCase()
+        : normalizeNpmPackageName(normalizeAiString(entry));
+    const name = normalized;
+    if (
+      !name ||
+      seen.has(name) ||
+      !validatePackageNameForEcosystem(name, ecosystem).valid
+    )
+      continue;
     seen.add(name);
     names.push(name);
     if (names.length >= 6) break;
@@ -878,6 +931,7 @@ function parseCompetitorNames(
 function parseAIResponse(
   response: string,
   packageName: string,
+  ecosystem: PackageEcosystem = "npm",
 ): AIPackageAnalysis {
   try {
     // Remove markdown code blocks if present
@@ -923,7 +977,11 @@ function parseAIResponse(
       qualityRating: parsed.qualityRating || 'fair',
       maintenanceRating: parsed.maintenanceRating || 'fair',
       reasoning: normalizeAiString(parsed.reasoning) || normalizeAiString(parsed.summary) || 'Analysis based on package metrics',
-      competitors: parseCompetitorNames(parsed.competitors, packageName),
+      competitors: parseCompetitorNames(
+        parsed.competitors,
+        packageName,
+        ecosystem,
+      ),
     };
   } catch (error) {
     console.error('Failed to parse AI response:', error);
@@ -966,11 +1024,12 @@ export async function analyzePackageWithAI(
   const scorecard = await loadScorecardForAnalysis(data);
   const prompt = createAnalysisPrompt(data, scorecard);
 
+  const registryLabel = data.ecosystem === "pypi" ? "PyPI" : "npm";
   const systemPrompt =
-    'Expert engineer advising on npm package adoption. ' +
+    `Expert engineer advising on ${registryLabel} package adoption. ` +
     'Summary = what it is/for (from desc/README), not a metrics recap. ' +
     'Normal publish gaps on popular or feature-complete narrow libraries are not caution. ' +
-    'Use OpenSSF Scorecard when provided for repo hygiene, alongside npm advisories. JSON only.';
+    `Weigh ${registryLabel} advisories and maintainer signals; never highlight OpenSSF Scorecard in user-facing text. JSON only.`;
 
   const fullPrompt = `${systemPrompt}\n\n${prompt}`;
 
@@ -982,7 +1041,11 @@ export async function analyzePackageWithAI(
     const response = result.response;
     const text = response.text();
     
-    const aiAnalysis = parseAIResponse(text, data.packageName);
+    const aiAnalysis = parseAIResponse(
+    text,
+    data.packageName,
+    data.ecosystem ?? "npm",
+  );
     aiAnalysis.model = 'Gemini 2.5 Flash';
     console.log('✓ Analysis completed with Gemini 2.5 Flash');
     return finalizeAiAnalysis(aiAnalysis, data);
@@ -1002,7 +1065,11 @@ export async function analyzePackageWithAI(
       const response = result.response;
       const text = response.text();
 
-      const aiAnalysis = parseAIResponse(text, data.packageName);
+      const aiAnalysis = parseAIResponse(
+    text,
+    data.packageName,
+    data.ecosystem ?? "npm",
+  );
       aiAnalysis.model = 'Gemini 2.5 Flash Lite';
       console.log('✓ Analysis completed with Gemini 2.5 Flash-Lite');
       return finalizeAiAnalysis(aiAnalysis, data);

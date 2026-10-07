@@ -27,6 +27,37 @@ export function normalizeNpmPackageName(input: string): string {
   return name;
 }
 
+/** PEP 503–style normalized project name (PyPI). */
+const VALID_PYPI_NAME_REGEX =
+  /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
+
+export function validatePyPiPackageName(packageName: string): {
+  valid: boolean;
+  error?: string;
+} {
+  const trimmed = extractPackageName(packageName);
+  if (!trimmed) {
+    return { valid: false, error: "Project name is required" };
+  }
+  if (VALID_PYPI_NAME_REGEX.test(trimmed)) {
+    return { valid: true };
+  }
+  return {
+    valid: false,
+    error:
+      'Invalid PyPI project name. Use letters, numbers, ".", "-", and "_".',
+  };
+}
+
+export function validatePackageNameForEcosystem(
+  packageName: string,
+  ecosystem: "npm" | "pypi",
+): { valid: boolean; error?: string } {
+  return ecosystem === "pypi"
+    ? validatePyPiPackageName(packageName)
+    : validatePackageName(packageName);
+}
+
 export function validatePackageName(packageName: string): { valid: boolean; error?: string } {
   const trimmed = extractPackageName(packageName);
 

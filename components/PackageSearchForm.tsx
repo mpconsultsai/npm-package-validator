@@ -2,7 +2,17 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { extractPackageName } from "@/lib/validation";
+import {
+  extractPackageName,
+  validatePackageNameForEcosystem,
+} from "@/lib/validation";
+import type { PackageEcosystem } from "@/lib/package-routes";
+import {
+  getEcosystemPreference,
+  setEcosystemPreference,
+} from "@/lib/ecosystem-pref";
+import { parsePackageRoute } from "@/lib/package-routes";
+import { featuresForEcosystem } from "@/lib/ecosystem-features";
 import { smoothNavigate } from "@/lib/smooth-navigate";
 import { useAiAnalysisPref } from "@/lib/use-ai-analysis-pref";
 import {
@@ -47,7 +57,9 @@ export interface PackageSearchSuggestion {
 interface PackageSearchFormProps {
   value: string;
   onChange: (value: string) => void;
-  onSearch: (packageName: string) => void;
+  onSearch: (packageName: string, ecosystem: PackageEcosystem) => void;
+  initialEcosystem?: PackageEcosystem;
+  onEcosystemChange?: (ecosystem: PackageEcosystem) => void;
   loading?: boolean;
   disabled?: boolean;
 }
@@ -167,9 +179,13 @@ export function PackageSearchForm({
   value,
   onChange,
   onSearch,
+  initialEcosystem = "npm",
+  onEcosystemChange,
   loading = false,
   disabled = false,
 }: PackageSearchFormProps) {
+  const [ecosystem, setEcosystemState] =
+    useState<PackageEcosystem>(initialEcosystem);
   const listboxId = useId();
   const router = useRouter();
   const pathname = usePathname();
@@ -219,17 +235,56 @@ export function PackageSearchForm({
     [dismissDropdown],
   );
 
+  const setEcosystem = useCallback(
+    (next: PackageEcosystem) => {
+      if (next === ecosystem) return;
+      setEcosystemState(next);
+      setEcosystemPreference(next);
+      onEcosystemChange?.(next);
+      dismissDropdown();
+      closeUtilityPanel();
+      onChange("");
+      if (parsePackageRoute(pathname)) {
+        smoothNavigate(() => router.push("/"));
+      }
+    },
+    [
+      ecosystem,
+      dismissDropdown,
+      closeUtilityPanel,
+      onChange,
+      onEcosystemChange,
+      pathname,
+      router,
+    ],
+  );
+
+  useEffect(() => {
+    const route = parsePackageRoute(pathname);
+    if (route?.ecosystem) {
+      setEcosystemState(route.ecosystem);
+      return;
+    }
+    if (pathname === "/") {
+      setEcosystemState(getEcosystemPreference());
+      return;
+    }
+    setEcosystemState(initialEcosystem);
+  }, [pathname, initialEcosystem]);
+
   const runSearch = useCallback(
     (name: string) => {
       const trimmed = extractPackageName(name);
       if (!trimmed) return;
+      const validation = validatePackageNameForEcosystem(trimmed, ecosystem);
+      if (!validation.valid) return;
       dismissDropdown();
       closeUtilityPanel();
       inputRef.current?.blur();
       onChange(trimmed);
-      onSearch(trimmed);
+      onSearch(trimmed, ecosystem);
     },
-    [onChange, onSearch, dismissDropdown, closeUtilityPanel],
+    [onChange, onSearch, dismissDropdown, closeUtilityPanel, ecosystem],
   );
 
   const handleClear = useCallback(() => {
@@ -262,7 +317,7 @@ export function PackageSearchForm({
       setIsSearching(true);
       try {
         const res = await fetch(
-          `${apiPaths.packages.search}?q=${encodeURIComponent(query)}&limit=8`,
+          `${apiPaths.packages.search}?q=${encodeURIComponent(query)}&limit=8&ecosystem=${ecosystem}`,
           { signal: controller.signal },
         );
         const data = await res.json();
@@ -288,7 +343,7 @@ export function PackageSearchForm({
     return () => {
       clearTimeout(timer);
     };
-  }, [value, dismissDropdown, loading, utilityPanel]);
+  }, [value, dismissDropdown, loading, utilityPanel, ecosystem]);
 
   useEffect(() => {
     if (loading) dismissDropdown();
@@ -416,6 +471,11 @@ export function PackageSearchForm({
 
   const showClear = value.length > 0 && !disabled && !loading;
   const isHome = pathname === "/";
+  const pasteFeatures = featuresForEcosystem(ecosystem);
+  const showPasteList = pasteFeatures.pasteList;
+  const pasteLabel = ecosystem === "pypi"
+    ? "Analyse requirements.txt"
+    : "Analyse package.json";
   const { enabled: aiEnabled, setEnabled: setAiEnabled, ready: aiPrefReady } =
     useAiAnalysisPref();
   const themePreference = useThemePreference();
@@ -433,8 +493,10 @@ export function PackageSearchForm({
   const { checking: watchlistChecking } = useWatchlistRefresh(isHome);
 
   useEffect(() => {
-    if (!isHome) closeUtilityPanel();
-  }, [isHome, closeUtilityPanel]);
+    if (!showPasteList && utilityPanel === "paste") {
+      closeUtilityPanel();
+    }
+  }, [showPasteList, utilityPanel, closeUtilityPanel]);
 
   const utilityButtonClass = (active: boolean) =>
     `relative inline-flex h-9 w-9 items-center justify-center rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
@@ -448,8 +510,141 @@ export function PackageSearchForm({
       ref={cardRef}
       className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-2 sm:p-8 mb-4 sm:mb-8"
     >
-      <div className="flex items-center gap-2 sm:gap-3">
-        <form onSubmit={handleSubmit} className="min-w-0 flex-1">
+      <form onSubmit={handleSubmit} className="min-w-0 space-y-2">
+          <div className="flex items-end justify-between gap-2 border-b border-gray-200 dark:border-gray-600">
+            <div
+              role="tablist"
+              aria-label="Package registry"
+              className="flex min-w-0 flex-1 gap-4"
+            >
+              {(
+                [
+                  { id: "npm" as const, label: "NPM" },
+                  { id: "pypi" as const, label: "PyPI" },
+                ] as const
+              ).map((option) => {
+                const selected = ecosystem === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => setEcosystem(option.id)}
+                    className={`-mb-px pb-2 text-sm font-semibold border-b-2 transition-colors ${
+                      selected
+                        ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400"
+                        : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div
+              role="toolbar"
+              aria-label="Search utilities"
+              className="flex shrink-0 items-center gap-0.5 pb-0.5 sm:gap-1"
+            >
+              <button
+                type="button"
+                title={
+                  utilityPanel === "watchlist"
+                    ? "Hide watchlist"
+                    : "Show watchlist"
+                }
+                aria-label={
+                  utilityPanel === "watchlist"
+                    ? watchCount > 0
+                      ? alertSummary.total > 0
+                        ? `Hide watchlist (${watchCount} packages, ${alertSummary.total} with updates)`
+                        : `Hide watchlist (${watchCount} packages)`
+                      : "Hide watchlist"
+                    : watchCount > 0
+                      ? alertSummary.total > 0
+                        ? `Show watchlist (${watchCount} packages, ${alertSummary.total} with updates)`
+                        : `Show watchlist (${watchCount} packages)`
+                      : "Show watchlist"
+                }
+                aria-expanded={utilityPanel === "watchlist"}
+                aria-controls="shell-panel-watchlist"
+                aria-haspopup="true"
+                onClick={(e) =>
+                  toggleUtilityPanel("watchlist", e.currentTarget)
+                }
+                className={utilityButtonClass(utilityPanel === "watchlist")}
+              >
+                <StarIcon
+                  className={`w-4 h-4 ${
+                    utilityPanel === "watchlist"
+                      ? "fill-amber-400 text-amber-400"
+                      : ""
+                  }`}
+                />
+                {alertSummary.total > 0 && (
+                  <span
+                    className={`absolute -right-0.5 -top-0.5 min-w-4 rounded-full px-1 text-[10px] font-semibold leading-4 text-white tabular-nums ${
+                      alertSummary.tone === "vulns"
+                        ? "bg-red-600"
+                        : alertSummary.tone === "version"
+                          ? "bg-emerald-600"
+                          : "bg-orange-500"
+                    }`}
+                    aria-hidden="true"
+                  >
+                    {alertSummary.total > 99 ? "99+" : alertSummary.total}
+                  </span>
+                )}
+              </button>
+              {showPasteList && (
+                <button
+                  type="button"
+                  title={
+                    utilityPanel === "paste"
+                      ? `Close ${pasteLabel}`
+                      : pasteLabel
+                  }
+                  aria-label={
+                    utilityPanel === "paste"
+                      ? `Close ${pasteLabel}`
+                      : pasteLabel
+                  }
+                  aria-expanded={utilityPanel === "paste"}
+                  aria-controls="shell-panel-paste"
+                  aria-haspopup="true"
+                  onClick={(e) =>
+                    toggleUtilityPanel("paste", e.currentTarget)
+                  }
+                  className={utilityButtonClass(utilityPanel === "paste")}
+                >
+                  <ClipboardIcon className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                type="button"
+                title={
+                  utilityPanel === "settings"
+                    ? "Hide settings"
+                    : "Show settings"
+                }
+                aria-label={
+                  utilityPanel === "settings"
+                    ? "Hide settings"
+                    : "Show settings"
+                }
+                aria-expanded={utilityPanel === "settings"}
+                aria-controls="shell-panel-settings"
+                aria-haspopup="true"
+                onClick={(e) =>
+                  toggleUtilityPanel("settings", e.currentTarget)
+                }
+                className={utilityButtonClass(utilityPanel === "settings")}
+              >
+                <CogIcon className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
           <div ref={containerRef} className="relative">
             <label htmlFor="packageName" className="sr-only">
               Package name
@@ -473,7 +668,11 @@ export function PackageSearchForm({
                   if (utilityPanel) closeUtilityPanel();
                 }}
                 onKeyDown={handleKeyDown}
-                placeholder="Search npm packages, e.g. react, lodash, @types/node"
+                placeholder={
+                  ecosystem === "pypi"
+                    ? "Search PyPI projects, e.g. requests, django, langgraph"
+                    : "Search npm packages, e.g. react, lodash, @types/node"
+                }
                 className={`w-full text-base py-2.5 sm:py-3 border border-gray-300 dark:border-gray-600 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-inset focus:ring-blue-500/30 dark:focus:border-blue-400 dark:bg-gray-700 dark:text-white disabled:opacity-60 pl-10 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden ${
                   showClear ? "pr-10" : "pr-4"
                 }`}
@@ -501,6 +700,15 @@ export function PackageSearchForm({
                 </button>
               )}
             </div>
+            {loading && !utilityPanel && (
+              <p
+                className="mt-2.5 text-xs text-gray-500 dark:text-gray-400"
+                role="status"
+                aria-live="polite"
+              >
+                Analysing package…
+              </p>
+            )}
             {!loading &&
               !utilityPanel &&
               isSearching &&
@@ -510,7 +718,7 @@ export function PackageSearchForm({
                   role="status"
                   aria-live="polite"
                 >
-                  Searching npm…
+                  {ecosystem === "pypi" ? "Searching PyPI…" : "Searching npm…"}
                 </p>
               )}
             {showNoMatches && (
@@ -566,121 +774,21 @@ export function PackageSearchForm({
               </ul>
             )}
           </div>
-        </form>
+      </form>
 
-        {isHome && (
-          <div
-            role="toolbar"
-            aria-label="Search utilities"
-            className="hidden shrink-0 items-center gap-0.5 sm:flex sm:gap-1"
-          >
-            <button
-              type="button"
-              title={
-                utilityPanel === "watchlist"
-                  ? "Hide watchlist"
-                  : "Show watchlist"
-              }
-              aria-label={
-                utilityPanel === "watchlist"
-                  ? watchCount > 0
-                    ? alertSummary.total > 0
-                      ? `Hide watchlist (${watchCount} packages, ${alertSummary.total} with updates)`
-                      : `Hide watchlist (${watchCount} packages)`
-                    : "Hide watchlist"
-                  : watchCount > 0
-                    ? alertSummary.total > 0
-                      ? `Show watchlist (${watchCount} packages, ${alertSummary.total} with updates)`
-                      : `Show watchlist (${watchCount} packages)`
-                    : "Show watchlist"
-              }
-              aria-expanded={utilityPanel === "watchlist"}
-              aria-controls="shell-panel-watchlist"
-              aria-haspopup="true"
-              onClick={(e) =>
-                toggleUtilityPanel("watchlist", e.currentTarget)
-              }
-              className={utilityButtonClass(utilityPanel === "watchlist")}
-            >
-              <StarIcon
-                className={`w-4 h-4 ${
-                  utilityPanel === "watchlist"
-                    ? "fill-amber-400 text-amber-400"
-                    : ""
-                }`}
-              />
-              {alertSummary.total > 0 && (
-                <span
-                  className={`absolute -right-0.5 -top-0.5 min-w-4 rounded-full px-1 text-[10px] font-semibold leading-4 text-white tabular-nums ${
-                    alertSummary.tone === "vulns"
-                      ? "bg-red-600"
-                      : alertSummary.tone === "version"
-                        ? "bg-emerald-600"
-                        : "bg-orange-500"
-                  }`}
-                  aria-hidden="true"
-                >
-                  {alertSummary.total > 99 ? "99+" : alertSummary.total}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              title={
-                utilityPanel === "paste"
-                  ? "Close Analyse package.json"
-                  : "Analyse package.json"
-              }
-              aria-label={
-                utilityPanel === "paste"
-                  ? "Close Analyse package.json"
-                  : "Analyse package.json"
-              }
-              aria-expanded={utilityPanel === "paste"}
-              aria-controls="shell-panel-paste"
-              aria-haspopup="true"
-              onClick={(e) => toggleUtilityPanel("paste", e.currentTarget)}
-              className={utilityButtonClass(utilityPanel === "paste")}
-            >
-              <ClipboardIcon className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              title={
-                utilityPanel === "settings" ? "Hide settings" : "Show settings"
-              }
-              aria-label={
-                utilityPanel === "settings" ? "Hide settings" : "Show settings"
-              }
-              aria-expanded={utilityPanel === "settings"}
-              aria-controls="shell-panel-settings"
-              aria-haspopup="true"
-              onClick={(e) =>
-                toggleUtilityPanel("settings", e.currentTarget)
-              }
-              className={utilityButtonClass(utilityPanel === "settings")}
-            >
-              <CogIcon className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-      </div>
-
-      {isHome && (
-        <div className="sr-only" aria-live="polite" aria-atomic="true">
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
           {utilityPanel === "watchlist"
             ? watchCount > 0
               ? `Watchlist opened, ${watchCount} packages`
               : "Watchlist opened, no packages yet"
             : utilityPanel === "paste"
-              ? "Analyse package.json opened"
+              ? `${pasteLabel} opened`
               : utilityPanel === "settings"
                 ? "Settings opened"
                 : ""}
-        </div>
-      )}
+      </div>
 
-      {isHome && utilityPanel === "watchlist" && (
+      {utilityPanel === "watchlist" && (
         <div
           id="shell-panel-watchlist"
           ref={watchlistPanelRef}
@@ -696,7 +804,7 @@ export function PackageSearchForm({
         </div>
       )}
 
-      {isHome && utilityPanel === "paste" && (
+      {showPasteList && utilityPanel === "paste" && (
         <div
           id="shell-panel-paste"
           ref={pastePanelRef}
@@ -706,13 +814,13 @@ export function PackageSearchForm({
           className="mt-3 sm:mt-4 border-t border-gray-100 dark:border-gray-700 pt-3 sm:pt-4 max-h-[32rem] overflow-y-auto outline-none"
         >
           <h2 id="shell-paste-heading" className="sr-only">
-            Analyse package.json
+            {pasteLabel}
           </h2>
-          <PasteListPanel />
+          <PasteListPanel key={ecosystem} ecosystem={ecosystem} />
         </div>
       )}
 
-      {isHome && utilityPanel === "settings" && (
+      {utilityPanel === "settings" && (
         <div
           id="shell-panel-settings"
           ref={settingsPanelRef}
@@ -806,10 +914,10 @@ export function PackageSearchForm({
                 id="package-manager-preference-label"
                 className="text-sm font-medium text-gray-900 dark:text-white"
               >
-                Package manager
+                Node Package manager
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                Used for upgrade install commands.
+                Used for npm upgrade install commands.
               </p>
             </div>
             {packageManagerReady ? (

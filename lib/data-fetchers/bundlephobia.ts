@@ -5,7 +5,7 @@ const BUNDLEPHOBIA_SIZE_URL = "https://bundlephobia.com/api/size";
 const BUNDLEPHOBIA_HEADERS = {
   Accept: "application/json",
   "User-Agent":
-    "Mozilla/5.0 (compatible; npm-package-validator/1.0; +https://github.com)",
+    "Mozilla/5.0 (compatible; pkglens/1.0; +https://github.com)",
   Origin: "https://bundlephobia.com",
   Referer: "https://bundlephobia.com/",
 };

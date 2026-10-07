@@ -9,6 +9,8 @@ import {
   type CompareColumn,
 } from "@/lib/package-compare";
 import { PackageCompareTable } from "./PackageCompareTable";
+import type { PackageEcosystem } from "@/lib/package-routes";
+import { packagePagePath } from "@/lib/package-routes";
 
 const COMPARE_CAP = 2;
 
@@ -21,6 +23,7 @@ interface SimilarPackage {
 
 interface SimilarPackagesCardProps {
   packageName: string;
+  ecosystem?: PackageEcosystem;
   /** Pass when available from analysis to avoid extra API work */
   keywords?: string[] | null;
   /** AI-named alternative packages */
@@ -57,6 +60,7 @@ function RelatedPackagesSkeleton() {
 
 export function SimilarPackagesCard({
   packageName,
+  ecosystem = "npm",
   keywords,
   competitors,
   current,
@@ -283,7 +287,7 @@ export function SimilarPackagesCard({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex items-center gap-2">
                     <Link
-                      href={`/package/${encodeURIComponent(pkg.name)}`}
+                      href={packagePagePath(ecosystem, pkg.name)}
                       className="font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline underline-offset-2 truncate"
                     >
                       {pkg.name}
@@ -341,6 +345,7 @@ export function SimilarPackagesCard({
         <div className="hidden md:block">
           <PackageCompareTable
             columns={compareColumns}
+            ecosystem={ecosystem}
             onClear={() => setSelected([])}
           />
         </div>

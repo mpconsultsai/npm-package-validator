@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore, useCallback } from "react";
+import type { PackageEcosystem } from "@/lib/package-routes";
 import {
   getWatchlistSnapshot,
   getWatchlistServerSnapshot,
@@ -21,35 +22,55 @@ export function useWatchlist() {
   );
 }
 
-export function useIsWatched(packageName: string): boolean {
+export function useIsWatched(
+  packageName: string,
+  ecosystem: PackageEcosystem = "npm",
+): boolean {
   const entries = useWatchlist();
-  const key = packageName.toLowerCase();
-  return entries.some((entry) => entry.name.toLowerCase() === key);
+  const key = `${ecosystem}:${packageName.toLowerCase()}`;
+  return entries.some(
+    (entry) =>
+      `${entry.ecosystem ?? "npm"}:${entry.name.toLowerCase()}` === key,
+  );
 }
 
 export function useWatchlistActions() {
   const toggle = useCallback(
-    (packageName: string, summary?: WatchlistSummary) =>
-      toggleWatchlist(packageName, summary),
+    (
+      packageName: string,
+      summary?: WatchlistSummary,
+      ecosystem: PackageEcosystem = "npm",
+    ) => toggleWatchlist(packageName, summary, ecosystem),
     [],
   );
   const add = useCallback(
-    (packageName: string, summary?: WatchlistSummary) => {
-      if (isWatched(packageName)) {
-        if (summary) updateWatchlistSummary(packageName, summary);
+    (
+      packageName: string,
+      summary?: WatchlistSummary,
+      ecosystem: PackageEcosystem = "npm",
+    ) => {
+      if (isWatched(packageName, ecosystem)) {
+        if (summary) updateWatchlistSummary(packageName, summary, ecosystem);
         return;
       }
-      addToWatchlist(packageName, summary);
+      addToWatchlist(packageName, summary, ecosystem);
     },
     [],
   );
-  const remove = useCallback((packageName: string) => {
-    removeFromWatchlist(packageName);
-  }, []);
+  const remove = useCallback(
+    (packageName: string, ecosystem: PackageEcosystem = "npm") => {
+      removeFromWatchlist(packageName, ecosystem);
+    },
+    [],
+  );
   const updateSummary = useCallback(
-    (packageName: string, summary: WatchlistSummary) => {
-      if (!isWatched(packageName)) return;
-      updateWatchlistSummary(packageName, summary);
+    (
+      packageName: string,
+      summary: WatchlistSummary,
+      ecosystem: PackageEcosystem = "npm",
+    ) => {
+      if (!isWatched(packageName, ecosystem)) return;
+      updateWatchlistSummary(packageName, summary, ecosystem);
     },
     [],
   );

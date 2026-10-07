@@ -5,10 +5,12 @@ import Link from "next/link";
 import semver from "semver";
 import { fetchJson } from "@/lib/fetch-client";
 import { apiPaths } from "@/lib/api/paths";
+import { PASTE_LIST_MAX_PACKAGES } from "@/lib/parse-dependency-list";
+import { parseDependencyListForEcosystem } from "@/lib/parse-requirements";
 import {
-  parseDependencyList,
-  PASTE_LIST_MAX_PACKAGES,
-} from "@/lib/parse-dependency-list";
+  packagePagePath,
+  type PackageEcosystem,
+} from "@/lib/package-routes";
 import { describeDependencySpec } from "@/lib/describe-dependency-spec";
 import { useWatchlistActions } from "@/lib/use-watchlist";
 import type { WatchlistSummary } from "@/lib/watchlist-store";
@@ -73,6 +75,21 @@ export function isUpdateAvailable(
     // ignore invalid ranges
   }
   return false;
+}
+
+function isPyPiUpdateAvailable(
+  requested: string | undefined,
+  latest: string | undefined,
+): boolean {
+  if (!requested || !latest || latest === "Unknown") return false;
+  const spec = requested.trim();
+  if (!spec || spec === "*") return false;
+  const pinned = spec.match(/^==\s*(.+)$/);
+  if (pinned) {
+    const want = pinned[1].trim();
+    return want !== latest && want !== latest.replace(/^v/i, "");
+  }
+  return isUpdateAvailable(spec, latest);
 }
 
 function SpecifiedCell({ requested }: { requested?: string }) {
@@ -170,7 +187,12 @@ function downloadMarkdown(content: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function PasteListPanel() {
+export function PasteListPanel({
+  ecosystem = "npm",
+}: {
+  ecosystem?: PackageEcosystem;
+}) {
+  const isPyPi = ecosystem === "pypi";
   const headingId = useId();
   const textareaId = useId();
   const selectAllId = useId();
@@ -249,7 +271,7 @@ export function PasteListPanel() {
   };
 
   const analyseList = useCallback(async () => {
-    const parsed = parseDependencyList(text);
+    const parsed = parseDependencyListForEcosystem(text, ecosystem);
     setMeta({
       invalidCount: parsed.invalidCount,
       truncated: parsed.truncated,
@@ -299,7 +321,7 @@ export function PasteListPanel() {
             const { ok, data } = await fetchJson<
               ClientAnalysisResponse & { error?: string }
             >(
-              `${apiPaths.analysis.metrics}?package=${encodeURIComponent(entry.name)}`,
+              `${apiPaths.analysis.metrics}?package=${encodeURIComponent(entry.name)}&ecosystem=${ecosystem}`,
               {
                 signal: controller.signal,
                 timeoutMs: 60_000,
@@ -335,10 +357,9 @@ export function PasteListPanel() {
                         ...row,
                         status: "done",
                         version: latest,
-                        updateAvailable: isUpdateAvailable(
-                          entry.requested,
-                          latest,
-                        ),
+                        updateAvailable: isPyPi
+                          ? isPyPiUpdateAvailable(entry.requested, latest)
+                          : isUpdateAvailable(entry.requested, latest),
                         vulnerabilityCount: data?.security?.totalCount,
                         qualityScore: data?.metrics?.qualityScore,
                         deprecated: Boolean(data?.npm?.deprecated),
@@ -373,7 +394,7 @@ export function PasteListPanel() {
 
     await Promise.all(workers);
     if (!cancelledRef.current) setRunning(false);
-  }, [text]);
+  }, [text, ecosystem, isPyPi]);
 
   const doneRows = rows.filter((row) => row.status === "done");
   const updateCount = rows.filter((row) => row.updateAvailable).length;
@@ -381,7 +402,7 @@ export function PasteListPanel() {
 
   const addSelectedToWatchlist = () => {
     for (const row of selectedRows) {
-      add(row.name, summaryFromRow(row));
+      add(row.name, summaryFromRow(row), ecosystem);
     }
   };
 
@@ -398,11 +419,12 @@ export function PasteListPanel() {
           htmlFor={textareaId}
           className="block text-sm font-medium text-gray-900 dark:text-white"
         >
-          Analyse package.json
+          {isPyPi ? "Analyse requirements.txt" : "Analyse package.json"}
         </label>
         <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-          package.json, package-lock.json, yarn.lock, or a list of package names
-          (max {PASTE_LIST_MAX_PACKAGES}).
+          {isPyPi
+            ? `requirements.txt or PEP 508 lines (max ${PASTE_LIST_MAX_PACKAGES}).`
+            : `package.json, package-lock.json, yarn.lock, or a list of package names (max ${PASTE_LIST_MAX_PACKAGES}).`}
         </p>
         <textarea
           id={textareaId}
@@ -410,7 +432,11 @@ export function PasteListPanel() {
           onChange={(e) => setText(e.target.value)}
           rows={6}
           spellCheck={false}
-          placeholder={`{\n  "dependencies": {\n    "react": "^19.0.0",\n    "lodash": "^4.17.21"\n  }\n}`}
+          placeholder={
+            isPyPi
+              ? "requests>=2.28.0\ndjango>=4.2,<5\nnumpy==1.26.4"
+              : `{\n  "dependencies": {\n    "react": "^19.0.0",\n    "lodash": "^4.17.21"\n  }\n}`
+          }
           className="mt-2 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white px-3 py-2 font-mono outline-none focus:border-blue-500 focus:ring-2 focus:ring-inset focus:ring-blue-500/30 dark:focus:border-blue-400"
           disabled={running}
         />
@@ -541,7 +567,7 @@ export function PasteListPanel() {
                       </td>
                       <td className="px-3 py-2">
                         <Link
-                          href={`/package/${encodeURIComponent(row.name)}`}
+                          href={packagePagePath(ecosystem, row.name)}
                           className="font-medium text-blue-600 dark:text-blue-400 hover:underline"
                         >
                           {row.name}

@@ -1,5 +1,7 @@
 import { jsonOk, withHandler } from "@/lib/api/http";
+import { parseEcosystem } from "@/lib/api/params";
 import { searchNpmPackages } from "@/lib/data-fetchers/npm-registry";
+import { searchPypiPackages } from "@/lib/data-fetchers/pypi-registry";
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 100;
@@ -42,13 +44,19 @@ export const GET = withHandler(
       return jsonOk({ packages: [] });
     }
 
-    const cacheKey = `v2:${q.toLowerCase()}:${limit}`;
+    const ecosystem = parseEcosystem(
+      request.nextUrl.searchParams.get("ecosystem"),
+    );
+    const cacheKey = `v3:${ecosystem}:${q.toLowerCase()}:${limit}`;
     const cached = getCached(cacheKey);
     if (cached) {
       return jsonOk({ packages: cached });
     }
 
-    const packages = await searchNpmPackages(q, limit);
+    const packages =
+      ecosystem === "pypi"
+        ? await searchPypiPackages(q, limit)
+        : await searchNpmPackages(q, limit);
     setCached(cacheKey, packages);
     return jsonOk({ packages });
   },

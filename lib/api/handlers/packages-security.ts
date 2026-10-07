@@ -1,26 +1,37 @@
 import { checkPackageSecurity } from "@/lib/data-fetchers/security";
 import { jsonOk, withHandler } from "@/lib/api/http";
 import {
+  parseEcosystem,
   readJsonBody,
-  requirePackageFromQuery,
-  requirePackageName,
+  requirePackageFromQueryWithEcosystem,
+  requirePackageNameForEcosystem,
   requireVersion,
 } from "@/lib/api/params";
 
-const securityCheck = async (packageName: string, version: string) => {
-  const security = await checkPackageSecurity(packageName, version);
-  return jsonOk({ packageName, version, security });
+const securityCheck = async (
+  packageName: string,
+  version: string,
+  ecosystem: import("@/lib/package-routes").PackageEcosystem,
+) => {
+  const securityEcosystem = ecosystem === "pypi" ? "pip" : "npm";
+  const security = await checkPackageSecurity(
+    packageName,
+    version,
+    securityEcosystem,
+  );
+  return jsonOk({ packageName, version, ecosystem, security });
 };
 
-/** GET /api/v1/packages/security?package=&version= */
+/** GET /api/v1/packages/security?package=&version=&ecosystem= */
 export const GET = withHandler(
   async (request) => {
-    const packageName = requirePackageFromQuery(request);
+    const { packageName, ecosystem } =
+      requirePackageFromQueryWithEcosystem(request);
     const version = requireVersion(
       request.nextUrl.searchParams.get("version"),
       "Version is required. Use ?version=1.0.0",
     );
-    return securityCheck(packageName, version);
+    return securityCheck(packageName, version, ecosystem);
   },
   {
     logLabel: "packages/security",
@@ -32,8 +43,12 @@ export const GET = withHandler(
 export const POST = withHandler(
   async (request) => {
     const body = await readJsonBody(request);
-    const packageName = requirePackageName(
+    const ecosystem = parseEcosystem(
+      typeof body.ecosystem === "string" ? body.ecosystem : undefined,
+    );
+    const packageName = requirePackageNameForEcosystem(
       typeof body.packageName === "string" ? body.packageName : "",
+      ecosystem,
       "packageName is required",
     );
     const version = requireVersion(
@@ -42,7 +57,7 @@ export const POST = withHandler(
         : "",
       "version is required",
     );
-    return securityCheck(packageName, version);
+    return securityCheck(packageName, version, ecosystem);
   },
   {
     logLabel: "packages/security",

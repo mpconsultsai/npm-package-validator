@@ -1,16 +1,19 @@
 import axios from "axios";
+import type { PackageEcosystem } from "@/lib/package-routes";
 import { checkPackageSecurity } from "./security";
+import { fetchPypiPackageData } from "./pypi-registry";
 
 const NPM_REGISTRY_URL = "https://registry.npmjs.org";
 
 export interface WatchlistPackageStatus {
   name: string;
+  ecosystem: PackageEcosystem;
   version: string;
   vulnerabilityCount: number;
   deprecated: boolean;
 }
 
-async function fetchLatestMeta(
+async function fetchNpmLatestMeta(
   packageName: string,
 ): Promise<{ version: string; deprecated: boolean } | null> {
   try {
@@ -23,8 +26,23 @@ async function fetchLatestMeta(
     );
     if (response.status === 404) return null;
     return {
-      version: typeof response.data?.version === "string" ? response.data.version : "",
+      version:
+        typeof response.data?.version === "string" ? response.data.version : "",
       deprecated: Boolean(response.data?.deprecated),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchPypiLatestMeta(
+  packageName: string,
+): Promise<{ version: string; deprecated: boolean } | null> {
+  try {
+    const { data } = await fetchPypiPackageData(packageName);
+    return {
+      version: data.version,
+      deprecated: Boolean(data.deprecated),
     };
   } catch {
     return null;
@@ -33,13 +51,21 @@ async function fetchLatestMeta(
 
 export async function fetchWatchlistPackageStatus(
   packageName: string,
+  ecosystem: PackageEcosystem = "npm",
 ): Promise<WatchlistPackageStatus | null> {
-  const meta = await fetchLatestMeta(packageName);
+  const meta =
+    ecosystem === "pypi"
+      ? await fetchPypiLatestMeta(packageName)
+      : await fetchNpmLatestMeta(packageName);
   if (!meta?.version) return null;
 
   let vulnerabilityCount = 0;
   try {
-    const security = await checkPackageSecurity(packageName, meta.version);
+    const security = await checkPackageSecurity(
+      packageName,
+      meta.version,
+      ecosystem === "pypi" ? "pip" : "npm",
+    );
     vulnerabilityCount = security.totalCount;
   } catch {
     // Keep version/deprecation even if advisories fail
@@ -47,6 +73,7 @@ export async function fetchWatchlistPackageStatus(
 
   return {
     name: packageName,
+    ecosystem,
     version: meta.version,
     vulnerabilityCount,
     deprecated: meta.deprecated,

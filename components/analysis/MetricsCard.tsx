@@ -1,4 +1,5 @@
 import { formatBytes } from "@/lib/utils/format";
+import { distributionSizeCaption } from "@/lib/data-fetchers/pypi-distribution-size";
 
 interface MetricsCardProps {
   metrics: {
@@ -9,31 +10,49 @@ interface MetricsCardProps {
     releaseCount?: number;
     bundleSize?: number;
     bundleGzip?: number;
+    distributionSize?: number;
+    distributionSizeKind?: string;
+    distributionFilename?: string;
   };
+  showDownloads?: boolean;
   /** Omit the outer card chrome when nested in another panel */
   embedded?: boolean;
 }
 
 export function MetricsCard({
   metrics,
+  showDownloads = true,
   embedded = false,
 }: MetricsCardProps) {
   const hasBundleSize =
     metrics.bundleSize !== undefined && metrics.bundleGzip !== undefined;
+  const hasDistributionSize =
+    typeof metrics.distributionSize === "number" &&
+    metrics.distributionSize > 0;
+  const distributionCaption =
+    metrics.distributionSizeKind != null
+      ? distributionSizeCaption({
+          bytes: metrics.distributionSize!,
+          packagetype: metrics.distributionSizeKind,
+          filename: metrics.distributionFilename,
+        })
+      : null;
   const hasReleaseCount =
     typeof metrics.releaseCount === "number" && metrics.releaseCount > 0;
 
   const body = (
     <>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-x-5 gap-y-6 sm:gap-4">
-        <div>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Downloads (month)
-          </p>
-          <p className="text-2xl font-bold break-words">
-            {metrics.downloads.toLocaleString()}
-          </p>
-        </div>
+        {showDownloads && (
+          <div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Downloads (month)
+            </p>
+            <p className="text-2xl font-bold break-words">
+              {metrics.downloads.toLocaleString()}
+            </p>
+          </div>
+        )}
         <div>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             GitHub Stars
@@ -86,10 +105,32 @@ export function MetricsCard({
             </div>
           </>
         )}
+        {hasDistributionSize && (
+          <div className="min-w-0">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Install file size
+            </p>
+            <p className="text-2xl font-bold">
+              {formatBytes(metrics.distributionSize!)}
+            </p>
+            {distributionCaption && (
+              <div className="mt-0.5 space-y-0.5 text-xs text-gray-500 dark:text-gray-400">
+                <p>{distributionCaption.context}</p>
+                <p
+                  className="truncate"
+                  title={distributionCaption.title}
+                >
+                  {distributionCaption.fileLabel}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
       <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-        *Quality score is calculated from GitHub stars or dependents, monthly
-        downloads, time since last publish, and known vulnerabilities.
+        *Quality score is calculated from GitHub stars or dependents
+        {showDownloads ? ", monthly downloads," : ","} time since last publish,
+        and known vulnerabilities.
       </p>
     </>
   );

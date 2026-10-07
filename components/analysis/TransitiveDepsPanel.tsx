@@ -5,6 +5,10 @@ import Link from "next/link";
 import { fetchJson } from "@/lib/fetch-client";
 import { apiPaths } from "@/lib/api/paths";
 import { buildAllDependencyPathsFromRoot } from "@/lib/utils/dependency-paths";
+import {
+  packagePagePath,
+  type PackageEcosystem,
+} from "@/lib/package-routes";
 
 type TransitiveDepNode = {
   name: string;
@@ -58,7 +62,13 @@ function RelationBadge({ relation }: { relation: TransitiveDepNode["relation"] }
   );
 }
 
-function PathBreadcrumb({ path }: { path: string[] }) {
+function PathBreadcrumb({
+  path,
+  ecosystem,
+}: {
+  path: string[];
+  ecosystem: PackageEcosystem;
+}) {
   if (path.length <= 1) return null;
   return (
     <span className="break-words">
@@ -73,7 +83,7 @@ function PathBreadcrumb({ path }: { path: string[] }) {
             </span>
           ) : (
             <Link
-              href={`/package/${encodeURIComponent(name)}`}
+              href={packagePagePath(ecosystem, name)}
               className="text-blue-600 underline underline-offset-2 dark:text-blue-400"
             >
               {name}
@@ -88,9 +98,11 @@ function PathBreadcrumb({ path }: { path: string[] }) {
 function DepTreeRow({
   node,
   paths,
+  ecosystem,
 }: {
   node: TransitiveDepNode;
   paths: string[][];
+  ecosystem: PackageEcosystem;
 }) {
   const [expanded, setExpanded] = useState(false);
   const hasPaths = paths.some((p) => p.length > 1);
@@ -103,7 +115,7 @@ function DepTreeRow({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <Link
-              href={`/package/${encodeURIComponent(node.name)}`}
+              href={packagePagePath(ecosystem, node.name)}
               className="font-medium text-blue-600 underline underline-offset-2 dark:text-blue-400"
             >
               {node.name}
@@ -148,7 +160,7 @@ function DepTreeRow({
                   Path:
                 </span>
               )}
-              <PathBreadcrumb path={path} />
+              <PathBreadcrumb path={path} ecosystem={ecosystem} />
             </li>
           ))}
         </ul>
@@ -185,7 +197,13 @@ function dedupeListedNodes(nodes: TransitiveDepNode[]): TransitiveDepNode[] {
   return [...byKey.values()];
 }
 
-export function TransitiveDepsPanel({ packageName }: { packageName: string }) {
+export function TransitiveDepsPanel({
+  packageName,
+  ecosystem = "npm",
+}: {
+  packageName: string;
+  ecosystem?: PackageEcosystem;
+}) {
   const [data, setData] = useState<GraphPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -379,6 +397,7 @@ export function TransitiveDepsPanel({ packageName }: { packageName: string }) {
                 key={nodeKey(node)}
                 node={node}
                 paths={pathsByNode.get(nodeKey(node)) ?? []}
+                ecosystem={ecosystem}
               />
             ))}
           </ul>

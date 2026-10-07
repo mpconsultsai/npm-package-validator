@@ -2,6 +2,7 @@
 
 import type { SecuritySummary } from '../data-fetchers/security';
 import type { BundleSizeInfo } from '../data-fetchers/bundlephobia';
+import type { DistributionSizeInfo } from '../data-fetchers/pypi-distribution-size';
 
 export interface NpmPackageData {
   name: string;
@@ -89,8 +90,11 @@ export interface NpmPackagePopularity {
   maintenanceScore: number;
 }
 
+export type PackageEcosystem = "npm" | "pypi";
+
 export interface PackageAnalysisResult {
   packageName: string;
+  ecosystem?: PackageEcosystem;
   npm?: NpmPackageData;
   downloads?: NpmDownloadStats;
   github?: GitHubRepoData;
@@ -98,6 +102,7 @@ export interface PackageAnalysisResult {
   security?: SecuritySummary;
   popularity?: NpmPackagePopularity;
   bundleSize?: BundleSizeInfo | null;
+  distributionSize?: DistributionSizeInfo | null;
   readme?: string | null;
   errors?: {
     npm?: string;

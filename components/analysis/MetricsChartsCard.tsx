@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Bar,
   BarChart,
@@ -29,6 +36,8 @@ interface ChartPoint {
 interface ChartsPayload {
   downloads: ChartPoint[];
   issues: ChartPoint[];
+  downloadsGranularity?: "week" | "day";
+  downloadsNote?: string;
 }
 
 function formatTickDate(iso: string) {
@@ -41,6 +50,46 @@ function formatTooltipDate(iso: string) {
     month: "short",
     year: "numeric",
   });
+}
+
+/** Recharts needs a non-zero box; skip render until layout gives dimensions. */
+function ChartFrame({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<{ width: number; height: number } | null>(
+    null,
+  );
+
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+
+    const update = (width: number, height: number) => {
+      if (width > 0 && height > 0) {
+        setSize({ width: Math.floor(width), height: Math.floor(height) });
+      } else {
+        setSize(null);
+      }
+    };
+
+    update(node.clientWidth, node.clientHeight);
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      update(entry.contentRect.width, entry.contentRect.height);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className="h-52 w-full min-w-0 overflow-hidden">
+      {size ? (
+        <ResponsiveContainer width={size.width} height={size.height}>
+          {children}
+        </ResponsiveContainer>
+      ) : null}
+    </div>
+  );
 }
 
 function githubChartLinks(repository?: string | null): {
@@ -159,8 +208,7 @@ function MetricLineChart({
               </li>
             </ul>
           )}
-          <div className="h-52 w-full overflow-hidden">
-            <ResponsiveContainer width="100%" height="100%">
+          <ChartFrame>
               <LineChart
                 key={`downloads-${compareName ?? "solo"}`}
                 data={data}
@@ -238,8 +286,7 @@ function MetricLineChart({
                   />
                 )}
               </LineChart>
-            </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </>
       )}
     </div>
@@ -247,7 +294,13 @@ function MetricLineChart({
 }
 
 /** Histogram of publishes per month — right chart for release cadence. */
-function ReleaseCadenceChart({ points }: { points: ChartPoint[] }) {
+function ReleaseCadenceChart({
+  points,
+  registryLabel = "npm",
+}: {
+  points: ChartPoint[];
+  registryLabel?: string;
+}) {
   const data = points.map((p) => ({
     ...p,
     label: formatTickDate(p.date),
@@ -260,7 +313,7 @@ function ReleaseCadenceChart({ points }: { points: ChartPoint[] }) {
         Release cadence
       </p>
       <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-        npm publishes per month
+        {registryLabel} publishes per month
         {total > 0 ? ` · ${total.toLocaleString()} in view` : ""}
       </p>
       {data.length < 1 ? (
@@ -268,8 +321,7 @@ function ReleaseCadenceChart({ points }: { points: ChartPoint[] }) {
           No release history available.
         </p>
       ) : (
-        <div className="h-52 w-full overflow-hidden">
-          <ResponsiveContainer width="100%" height="100%">
+        <ChartFrame>
             <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#6b7280" opacity={0.25} />
               <XAxis
@@ -313,8 +365,7 @@ function ReleaseCadenceChart({ points }: { points: ChartPoint[] }) {
                 maxBarSize={28}
               />
             </BarChart>
-          </ResponsiveContainer>
-        </div>
+        </ChartFrame>
       )}
     </div>
   );
@@ -459,17 +510,22 @@ function DownloadsChartSkeleton() {
 
 export function MetricsChartsCard({
   packageName,
+  ecosystem = "npm",
+  showDownloads = true,
   repository,
   versionTimes,
   keywords,
   competitors,
 }: {
   packageName: string;
+  ecosystem?: import("@/lib/package-routes").PackageEcosystem;
+  showDownloads?: boolean;
   repository?: string | null;
   versionTimes?: Record<string, string>;
   keywords?: string[] | null;
   competitors?: string[] | null;
 }) {
+  const registryLabel = ecosystem === "pypi" ? "PyPI" : "npm";
   const keywordsKey = (keywords ?? []).join(",");
   const competitorsKey = (competitors ?? []).join(",");
   const [data, setData] = useState<ChartsPayload>({
@@ -486,7 +542,7 @@ export function MetricsChartsCard({
   const [loadingCompare, setLoadingCompare] = useState(false);
   const [chartSection, setChartSection] = useState<
     "downloads" | "releases" | "issues"
-  >("downloads");
+  >(() => (showDownloads ? "downloads" : "releases"));
   const compareRequestId = useRef(0);
   const compareCacheRef = useRef<Record<string, ChartPoint[]>>({});
 
@@ -516,7 +572,7 @@ export function MetricsChartsCard({
         const { ok, data: payload } = await fetchJson<
           ChartsPayload & { error?: string }
         >(
-          `${apiPaths.packages.charts}?package=${encodeURIComponent(packageName)}&series=${series}`,
+          `${apiPaths.packages.charts}?package=${encodeURIComponent(packageName)}&series=${series}&ecosystem=${ecosystem}`,
           {
             signal: controller.signal,
             timeoutMs: 60_000,
@@ -537,27 +593,38 @@ export function MetricsChartsCard({
       }
     };
 
-    setLoadingDownloads(true);
+    setLoadingDownloads(showDownloads);
     setLoadingIssues(true);
-    setLoadingRelated(true);
+    setLoadingRelated(showDownloads);
     setError(null);
-    setData({ downloads: [], issues: [] });
+    setData({
+      downloads: [],
+      issues: [],
+      downloadsGranularity: "week",
+      downloadsNote: undefined,
+    });
     setRelatedNames([]);
     setCompareWith("");
     setCompareDownloads([]);
-    setChartSection("downloads");
+    setChartSection(showDownloads ? "downloads" : "releases");
     compareCacheRef.current = {};
     compareRequestId.current += 1;
 
-    void load(
-      "downloads",
-      (payload) =>
-        setData((current) => ({
-          ...current,
-          downloads: payload.downloads || [],
-        })),
-      () => setLoadingDownloads(false),
-    );
+    if (showDownloads) {
+      void load(
+        "downloads",
+        (payload) =>
+          setData((current) => ({
+            ...current,
+            downloads: payload.downloads || [],
+            downloadsGranularity: payload.downloadsGranularity ?? "week",
+            downloadsNote: payload.downloadsNote,
+          })),
+        () => setLoadingDownloads(false),
+      );
+    } else {
+      setLoadingDownloads(false);
+    }
     void load(
       "issues",
       (payload) =>
@@ -568,10 +635,14 @@ export function MetricsChartsCard({
     return () => {
       controller.abort();
     };
-  }, [packageName]);
+  }, [packageName, ecosystem, showDownloads]);
 
   useEffect(() => {
-    if (!packageName) return;
+    if (!packageName || !showDownloads) {
+      setRelatedNames([]);
+      setLoadingRelated(false);
+      return;
+    }
     const controller = new AbortController();
     const params = new URLSearchParams({ package: packageName });
     if (keywordsKey) params.set("keywords", keywordsKey);
@@ -601,11 +672,20 @@ export function MetricsChartsCard({
       });
 
     return () => controller.abort();
-  }, [packageName, keywordsKey, competitorsKey]);
+  }, [packageName, ecosystem, keywordsKey, competitorsKey, showDownloads]);
 
   const downloadsReady = !loadingDownloads && !loadingRelated;
+  const downloadsChartTitle =
+    data.downloadsGranularity === "day"
+      ? "Downloads (daily)"
+      : "Downloads (weekly)";
 
   useEffect(() => {
+    if (!showDownloads) {
+      setCompareDownloads([]);
+      setLoadingCompare(false);
+      return;
+    }
     if (!compareWith) {
       setCompareDownloads([]);
       setLoadingCompare(false);
@@ -624,7 +704,7 @@ export function MetricsChartsCard({
     setLoadingCompare(true);
 
     void fetchJson<ChartsPayload & { error?: string }>(
-      `${apiPaths.packages.charts}?package=${encodeURIComponent(compareWith)}&series=downloads`,
+      `${apiPaths.packages.charts}?package=${encodeURIComponent(compareWith)}&series=downloads&ecosystem=${ecosystem}`,
       {
         signal: controller.signal,
         timeoutMs: 60_000,
@@ -660,25 +740,38 @@ export function MetricsChartsCard({
     return () => {
       controller.abort();
     };
-  }, [compareWith]);
+  }, [compareWith, ecosystem, showDownloads]);
+
+  const chartTypeOptions = (
+    [
+      ...(showDownloads
+        ? [{ id: "downloads" as const, label: "Downloads" }]
+        : []),
+      { id: "releases" as const, label: "Releases" },
+      { id: "issues" as const, label: "Issues" },
+    ] as const
+  );
+
+  useEffect(() => {
+    if (showDownloads) return;
+    setChartSection((current) =>
+      current === "downloads" ? "releases" : current,
+    );
+  }, [showDownloads]);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
       <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
-        Trends for downloads, releases, and open issues.
+        {showDownloads
+          ? "Trends for downloads, releases, and open issues."
+          : "Trends for releases and open issues."}
       </p>
       <div
         role="radiogroup"
         aria-label="Chart type"
         className="flex gap-5 mb-4 border-b border-gray-200 dark:border-gray-600"
       >
-        {(
-          [
-            { id: "downloads" as const, label: "Downloads" },
-            { id: "releases" as const, label: "Releases" },
-            { id: "issues" as const, label: "Issues" },
-          ] as const
-        ).map((option) => {
+        {chartTypeOptions.map((option) => {
           const selected = chartSection === option.id;
           return (
             <button
@@ -733,8 +826,21 @@ export function MetricsChartsCard({
                 )}
               </div>
             )}
+            {ecosystem === "pypi" && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                PyPI download trend from pypistats.org
+                {data.downloadsGranularity === "day"
+                  ? " (recent daily counts)."
+                  : " (recent daily data, aggregated weekly)."}
+              </p>
+            )}
+            {data.downloadsNote && (
+              <p className="text-sm text-amber-700 dark:text-amber-400 mb-2">
+                {data.downloadsNote}
+              </p>
+            )}
             <MetricLineChart
-              title="Downloads (weekly)"
+              title={downloadsChartTitle}
               color="#3b82f6"
               points={data.downloads}
               seriesName={packageName}
@@ -758,7 +864,10 @@ export function MetricsChartsCard({
               </ChartExternalLink>
             </div>
           ) : null}
-          <ReleaseCadenceChart points={releasePoints} />
+          <ReleaseCadenceChart
+            points={releasePoints}
+            registryLabel={registryLabel}
+          />
           <ReleaseTypeMixChart mix={releaseTypeMix} />
         </div>
       )}

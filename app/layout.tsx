@@ -1,13 +1,14 @@
 import type { Metadata, Viewport } from "next";
+import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/site-brand";
 import { getSiteUrl } from "@/lib/site-url";
 import { AppShell } from "@/components/AppShell";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme-pref";
+import { wordmarkFont } from "@/lib/wordmark-font";
 import "./globals.css";
 
-const siteName = "NPM Package Validator";
-const siteDescription =
-  "Validate npm packages for security and quality before installation";
+const siteName = SITE_NAME;
+const siteDescription = SITE_DESCRIPTION;
 const siteUrl = getSiteUrl();
 
 export const metadata: Metadata = {
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "npm Validator",
+    title: SITE_NAME,
     statusBarStyle: "default",
   },
   icons: {
@@ -77,7 +78,10 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>
-      <body className="antialiased" suppressHydrationWarning>
+      <body
+        className={`${wordmarkFont.variable} antialiased`}
+        suppressHydrationWarning
+      >
         <ThemeProvider>
           <AppShell>{children}</AppShell>
         </ThemeProvider>

@@ -45,7 +45,7 @@ export const parseGitHubUrl = (url: string): { owner: string; repo: string } | n
 const getGitHubHeaders = (): Record<string, string> => {
   const headers: Record<string, string> = {
     'Accept': 'application/vnd.github.v3+json',
-    'User-Agent': 'npm-package-validator',
+    'User-Agent': 'pkglens/1.0',
   };
 
   if (process.env.GITHUB_TOKEN) {

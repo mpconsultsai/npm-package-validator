@@ -1,15 +1,20 @@
 import { AppError } from "@/lib/api/errors";
 import { jsonOk, withHandler } from "@/lib/api/http";
-import { requirePackageFromQuery } from "@/lib/api/params";
+import { requirePackageFromQueryWithEcosystem } from "@/lib/api/params";
 import { fetchNpmPackageData } from "@/lib/data-fetchers/npm-registry";
+import { fetchPypiPackageData } from "@/lib/data-fetchers/pypi-registry";
 import { listPackageDependencies } from "@/lib/package-deps";
 
-/** GET /api/v1/packages/dependencies?package= */
+/** GET /api/v1/packages/dependencies?package=&ecosystem= */
 export const GET = withHandler(
   async (request) => {
-    const packageName = requirePackageFromQuery(request);
+    const { packageName, ecosystem } =
+      requirePackageFromQueryWithEcosystem(request);
     try {
-      const { data } = await fetchNpmPackageData(packageName);
+      const { data } =
+        ecosystem === "pypi"
+          ? await fetchPypiPackageData(packageName)
+          : await fetchNpmPackageData(packageName);
       const dependencies = listPackageDependencies(
         data.dependencies,
         data.peerDependencies,

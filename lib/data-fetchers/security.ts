@@ -92,7 +92,7 @@ function githubHeaders(includeToken: boolean) {
   const token = process.env.GITHUB_TOKEN?.trim();
   return {
     Accept: 'application/vnd.github+json',
-    'User-Agent': 'npm-package-validator',
+    'User-Agent': 'pkglens/1.0',
     'X-GitHub-Api-Version': '2022-11-28',
     ...(includeToken && token ? { Authorization: `Bearer ${token}` } : {}),
   };
@@ -116,14 +116,17 @@ async function fetchAdvisoryPage(url: string, includeToken: boolean) {
  * List GitHub global advisories that affect this npm package (optionally a specific version).
  * Uses REST so version matching is done by GitHub, not a local semver parse of GHSA ranges.
  */
+export type SecurityEcosystem = "npm" | "pip";
+
 async function fetchAdvisories(
   packageName: string,
-  version?: string
+  version?: string,
+  ecosystem: SecurityEcosystem = "npm",
 ): Promise<GitHubAdvisory[]> {
   const affects = version ? `${packageName}@${version}` : packageName;
   const startUrl = 'https://api.github.com/advisories';
   const params = new URLSearchParams({
-    ecosystem: 'npm',
+    ecosystem,
     affects,
     per_page: '100',
   });
@@ -165,20 +168,22 @@ async function fetchAdvisories(
  */
 export async function checkPackageSecurity(
   packageName: string,
-  version?: string
+  version?: string,
+  ecosystem: SecurityEcosystem = "npm",
 ): Promise<SecuritySummary> {
   const summary = emptySummary();
+  const ecoLower = ecosystem.toLowerCase();
 
   try {
-    const advisories = await fetchAdvisories(packageName, version);
+    const advisories = await fetchAdvisories(packageName, version, ecosystem);
 
     for (const advisory of advisories) {
       if (advisory.withdrawn_at) continue;
 
       const packageVuln = advisory.vulnerabilities?.find(
         (entry) =>
-          entry.package?.ecosystem?.toLowerCase() === 'npm' &&
-          entry.package?.name === packageName
+          entry.package?.ecosystem?.toLowerCase() === ecoLower &&
+          entry.package?.name.toLowerCase() === packageName.toLowerCase()
       );
 
       const severity = mapSeverity(advisory.severity);

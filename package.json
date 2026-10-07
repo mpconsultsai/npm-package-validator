@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -34,6 +35,7 @@
     "eslint": "^9.39.5",
     "eslint-config-next": "^15.5.24",
     "postcss": "^8.5.26",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.7.2"
   }

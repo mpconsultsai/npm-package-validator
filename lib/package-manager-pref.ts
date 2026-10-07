@@ -8,7 +8,7 @@ const STORAGE_KEY = "npv-package-manager";
 type Listener = () => void;
 
 const listeners = new Set<Listener>();
-let hydrated = false;
+let storageHydrated = false;
 let preference: PackageManagerPreference = "auto";
 
 const emit = () => {
@@ -23,13 +23,17 @@ const isPreference = (
 ): value is PackageManagerPreference =>
   value === "auto" || isPackageManager(value);
 
+function hydrateFromStorage(): void {
+  if (storageHydrated) return;
+  storageHydrated = true;
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+  preference = isPreference(raw) ? raw : "auto";
+  emit();
+}
+
 const read = (): PackageManagerPreference => {
   if (typeof window === "undefined") return "auto";
-  if (!hydrated) {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    preference = isPreference(raw) ? raw : "auto";
-    hydrated = true;
-  }
+  if (!storageHydrated) return "auto";
   return preference;
 };
 
@@ -37,6 +41,9 @@ export const subscribePackageManagerPref = (
   listener: Listener,
 ): (() => void) => {
   listeners.add(listener);
+  if (typeof window !== "undefined" && !storageHydrated) {
+    queueMicrotask(() => hydrateFromStorage());
+  }
   return () => listeners.delete(listener);
 };
 
@@ -49,9 +56,9 @@ export const getPackageManagerPreferenceServerSnapshot =
 export const setPackageManagerPreference = (
   value: PackageManagerPreference,
 ): void => {
-  if (hydrated && preference === value) return;
+  if (storageHydrated && preference === value) return;
   preference = value;
-  hydrated = true;
+  storageHydrated = true;
   try {
     window.localStorage.setItem(STORAGE_KEY, value);
   } catch {

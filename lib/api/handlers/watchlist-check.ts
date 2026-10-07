@@ -1,38 +1,69 @@
 import { jsonOk, withHandler } from "@/lib/api/http";
 import { readJsonBody } from "@/lib/api/params";
+import type { PackageEcosystem } from "@/lib/package-routes";
 import {
   fetchWatchlistPackageStatus,
   mapPool,
 } from "@/lib/data-fetchers/watchlist-status";
-import { extractPackageName, validatePackageName } from "@/lib/validation";
+import {
+  extractPackageName,
+  validatePackageNameForEcosystem,
+} from "@/lib/validation";
 
 const MAX_PACKAGES = 50;
 const CONCURRENCY = 4;
 
-/** POST /api/v1/watchlist/check { packages: string[] } */
+type WatchlistCheckItem = { name: string; ecosystem: PackageEcosystem };
+
+function parseWatchlistCheckItems(raw: unknown[]): WatchlistCheckItem[] {
+  const items: WatchlistCheckItem[] = [];
+  for (const entry of raw) {
+    if (typeof entry === "string") {
+      const name = extractPackageName(entry);
+      if (name && validatePackageNameForEcosystem(name, "npm").valid) {
+        items.push({ name, ecosystem: "npm" });
+      }
+      continue;
+    }
+    if (entry && typeof entry === "object") {
+      const obj = entry as { name?: unknown; ecosystem?: unknown };
+      const name =
+        typeof obj.name === "string" ? extractPackageName(obj.name) : "";
+      const ecosystem =
+        obj.ecosystem === "pypi" || obj.ecosystem === "pip"
+          ? "pypi"
+          : "npm";
+      if (name && validatePackageNameForEcosystem(name, ecosystem).valid) {
+        items.push({ name, ecosystem });
+      }
+    }
+  }
+  const seen = new Set<string>();
+  const unique: WatchlistCheckItem[] = [];
+  for (const item of items) {
+    const key = `${item.ecosystem}:${item.name.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(item);
+    if (unique.length >= MAX_PACKAGES) break;
+  }
+  return unique;
+}
+
+/** POST /api/v1/watchlist/check { packages: string[] | { name, ecosystem }[] } */
 export const POST = withHandler(
   async (request) => {
     const body = await readJsonBody(request);
     const raw: unknown[] = Array.isArray(body.packages) ? body.packages : [];
-    const names = [
-      ...new Set(
-        raw
-          .map((entry) =>
-            typeof entry === "string" ? extractPackageName(entry) : "",
-          )
-          .filter((name): name is string => name.length > 0),
-      ),
-    ]
-      .filter((name) => validatePackageName(name).valid)
-      .slice(0, MAX_PACKAGES);
+    const items = parseWatchlistCheckItems(raw);
 
-    if (names.length === 0) {
+    if (items.length === 0) {
       return jsonOk({ packages: [] });
     }
 
-    const results = await mapPool(names, CONCURRENCY, async (name) => {
+    const results = await mapPool(items, CONCURRENCY, async (item) => {
       try {
-        return await fetchWatchlistPackageStatus(name);
+        return await fetchWatchlistPackageStatus(item.name, item.ecosystem);
       } catch {
         return null;
       }

@@ -170,7 +170,7 @@ export async function fetchPackageChangelog(input: {
         const url = `https://raw.githubusercontent.com/${input.owner}/${input.repo}/${branch}/${path}`;
         try {
           const res = await fetch(url, {
-            headers: { "User-Agent": "npm-package-validator" },
+            headers: { "User-Agent": "pkglens/1.0" },
             signal: AbortSignal.timeout(12_000),
           });
           if (!res.ok) continue;

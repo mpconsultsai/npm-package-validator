@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { fetchJson, friendlyFetchError } from "@/lib/fetch-client";
 import { apiPaths } from "@/lib/api/paths";
+import { packagePagePath } from "@/lib/package-routes";
 
 type DependentRow = {
   name: string;
@@ -228,7 +229,7 @@ export function DependentsModal({
                 <li key={pkg.name} className="py-3 first:pt-0 last:pb-0">
                   <div className="flex items-baseline justify-between gap-3">
                     <Link
-                      href={`/package/${encodeURIComponent(pkg.name)}`}
+                      href={packagePagePath("npm", pkg.name)}
                       className="text-sm font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 truncate"
                       onClick={onClose}
                     >

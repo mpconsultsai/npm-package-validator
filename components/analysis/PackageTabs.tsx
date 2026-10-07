@@ -196,13 +196,24 @@ function TabRow<T extends string>({
 export function OverviewTabs({
   active,
   onChange,
+  showCharts = true,
 }: {
   active: OverviewTabId;
   onChange: (tab: OverviewTabId) => void;
+  showCharts?: boolean;
 }) {
   const tabs: TabDef<OverviewTabId>[] = [
     { id: "info", label: "Package info", shortLabel: "Info", icon: <TabIconBox /> },
-    { id: "charts", label: "Charts", shortLabel: "Charts", icon: <TabIconTrend /> },
+    ...(showCharts
+      ? [
+          {
+            id: "charts" as const,
+            label: "Charts",
+            shortLabel: "Charts",
+            icon: <TabIconTrend />,
+          },
+        ]
+      : []),
     {
       id: "dependencies",
       label: "Dependencies",
@@ -228,12 +239,14 @@ export function InsightTabs({
   aiModel,
   security,
   showAi = true,
+  showRelated = true,
 }: {
   active: InsightTabId;
   onChange: (tab: InsightTabId) => void;
   aiModel?: string;
   security?: SecurityCountSummary | null;
   showAi?: boolean;
+  showRelated?: boolean;
 }) {
   const tabs: TabDef<InsightTabId>[] = [
     ...(showAi
@@ -253,12 +266,16 @@ export function InsightTabs({
       shortLabel: "Security",
       icon: <TabIconShield />,
     },
-    {
-      id: "related",
-      label: "Related packages",
-      shortLabel: "Related",
-      icon: <TabIconPackages />,
-    },
+    ...(showRelated
+      ? [
+          {
+            id: "related" as const,
+            label: "Related packages",
+            shortLabel: "Related",
+            icon: <TabIconPackages />,
+          },
+        ]
+      : []),
   ];
 
   return (

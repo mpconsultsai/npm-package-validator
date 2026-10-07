@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { formatBytes, formatCompactNumber } from "@/lib/utils/format";
 import type { CompareColumn } from "@/lib/package-compare";
+import {
+  packagePagePath,
+  type PackageEcosystem,
+} from "@/lib/package-routes";
 
 const Pulse = () => (
   <span
@@ -76,9 +80,11 @@ const rows: {
 
 export function PackageCompareTable({
   columns,
+  ecosystem = "npm",
   onClear,
 }: {
   columns: CompareColumn[];
+  ecosystem?: PackageEcosystem;
   onClear: () => void;
 }) {
   const visibleRows = rows.filter((row) =>
@@ -116,7 +122,7 @@ export function PackageCompareTable({
                   className="px-3 py-2 font-semibold min-w-[8rem] normal-case tracking-normal"
                 >
                   <Link
-                    href={`/package/${encodeURIComponent(column.name)}`}
+                    href={packagePagePath(ecosystem, column.name)}
                     className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline underline-offset-2"
                   >
                     {column.name}

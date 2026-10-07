@@ -171,10 +171,31 @@ export async function fetchNpmDownloadTrends(packageName: string): Promise<{
   }
 }
 
-export function toWeeklyDownloads(days: NpmDownloadDay[]): ChartPointLike[] {
+export interface DownloadChartPoint {
+  date: string;
+  value: number;
+}
+
+export type WeeklyDownloadOptions = {
+  /** Days before today excluded (npm default trims incomplete recent weeks). */
+  excludeRecentDays?: number;
+  /** Minimum daily samples required to count a week (PyPI uses a lower bar). */
+  minDaysInWeek?: number;
+  /** Drop the newest full week when multiple weeks exist (npm trends convention). */
+  dropLastCompleteWeek?: boolean;
+};
+
+export function toWeeklyDownloads(
+  days: NpmDownloadDay[],
+  options?: WeeklyDownloadOptions,
+): DownloadChartPoint[] {
+  const excludeRecentDays = options?.excludeRecentDays ?? 14;
+  const minDaysInWeek = options?.minDaysInWeek ?? 7;
+  const dropLastCompleteWeek = options?.dropLastCompleteWeek ?? true;
+
   const end = new Date();
   end.setUTCHours(0, 0, 0, 0);
-  end.setUTCDate(end.getUTCDate() - 14);
+  end.setUTCDate(end.getUTCDate() - excludeRecentDays);
   const cutoff = end.toISOString().slice(0, 10);
   const byWeek = new Map<string, { total: number; days: number }>();
 
@@ -193,18 +214,65 @@ export function toWeeklyDownloads(days: NpmDownloadDay[]): ChartPointLike[] {
   }
 
   // Drop partial weeks at the start/end — they look like false dips.
-  // Also drop the newest complete week; it can still look soft vs earlier weeks.
   const weeks = [...byWeek.entries()]
-    .filter(([, bucket]) => bucket.days >= 7)
+    .filter(([, bucket]) => bucket.days >= minDaysInWeek)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, bucket]) => ({ date, value: bucket.total }));
 
-  return weeks.length > 1 ? weeks.slice(0, -1) : weeks;
+  if (dropLastCompleteWeek && weeks.length > 1) {
+    return weeks.slice(0, -1);
+  }
+  return weeks;
 }
 
-interface ChartPointLike {
-  date: string;
-  value: number;
+export function toDailyDownloadChartPoints(
+  days: NpmDownloadDay[],
+): DownloadChartPoint[] {
+  return days
+    .filter(
+      (day) =>
+        typeof day.day === "string" &&
+        day.day.length > 0 &&
+        typeof day.downloads === "number",
+    )
+    .map((day) => ({ date: day.day, value: day.downloads }));
+}
+
+export type DownloadChartGranularity = "week" | "day";
+
+/** Chart-ready download series; PyPI short histories fall back to daily points. */
+export function aggregateDownloadsForCharts(
+  days: NpmDownloadDay[],
+  ecosystem: "npm" | "pypi",
+): { points: DownloadChartPoint[]; granularity: DownloadChartGranularity } {
+  if (ecosystem === "pypi") {
+    const weekly = toWeeklyDownloads(days, {
+      excludeRecentDays: 0,
+      minDaysInWeek: 4,
+      dropLastCompleteWeek: false,
+    });
+    if (weekly.length >= 2) {
+      return { points: weekly, granularity: "week" };
+    }
+    const daily = toDailyDownloadChartPoints(days);
+    if (daily.length >= 2) {
+      return { points: daily, granularity: "day" };
+    }
+    if (weekly.length === 1) {
+      return { points: weekly, granularity: "week" };
+    }
+    return { points: daily, granularity: "day" };
+  }
+
+  const weekly = toWeeklyDownloads(days);
+  if (weekly.length >= 2) {
+    return { points: weekly, granularity: "week" };
+  }
+  const daily = toDailyDownloadChartPoints(days);
+  return {
+    points: daily.length >= 2 ? daily : weekly,
+    granularity: daily.length >= 2 ? "day" : "week",
+  };
 }
 
 export interface NpmSearchResult {

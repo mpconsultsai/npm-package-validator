@@ -42,8 +42,8 @@ export function InfoCards() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-6">
       <InfoCard
-        title="Security Analysis"
-        description="Check for vulnerabilities and security advisories"
+        title="Security"
+        description="Advisories and known issues surfaced for each package"
         iconClassName="text-blue-600 dark:text-blue-400"
       >
         <CardIcon>
@@ -57,8 +57,8 @@ export function InfoCards() {
       </InfoCard>
 
       <InfoCard
-        title="Quality Metrics"
-        description="Evaluate maintenance, popularity, bundle size, and code quality"
+        title="Health signals"
+        description="Maintenance, adoption, and quality signals at a glance"
         iconClassName="text-green-600 dark:text-green-400"
       >
         <CardIcon>
@@ -72,8 +72,8 @@ export function InfoCards() {
       </InfoCard>
 
       <InfoCard
-        title="AI-Powered"
-        description="Get intelligent recommendations using Agentic AI"
+        title="AI insights"
+        description="Summaries, scores, and recommendations grounded in package data"
         iconClassName="text-purple-600 dark:text-purple-400"
       >
         <CardIcon>
@@ -101,7 +101,7 @@ export function InfoCards() {
 
       <InfoCard
         title="Dependencies"
-        description="Map direct and peer deps as a graph or list"
+        description="Explore dependencies before adding a package to your project."
         iconClassName="text-orange-600 dark:text-orange-400"
       >
         <CardIcon>
@@ -115,8 +115,8 @@ export function InfoCards() {
       </InfoCard>
 
       <InfoCard
-        title="Visualisations"
-        description="Track downloads, open issues, and trends over time"
+        title="Trends"
+        description="Review download, release and issue history over time"
         iconClassName="text-sky-600 dark:text-sky-400"
       >
         <CardIcon>
@@ -130,8 +130,8 @@ export function InfoCards() {
       </InfoCard>
 
       <InfoCard
-        title="Related packages"
-        description="Discover similar packages and compare side by side"
+        title="Compare"
+        description="Compare related packages and competitors"
         iconClassName="text-teal-600 dark:text-teal-400"
       >
         <CardIcon>

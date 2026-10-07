@@ -5,7 +5,7 @@ const STORAGE_KEY = "npv-theme";
 type Listener = () => void;
 
 const listeners = new Set<Listener>();
-let hydrated = false;
+let storageHydrated = false;
 let preference: ThemePreference = "system";
 
 const emit = () => {
@@ -15,18 +15,25 @@ const emit = () => {
 const isThemePreference = (value: string | null): value is ThemePreference =>
   value === "system" || value === "light" || value === "dark";
 
+function hydrateFromStorage(): void {
+  if (storageHydrated) return;
+  storageHydrated = true;
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+  preference = isThemePreference(raw) ? raw : "system";
+  emit();
+}
+
 const read = (): ThemePreference => {
   if (typeof window === "undefined") return "system";
-  if (!hydrated) {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    preference = isThemePreference(raw) ? raw : "system";
-    hydrated = true;
-  }
+  if (!storageHydrated) return "system";
   return preference;
 };
 
 export const subscribeThemePref = (listener: Listener): (() => void) => {
   listeners.add(listener);
+  if (typeof window !== "undefined" && !storageHydrated) {
+    queueMicrotask(() => hydrateFromStorage());
+  }
   return () => listeners.delete(listener);
 };
 
@@ -36,9 +43,9 @@ export const getThemePreferenceServerSnapshot = (): ThemePreference =>
   "system";
 
 export const setThemePreference = (value: ThemePreference): void => {
-  if (hydrated && preference === value) return;
+  if (storageHydrated && preference === value) return;
   preference = value;
-  hydrated = true;
+  storageHydrated = true;
   try {
     window.localStorage.setItem(STORAGE_KEY, value);
   } catch {

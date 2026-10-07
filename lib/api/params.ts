@@ -4,7 +4,56 @@ import {
   parsePackageManagerPreference,
   type PackageManagerPreference,
 } from "@/lib/package-manager-pref";
-import { extractPackageName, validatePackageName } from "@/lib/validation";
+import type { PackageEcosystem } from "@/lib/package-routes";
+import {
+  extractPackageName,
+  validatePackageName,
+  validatePackageNameForEcosystem,
+} from "@/lib/validation";
+
+export const parseEcosystem = (
+  raw: string | null | undefined,
+  fallback: PackageEcosystem = "npm",
+): PackageEcosystem => {
+  const value = (raw || "").trim().toLowerCase();
+  if (value === "pypi" || value === "pip") return "pypi";
+  if (value === "npm") return "npm";
+  return fallback;
+};
+
+export const requireEcosystemFromQuery = (
+  request: import("next/server").NextRequest,
+): PackageEcosystem =>
+  parseEcosystem(request.nextUrl.searchParams.get("ecosystem"), "npm");
+
+export const requirePackageNameForEcosystem = (
+  raw: string | null | undefined,
+  ecosystem: PackageEcosystem,
+  missingMessage = "Package name is required",
+): string => {
+  const packageName = extractPackageName(raw || "");
+  if (!packageName) {
+    throw new AppError(missingMessage, 400);
+  }
+  const validation = validatePackageNameForEcosystem(packageName, ecosystem);
+  if (!validation.valid) {
+    throw new AppError(validation.error || "Invalid package name", 400);
+  }
+  return packageName;
+};
+
+export const requirePackageFromQueryWithEcosystem = (
+  request: import("next/server").NextRequest,
+  missingMessage = "Package name is required. Use ?package=package-name",
+): { packageName: string; ecosystem: PackageEcosystem } => {
+  const ecosystem = requireEcosystemFromQuery(request);
+  const packageName = requirePackageNameForEcosystem(
+    request.nextUrl.searchParams.get("package"),
+    ecosystem,
+    missingMessage,
+  );
+  return { packageName, ecosystem };
+};
 
 export const requirePackageName = (
   raw: string | null | undefined,

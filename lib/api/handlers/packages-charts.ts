@@ -1,10 +1,11 @@
 import { jsonOk, withHandler } from "@/lib/api/http";
-import { requirePackageFromQuery } from "@/lib/api/params";
+import { requirePackageFromQueryWithEcosystem } from "@/lib/api/params";
 import {
+  aggregateDownloadsForCharts,
   fetchNpmDownloadTrends,
   fetchNpmPackageData,
-  toWeeklyDownloads,
 } from "@/lib/data-fetchers/npm-registry";
+import { fetchPypiPackageData } from "@/lib/data-fetchers/pypi-registry";
 import {
   fetchOpenIssuesByMonth,
   parseGitHubUrl,
@@ -26,29 +27,51 @@ const withTimeout = <T>(
   ]);
 };
 
-/** GET /api/v1/packages/charts?package=&series= */
+/** GET /api/v1/packages/charts?package=&series=&ecosystem= */
 export const GET = withHandler(
   async (request) => {
-    const packageName = requirePackageFromQuery(request);
+    const { packageName, ecosystem } =
+      requirePackageFromQueryWithEcosystem(request);
     const series = request.nextUrl.searchParams.get("series");
 
     const wantDownloads = series !== "issues";
     const wantIssues = series !== "downloads";
 
-    const downloadsPromise = wantDownloads
-      ? fetchNpmDownloadTrends(packageName)
-          .then((data) => toWeeklyDownloads(data.downloads || []))
-          .catch(() => [])
-      : Promise.resolve([]);
+    let downloadsNote: string | undefined;
+
+    const downloadsPromise =
+      wantDownloads && ecosystem !== "pypi"
+        ? fetchNpmDownloadTrends(packageName)
+          .then((data) =>
+            aggregateDownloadsForCharts(data.downloads || [], ecosystem),
+          )
+          .catch((error: unknown) => {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            if (message.includes("rate-limited")) {
+              downloadsNote = message;
+            }
+            return {
+              points: [] as { date: string; value: number }[],
+              granularity: "week" as const,
+            };
+          })
+      : Promise.resolve({
+          points: [] as { date: string; value: number }[],
+          granularity: "week" as const,
+        });
 
     let issuesPromise: Promise<{ date: string; value: number }[]> =
       Promise.resolve([]);
 
     if (wantIssues) {
-      issuesPromise = fetchNpmPackageData(packageName)
-        .then(({ data: npm }) => {
-          const githubInfo = npm.repository?.url
-            ? parseGitHubUrl(npm.repository.url)
+      issuesPromise = (ecosystem === "pypi"
+        ? fetchPypiPackageData(packageName)
+        : fetchNpmPackageData(packageName)
+      )
+        .then(({ data: meta }) => {
+          const githubInfo = meta.repository?.url
+            ? parseGitHubUrl(meta.repository.url)
             : null;
           if (!githubInfo) return [];
           return withTimeout(
@@ -62,12 +85,17 @@ export const GET = withHandler(
         .catch(() => []);
     }
 
-    const [downloads, issues] = await Promise.all([
+    const [downloadSeries, issues] = await Promise.all([
       downloadsPromise,
       issuesPromise,
     ]);
 
-    return jsonOk({ downloads, issues });
+    return jsonOk({
+      downloads: downloadSeries.points,
+      downloadsGranularity: downloadSeries.granularity,
+      downloadsNote,
+      issues,
+    });
   },
   { logLabel: "packages/charts", fallbackMessage: "Failed to load charts" },
 );

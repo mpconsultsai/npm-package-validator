@@ -1,5 +1,8 @@
 import { formatDaysSinceRelease } from "@/lib/utils/format";
-import type { PackageAnalysisResult } from "@/lib/types/package-data";
+import type {
+  PackageAnalysisResult,
+  PackageEcosystem,
+} from "@/lib/types/package-data";
 import type { AIPackageAnalysis } from "@/lib/ai/analyzer";
 import { classifyRuntimeEnvironment } from "@/lib/runtime-environment";
 import { licenseDisplayName } from "@/lib/license-info";
@@ -125,17 +128,24 @@ export function buildAnalysisResponse(
   packageData: PackageAnalysisResult,
   aiAnalysis: AIPackageAnalysis | null = null,
 ) {
+  const ecosystem: PackageEcosystem = packageData.ecosystem ?? "npm";
   const daysSinceLastRelease = getDaysSinceLastRelease(packageData);
   const runtime = getPackageRuntime(packageData);
+  const registryUrl =
+    ecosystem === "pypi"
+      ? `https://pypi.org/project/${packageName}/`
+      : `https://www.npmjs.com/package/${packageName}`;
 
   return {
     ...packageData,
+    ecosystem,
     ai: aiAnalysis,
     packageInfo: {
       name: packageName,
       latestVersion: packageData.npm?.version || "Unknown",
       license: licenseDisplayName(packageData.npm?.license),
-      npmUrl: `https://www.npmjs.com/package/${packageName}`,
+      npmUrl: registryUrl,
+      registryUrl,
       description: packageData.npm?.description || "",
       homepage: packageData.npm?.homepage,
       repository: packageData.npm?.repository?.url,
@@ -166,6 +176,13 @@ export function buildAnalysisResponse(
         ? {
             bundleSize: packageData.bundleSize.size,
             bundleGzip: packageData.bundleSize.gzip,
+          }
+        : {}),
+      ...(packageData.distributionSize
+        ? {
+            distributionSize: packageData.distributionSize.bytes,
+            distributionSizeKind: packageData.distributionSize.packagetype,
+            distributionFilename: packageData.distributionSize.filename,
           }
         : {}),
     },

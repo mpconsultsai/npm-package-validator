@@ -47,7 +47,10 @@ export function useWatchlistRefresh(enabled: boolean) {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                packages: needing.map((entry) => entry.name),
+                packages: needing.map((entry) => ({
+                  name: entry.name,
+                  ecosystem: entry.ecosystem ?? "npm",
+                })),
               }),
             },
             signal: controller.signal,

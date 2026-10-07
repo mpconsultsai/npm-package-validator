@@ -7,6 +7,11 @@ import { apiPaths } from "@/lib/api/paths";
 import type { PackageDependency } from "@/lib/package-deps";
 import { describeDependencySpec } from "@/lib/describe-dependency-spec";
 import { TransitiveDepsPanel } from "@/components/analysis/TransitiveDepsPanel";
+import {
+  packagePagePath,
+  type PackageEcosystem,
+} from "@/lib/package-routes";
+import { featuresForEcosystem } from "@/lib/ecosystem-features";
 
 const GRAPH_CAP = 18;
 
@@ -28,9 +33,11 @@ function KindBadge({ kind }: { kind: PackageDependency["kind"] }) {
 function DependencyRow({
   dep,
   depth = 0,
+  ecosystem,
 }: {
   dep: PackageDependency;
   depth?: number;
+  ecosystem: PackageEcosystem;
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -47,7 +54,7 @@ function DependencyRow({
     void fetchJson<{
       dependencies?: PackageDependency[];
       error?: string;
-    }>(`${apiPaths.packages.dependencies}?package=${encodeURIComponent(dep.name)}`, {
+    }>(`${apiPaths.packages.dependencies}?package=${encodeURIComponent(dep.name)}&ecosystem=${ecosystem}`, {
       signal: controller.signal,
       timeoutMs: 20_000,
       retries: 1,
@@ -72,7 +79,7 @@ function DependencyRow({
       });
 
     return () => controller.abort();
-  }, [open, children, dep.name]);
+  }, [open, children, dep.name, ecosystem]);
 
   const canExpand = depth < 1;
 
@@ -113,7 +120,7 @@ function DependencyRow({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <Link
-              href={`/package/${encodeURIComponent(dep.name)}`}
+              href={packagePagePath(ecosystem, dep.name)}
               className="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 truncate"
             >
               {dep.name}
@@ -150,6 +157,7 @@ function DependencyRow({
                   key={`${child.kind}:${child.name}`}
                   dep={child}
                   depth={depth + 1}
+                  ecosystem={ecosystem}
                 />
               ))}
             </ul>
@@ -160,11 +168,21 @@ function DependencyRow({
   );
 }
 
-function DependencyList({ deps }: { deps: PackageDependency[] }) {
+function DependencyList({
+  deps,
+  ecosystem,
+}: {
+  deps: PackageDependency[];
+  ecosystem: PackageEcosystem;
+}) {
   return (
     <ul className="divide-y divide-gray-100 dark:divide-gray-700 rounded-lg border border-gray-200 dark:border-gray-700 px-2 sm:px-3">
       {deps.map((dep) => (
-        <DependencyRow key={`${dep.kind}:${dep.name}`} dep={dep} />
+        <DependencyRow
+          key={`${dep.kind}:${dep.name}`}
+          dep={dep}
+          ecosystem={ecosystem}
+        />
       ))}
     </ul>
   );
@@ -173,9 +191,11 @@ function DependencyList({ deps }: { deps: PackageDependency[] }) {
 function DependenciesGraph({
   packageName,
   dependencies,
+  ecosystem,
 }: {
   packageName: string;
   dependencies: PackageDependency[];
+  ecosystem: PackageEcosystem;
 }) {
   const visible = dependencies.slice(0, GRAPH_CAP);
   const overflow = dependencies.length - visible.length;
@@ -230,7 +250,7 @@ function DependenciesGraph({
               strokeWidth={1.25}
             />
           ))}
-          <a href={`/package/${encodeURIComponent(packageName)}`}>
+          <a href={packagePagePath(ecosystem, packageName)}>
             <circle
               cx={cx}
               cy={cy}
@@ -255,7 +275,7 @@ function DependenciesGraph({
             return (
               <a
                 key={`node-${node.kind}-${node.name}`}
-                href={`/package/${encodeURIComponent(node.name)}`}
+                href={packagePagePath(ecosystem, node.name)}
               >
                 <circle
                   cx={node.x}
@@ -316,7 +336,14 @@ function DependenciesSkeleton() {
   );
 }
 
-export function DependenciesCard({ packageName }: { packageName: string }) {
+export function DependenciesCard({
+  packageName,
+  ecosystem = "npm",
+}: {
+  packageName: string;
+  ecosystem?: PackageEcosystem;
+}) {
+  const features = featuresForEcosystem(ecosystem);
   const [deps, setDeps] = useState<PackageDependency[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -332,7 +359,7 @@ export function DependenciesCard({ packageName }: { packageName: string }) {
     void fetchJson<{
       dependencies?: PackageDependency[];
       error?: string;
-    }>(`${apiPaths.packages.dependencies}?package=${encodeURIComponent(packageName)}`, {
+    }>(`${apiPaths.packages.dependencies}?package=${encodeURIComponent(packageName)}&ecosystem=${ecosystem}`, {
       signal: controller.signal,
       timeoutMs: 20_000,
       retries: 1,
@@ -357,7 +384,13 @@ export function DependenciesCard({ packageName }: { packageName: string }) {
       });
 
     return () => controller.abort();
-  }, [packageName]);
+  }, [packageName, ecosystem]);
+
+  useEffect(() => {
+    if (!features.transitiveDepsTree && view === "transitive") {
+      setView("list");
+    }
+  }, [features.transitiveDepsTree, view]);
 
   const runtimeCount = (deps ?? []).filter((d) => d.kind === "runtime").length;
   const peerCount = (deps ?? []).filter((d) => d.kind === "peer").length;
@@ -406,7 +439,9 @@ export function DependenciesCard({ packageName }: { packageName: string }) {
             [
               { id: "chart" as const, label: "Chart" },
               { id: "list" as const, label: "List" },
-              { id: "transitive" as const, label: "Full tree" },
+              ...(features.transitiveDepsTree
+                ? [{ id: "transitive" as const, label: "Full tree" }]
+                : []),
             ] as const
           ).map((option) => {
             const selected = view === option.id;
@@ -430,25 +465,33 @@ export function DependenciesCard({ packageName }: { packageName: string }) {
         </div>
       </div>
 
-      {view === "transitive" ? (
-        <TransitiveDepsPanel packageName={packageName} />
+      {view === "transitive" && features.transitiveDepsTree ? (
+        <TransitiveDepsPanel packageName={packageName} ecosystem={ecosystem} />
       ) : (
         <>
           {/* Mobile: list when not chart */}
           <div className="md:hidden">
             {view === "list" ? (
-              <DependencyList deps={deps} />
+              <DependencyList deps={deps} ecosystem={ecosystem} />
             ) : (
-              <DependenciesGraph packageName={packageName} dependencies={deps} />
+              <DependenciesGraph
+                packageName={packageName}
+                dependencies={deps}
+                ecosystem={ecosystem}
+              />
             )}
           </div>
 
           {/* Desktop: chart or list */}
           <div className="hidden md:block">
             {view === "chart" ? (
-              <DependenciesGraph packageName={packageName} dependencies={deps} />
+              <DependenciesGraph
+                packageName={packageName}
+                dependencies={deps}
+                ecosystem={ecosystem}
+              />
             ) : (
-              <DependencyList deps={deps} />
+              <DependencyList deps={deps} ecosystem={ecosystem} />
             )}
           </div>
         </>

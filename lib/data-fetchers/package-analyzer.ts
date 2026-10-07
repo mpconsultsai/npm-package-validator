@@ -1,9 +1,10 @@
-import type { PackageAnalysisResult } from "../types/package-data";
+import type { PackageAnalysisResult, PackageEcosystem } from "../types/package-data";
 import {
   fetchNpmPackageData,
   fetchNpmDownloadStats,
   fetchNpmPackagePopularity,
 } from "./npm-registry";
+import { fetchPypiPackageData } from "./pypi-registry";
 import { fetchGitHubDataFromUrl, parseGitHubUrl } from "./github";
 import { checkPackageSecurity } from "./security";
 import { fetchBundleSize } from "./bundlephobia";
@@ -14,11 +15,60 @@ import { fetchBundleSize } from "./bundlephobia";
  */
 export async function analyzePackage(
   packageName: string,
+  ecosystem: PackageEcosystem = "npm",
 ): Promise<PackageAnalysisResult> {
   const result: PackageAnalysisResult = {
     packageName,
+    ecosystem,
     errors: {},
   };
+
+  if (ecosystem === "pypi") {
+    try {
+      const { data, readme, distributionSize } =
+        await fetchPypiPackageData(packageName);
+      result.npm = data;
+      result.readme = readme;
+      result.distributionSize = distributionSize;
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Unknown PyPI error";
+      result.errors!.npm = message;
+      throw new Error(`Failed to fetch package data: ${message}`);
+    }
+
+    const version = result.npm.version;
+    const repoUrl = result.npm.repository?.url;
+    const canFetchGitHub = Boolean(repoUrl && parseGitHubUrl(repoUrl));
+
+    await Promise.all([
+      (async () => {
+        if (!canFetchGitHub || !repoUrl) return;
+        try {
+          const githubData = await fetchGitHubDataFromUrl(repoUrl);
+          result.github = githubData.repoData;
+          result.releases = githubData.releases;
+        } catch (error: unknown) {
+          result.errors!.github =
+            error instanceof Error ? error.message : "GitHub fetch failed";
+        }
+      })(),
+      (async () => {
+        try {
+          result.security = await checkPackageSecurity(
+            packageName,
+            version,
+            "pip",
+          );
+        } catch (error: unknown) {
+          result.errors!.security =
+            error instanceof Error ? error.message : "Security check failed";
+        }
+      })(),
+    ]);
+
+    return result;
+  }
 
   // Fetch npm registry data (required) — README comes from the same packument
   try {
@@ -70,7 +120,7 @@ export async function analyzePackage(
     })(),
     (async () => {
       try {
-        result.security = await checkPackageSecurity(packageName, version);
+        result.security = await checkPackageSecurity(packageName, version, "npm");
       } catch (error: unknown) {
         result.errors!.security =
           error instanceof Error ? error.message : "Security check failed";

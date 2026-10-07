@@ -17,7 +17,13 @@ export interface ParseDependencyListResult {
   entries: ParsedDependency[];
   invalidCount: number;
   truncated: boolean;
-  source: "package.json" | "package-lock" | "yarn.lock" | "text" | "empty";
+  source:
+    | "package.json"
+    | "package-lock"
+    | "yarn.lock"
+    | "requirements.txt"
+    | "text"
+    | "empty";
 }
 
 /** Manifest / lockfile field names that must never be treated as packages. */

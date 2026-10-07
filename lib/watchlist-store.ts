@@ -1,5 +1,8 @@
 "use client";
 
+import type { PackageEcosystem } from "@/lib/package-routes";
+import { watchlistEntryKey } from "@/lib/package-routes";
+
 export interface WatchlistSummary {
   version?: string;
   qualityScore?: number;
@@ -22,6 +25,7 @@ export interface WatchlistAlerts {
 
 export interface WatchlistEntry {
   name: string;
+  ecosystem?: PackageEcosystem;
   pinnedAt: number;
   /** When we last polled npm/security for this package */
   lastCheckedAt?: number;
@@ -34,7 +38,8 @@ export interface WatchlistEntry {
 /** Poll at most once per day — typical npm releases are weeks/months apart. */
 export const WATCHLIST_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
-const STORAGE_KEY = "npv-watchlist-v1";
+const STORAGE_KEY = "npv-watchlist-v2";
+const LEGACY_STORAGE_KEY = "npv-watchlist-v1";
 const MAX_ENTRIES = 50;
 
 type Listener = () => void;
@@ -42,29 +47,75 @@ type Listener = () => void;
 const listeners = new Set<Listener>();
 
 /** Cached snapshot for useSyncExternalStore — must be referentially stable until data changes. */
-let snapshot: WatchlistEntry[] = [];
-let hydrated = false;
+const EMPTY_SNAPSHOT: WatchlistEntry[] = [];
+let snapshot: WatchlistEntry[] = EMPTY_SNAPSHOT;
+/** True after localStorage has been read on the client (post-hydration). */
+let storageHydrated = false;
 
 function emit() {
   for (const listener of listeners) listener();
 }
 
+function hydrateFromStorage(): void {
+  if (storageHydrated) return;
+  storageHydrated = true;
+  snapshot = sortEntries(readRaw());
+  emit();
+}
+
 export function subscribeWatchlist(listener: Listener): () => void {
   listeners.add(listener);
+  if (typeof window !== "undefined" && !storageHydrated) {
+    queueMicrotask(() => hydrateFromStorage());
+  }
   return () => listeners.delete(listener);
 }
 
+function normalizeEntry(entry: WatchlistEntry): WatchlistEntry {
+  return {
+    ...entry,
+    ecosystem: entry.ecosystem === "pypi" ? "pypi" : "npm",
+  };
+}
+
 function sortEntries(entries: WatchlistEntry[]): WatchlistEntry[] {
-  return [...entries].sort((a, b) =>
-    a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
-  );
+  return [...entries].sort((a, b) => {
+    const eco = (a.ecosystem ?? "npm").localeCompare(b.ecosystem ?? "npm");
+    if (eco !== 0) return eco;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+  });
 }
 
 function readRaw(): WatchlistEntry[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
+    if (!raw) {
+      const legacy = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (legacy) {
+        const parsedLegacy = JSON.parse(legacy) as unknown;
+        if (Array.isArray(parsedLegacy)) {
+          const migrated = sortEntries(
+            parsedLegacy
+              .filter(
+                (entry): entry is WatchlistEntry =>
+                  Boolean(
+                    entry &&
+                      typeof entry === "object" &&
+                      typeof (entry as WatchlistEntry).name === "string" &&
+                      typeof (entry as WatchlistEntry).pinnedAt === "number",
+                  ),
+              )
+              .map((entry) => normalizeEntry({ ...entry, ecosystem: "npm" }))
+              .slice(0, MAX_ENTRIES),
+          );
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+          window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+          return migrated;
+        }
+      }
+      return [];
+    }
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
     return parsed
@@ -77,6 +128,7 @@ function readRaw(): WatchlistEntry[] {
               typeof (entry as WatchlistEntry).pinnedAt === "number",
           ),
       )
+      .map(normalizeEntry)
       .slice(0, MAX_ENTRIES);
   } catch {
     return [];
@@ -92,35 +144,41 @@ function writeRaw(entries: WatchlistEntry[]) {
     // Quota or private mode — ignore
   }
   snapshot = next;
-  hydrated = true;
+  storageHydrated = true;
   emit();
 }
 
 function ensureHydrated(): WatchlistEntry[] {
-  if (!hydrated) {
-    snapshot = sortEntries(readRaw());
-    hydrated = true;
+  if (!storageHydrated) {
+    hydrateFromStorage();
   }
   return snapshot;
 }
 
 export function getWatchlistSnapshot(): WatchlistEntry[] {
-  return ensureHydrated();
+  if (!storageHydrated) {
+    return EMPTY_SNAPSHOT;
+  }
+  return snapshot;
 }
 
 export function getWatchlistServerSnapshot(): WatchlistEntry[] {
   return EMPTY_SNAPSHOT;
 }
 
-const EMPTY_SNAPSHOT: WatchlistEntry[] = [];
-
 export function listWatchlist(): WatchlistEntry[] {
   return ensureHydrated();
 }
 
-export function isWatched(packageName: string): boolean {
-  const key = packageName.toLowerCase();
-  return ensureHydrated().some((entry) => entry.name.toLowerCase() === key);
+export function isWatched(
+  packageName: string,
+  ecosystem: PackageEcosystem = "npm",
+): boolean {
+  const key = watchlistEntryKey(ecosystem, packageName);
+  return ensureHydrated().some(
+    (entry) =>
+      watchlistEntryKey(entry.ecosystem ?? "npm", entry.name) === key,
+  );
 }
 
 export function getWatchlistAlerts(entry: WatchlistEntry): WatchlistAlerts {
@@ -200,18 +258,21 @@ export function getWatchlistEntriesNeedingCheck(
 export function addToWatchlist(
   packageName: string,
   summary?: WatchlistSummary,
+  ecosystem: PackageEcosystem = "npm",
 ): WatchlistEntry[] {
   const name = packageName.trim();
   if (!name) return listWatchlist();
 
-  const key = name.toLowerCase();
+  const key = watchlistEntryKey(ecosystem, name);
   const now = Date.now();
   const current = ensureHydrated().filter(
-    (entry) => entry.name.toLowerCase() !== key,
+    (entry) =>
+      watchlistEntryKey(entry.ecosystem ?? "npm", entry.name) !== key,
   );
   writeRaw([
     {
       name,
+      ecosystem,
       pinnedAt: now,
       lastCheckedAt: summary ? now : undefined,
       summary,
@@ -228,32 +289,45 @@ export function addToWatchlist(
   return listWatchlist();
 }
 
-export function removeFromWatchlist(packageName: string): WatchlistEntry[] {
-  const key = packageName.toLowerCase();
-  writeRaw(ensureHydrated().filter((entry) => entry.name.toLowerCase() !== key));
+export function removeFromWatchlist(
+  packageName: string,
+  ecosystem: PackageEcosystem = "npm",
+): WatchlistEntry[] {
+  const key = watchlistEntryKey(ecosystem, packageName);
+  writeRaw(
+    ensureHydrated().filter(
+      (entry) =>
+        watchlistEntryKey(entry.ecosystem ?? "npm", entry.name) !== key,
+    ),
+  );
   return listWatchlist();
 }
 
 export function toggleWatchlist(
   packageName: string,
   summary?: WatchlistSummary,
+  ecosystem: PackageEcosystem = "npm",
 ): boolean {
-  if (isWatched(packageName)) {
-    removeFromWatchlist(packageName);
+  if (isWatched(packageName, ecosystem)) {
+    removeFromWatchlist(packageName, ecosystem);
     return false;
   }
-  addToWatchlist(packageName, summary);
+  addToWatchlist(packageName, summary, ecosystem);
   return true;
 }
 
 export function updateWatchlistSummary(
   packageName: string,
   summary: WatchlistSummary,
+  ecosystem: PackageEcosystem = "npm",
 ): void {
-  const key = packageName.toLowerCase();
+  const key = watchlistEntryKey(ecosystem, packageName);
   const now = Date.now();
   const current = ensureHydrated();
-  const existing = current.find((entry) => entry.name.toLowerCase() === key);
+  const existing = current.find(
+    (entry) =>
+      watchlistEntryKey(entry.ecosystem ?? "npm", entry.name) === key,
+  );
   if (!existing) return;
 
   const nextFresh: WatchlistFresh = {
@@ -271,7 +345,7 @@ export function updateWatchlistSummary(
 
   writeRaw(
     current.map((entry) =>
-      entry.name.toLowerCase() === key
+      watchlistEntryKey(entry.ecosystem ?? "npm", entry.name) === key
         ? {
             ...entry,
             lastCheckedAt: now,
@@ -285,18 +359,26 @@ export function updateWatchlistSummary(
 
 /** Apply polled status without treating it as a user review. */
 export function applyWatchlistFreshStatuses(
-  updates: (WatchlistFresh & { name: string })[],
+  updates: (WatchlistFresh & { name: string; ecosystem?: PackageEcosystem })[],
   checkedAt = Date.now(),
 ): void {
   if (updates.length === 0) return;
   const byName = new Map(
-    updates.map((u) => [u.name.toLowerCase(), u] as const),
+    updates.map(
+      (u) =>
+        [
+          watchlistEntryKey(u.ecosystem ?? "npm", u.name),
+          u,
+        ] as const,
+    ),
   );
   const current = ensureHydrated();
   let changed = false;
 
   const next = current.map((entry) => {
-    const update = byName.get(entry.name.toLowerCase());
+    const update = byName.get(
+      watchlistEntryKey(entry.ecosystem ?? "npm", entry.name),
+    );
     if (!update) return entry;
 
     const fresh: WatchlistFresh = {
