@@ -25,7 +25,7 @@ const sseHeaders = {
 const encodeSse = (encoder: TextEncoder, event: UpgradeAgentStreamEvent) =>
   encoder.encode(`data: ${JSON.stringify(event)}\n\n`);
 
-/** POST /api/v1/upgrade/agent — JSON by default; SSE when `stream: true` or Accept includes event-stream. */
+/** POST /api/v1/upgrade/agent - JSON by default; SSE when `stream: true` or Accept includes event-stream. */
 export const POST = withHandler(
   async (request) => {
     const body = await readJsonBody(request);

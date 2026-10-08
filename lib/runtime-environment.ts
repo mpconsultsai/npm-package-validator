@@ -1,6 +1,6 @@
 /**
  * Heuristic client / server / both classification from npm metadata.
- * Not authoritative — confidence varies by how clear the signals are.
+ * Not authoritative - confidence varies by how clear the signals are.
  */
 
 export type RuntimeKind = "client" | "server" | "both" | "unclear";

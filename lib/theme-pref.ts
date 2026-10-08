@@ -63,5 +63,5 @@ export function resolveTheme(
   return systemDark ? "dark" : "light";
 }
 
-/** Inline boot script — apply class before paint to avoid flash. */
+/** Inline boot script - apply class before paint to avoid flash. */
 export const THEME_BOOT_SCRIPT = `(function(){try{var k=${JSON.stringify(STORAGE_KEY)};var p=localStorage.getItem(k);if(p!=="light"&&p!=="dark"&&p!=="system")p="system";var dark=p==="dark"||(p!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches);var r=document.documentElement;r.classList.toggle("dark",dark);r.style.colorScheme=dark?"dark":"light";}catch(e){}})();`;

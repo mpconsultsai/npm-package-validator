@@ -65,7 +65,7 @@ export function useWatchlistRefresh(enabled: boolean) {
         );
         applyWatchlistFreshStatuses(updates, data.checkedAt ?? Date.now());
       } catch {
-        // Silent — watchlist still usable offline / on failure
+        // Silent - watchlist still usable offline / on failure
       } finally {
         if (!controller.signal.aborted) setChecking(false);
         inFlight.current = false;

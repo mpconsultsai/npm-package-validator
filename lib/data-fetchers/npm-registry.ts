@@ -121,7 +121,7 @@ export async function fetchNpmDownloadTrends(packageName: string): Promise<{
   try {
     const end = new Date();
     end.setUTCHours(0, 0, 0, 0);
-    // Exclude the most recent two weeks — current/partial weeks are noisy.
+    // Exclude the most recent two weeks - current/partial weeks are noisy.
     end.setUTCDate(end.getUTCDate() - 14);
     const mid = new Date(end);
     mid.setUTCDate(mid.getUTCDate() - 365);
@@ -213,7 +213,7 @@ export function toWeeklyDownloads(
     byWeek.set(weekKey, bucket);
   }
 
-  // Drop partial weeks at the start/end — they look like false dips.
+  // Drop partial weeks at the start/end - they look like false dips.
   const weeks = [...byWeek.entries()]
     .filter(([, bucket]) => bucket.days >= minDaysInWeek)
     .sort(([a], [b]) => a.localeCompare(b))
@@ -656,7 +656,7 @@ export type SimilarPackageCard = {
 
 /**
  * Rank related packages by distinctive keyword overlap, name similarity,
- * and npm's quality/popularity/maintenance scores — not raw search order.
+ * and npm's quality/popularity/maintenance scores - not raw search order.
  *
  * Returns a ranked pool (default 30) so callers can paginate with an offset cursor.
  */
@@ -721,7 +721,7 @@ export async function fetchSimilarPackages(
 
 /**
  * Fetch package README content (truncated for AI analysis).
- * Prefer readme from fetchNpmPackageData when analysing — this is a standalone fallback.
+ * Prefer readme from fetchNpmPackageData when analysing - this is a standalone fallback.
  */
 export async function fetchNpmReadme(packageName: string): Promise<string | null> {
   try {

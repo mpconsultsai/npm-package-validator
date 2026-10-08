@@ -52,7 +52,7 @@ export type UpgradeAgentResult = {
   toolCalls: string[];
 };
 
-/** Keep prompts small — large Angular-style payloads make gpt-oss emit empty JSON. */
+/** Keep prompts small - large Angular-style payloads make gpt-oss emit empty JSON. */
 const MAX_FACTS_CHARS = 10_000;
 
 const clampFacts = (facts: string): string => {
@@ -100,7 +100,7 @@ const ensureBriefDefaults = (
     bullets:
       bullets.length > 0
         ? bullets
-        : ["Limited structured output from the model — rely on the breaking notes and peers above."],
+        : ["Limited structured output from the model - rely on the breaking notes and peers above."],
     risk,
     nextSteps:
       nextSteps.length > 0
@@ -284,7 +284,7 @@ const buildSecurityDelta = (
   } else if (delta > 0) {
     summary = `Security worsens: ${fromTotal} → ${toTotal} advisories (${delta} more on the target).`;
   } else {
-    summary = `Advisory count unchanged (${fromTotal} on both versions) — still review severity mix.`;
+    summary = `Advisory count unchanged (${fromTotal} on both versions) - still review severity mix.`;
   }
 
   return {
@@ -374,7 +374,7 @@ const routeAfterPeers = (state: typeof AgentState.State): EnrichRoute =>
 const routeAfterSecurityDelta = (state: typeof AgentState.State): EnrichRoute =>
   nextEnrichRoute(parseFacts(state.facts), "securityDelta");
 
-/** Peers node — only entered when peerDependency changes exist. */
+/** Peers node - only entered when peerDependency changes exist. */
 async function enrichPeers(state: typeof AgentState.State) {
   const facts = parseFacts(state.facts);
   const peers = buildPeersEnrichment(facts);
@@ -388,7 +388,7 @@ async function enrichPeers(state: typeof AgentState.State) {
   };
 }
 
-/** Security delta — only entered when advisory counts/severity change. */
+/** Security delta - only entered when advisory counts/severity change. */
 async function enrichSecurityDelta(state: typeof AgentState.State) {
   const facts = parseFacts(state.facts);
   const securityDelta = buildSecurityDelta(facts);
@@ -405,7 +405,7 @@ async function enrichSecurityDelta(state: typeof AgentState.State) {
   };
 }
 
-/** Migration node — only entered when guide/changelog URLs appear. */
+/** Migration node - only entered when guide/changelog URLs appear. */
 async function enrichMigration(state: typeof AgentState.State) {
   const facts = parseFacts(state.facts);
   const migration = buildMigrationEnrichment(facts);
@@ -425,7 +425,7 @@ const INSTALL_CMD_RE =
 function installGuidance(pref: PackageManagerPreference): string {
   if (pref === "auto") {
     return (
-      "packageManager preference is auto — give install examples for npm, pnpm, and yarn " +
+      "packageManager preference is auto - give install examples for npm, pnpm, and yarn " +
       "(e.g. `npm install pkg@ver`, `pnpm add pkg@ver`, `yarn add pkg@ver`); do not assume only npm."
     );
   }
@@ -435,7 +435,7 @@ function installGuidance(pref: PackageManagerPreference): string {
     yarn: "`yarn add pkg@version`",
     bun: "`bun add pkg@version`",
   };
-  return `packageManager preference is ${pref} — use ${examples[pref]} for the install step (match this manager only).`;
+  return `packageManager preference is ${pref} - use ${examples[pref]} for the install step (match this manager only).`;
 }
 
 /** Ensure next steps include a concrete install command after an initial review step. */
@@ -475,13 +475,13 @@ export function normalizeNextSteps(
 
 function nextStepsGuidance(packageManager: PackageManagerPreference): string {
   return `nextSteps must be a clear, ordered developer checklist (3–5 items):
-1. FIRST: review release notes / breaking-change notes and peer risks — use a real URL from facts.enrichment.migration.urls or details when available; otherwise say to check the package's changelog for this range. Do not invent URLs. Call out named breaking changes from the facts when present.
+1. FIRST: review release notes / breaking-change notes and peer risks - use a real URL from facts.enrichment.migration.urls or details when available; otherwise say to check the package's changelog for this range. Do not invent URLs. Call out named breaking changes from the facts when present.
 2. THEN: install/upgrade to the target version. ${installGuidance(packageManager)} Only install after reviewing what may break.
 3. If facts.enrichment.peers is present, include aligning those peers (name the packages from enrichment.peers.align).
 4. If facts.enrichment.securityDelta shows more advisories on the target, call that out before or with the install step.
 5. Run the project's tests and typecheck (or build) to catch breakages.
 Do NOT invent vague steps like "monitor application logs", "update the package lock and rebuild" as a separate step (the lockfile updates with install), or generic "confirm compatibility" without saying how.
-Write in UK English. Do not use "you" or "your". Use enrichment summaries when present — they are deterministic facts.`;
+Write in UK English. Do not use "you" or "your". Use enrichment summaries when present - they are deterministic facts.`;
 }
 
 function requireGroqKey(): string {
@@ -554,7 +554,7 @@ async function collectFacts(state: typeof AgentState.State) {
     (async () => {
       toolCalls.push("get_upgrade_details");
       const details = await loadUpgradeDetails(packageName, from, to);
-      // Keep peer list short — Angular-style majors can list dozens of peers.
+      // Keep peer list short - Angular-style majors can list dozens of peers.
       const truncated = truncateUpgradeDetailsForAgent(details, 4, 2);
       if (
         truncated.peers &&

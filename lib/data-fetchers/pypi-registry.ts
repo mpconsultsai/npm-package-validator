@@ -8,6 +8,11 @@ import { errorMessage } from "@/lib/utils/error-message";
 import { validatePackageNameForEcosystem } from "@/lib/validation";
 import { sanitizeDescription } from "../sanitize";
 import type { NpmPackageData } from "../types/package-data";
+import {
+  coreDependenciesMap,
+  parsePypiRequiresDist,
+  type PypiInstallRequirements,
+} from "@/lib/pypi-requires-dist";
 
 const PYPI_JSON_URL = "https://pypi.org/pypi";
 const PYPI_SIMPLE_INDEX_URL = "https://pypi.org/simple/";
@@ -28,27 +33,25 @@ export type PypiSearchResult = {
   version: string;
 };
 
-function parseRequiresDist(requiresDist?: string[] | null): Record<string, string> {
-  const deps: Record<string, string> = {};
-  if (!requiresDist?.length) return deps;
-  for (const line of requiresDist) {
-    const match = line.match(/^([A-Za-z0-9._-]+)\s*(.*)$/);
-    if (!match) continue;
-    const name = match[1];
-    const spec = (match[2] || "").trim();
-    deps[name] = spec || "*";
-  }
-  return deps;
-}
-
 function buildTimeMap(
   releases: Record<string, { upload_time?: string }[] | undefined> | undefined,
 ): NpmPackageData["time"] {
   const time: Record<string, string> = {};
   if (releases) {
     for (const [version, files] of Object.entries(releases)) {
-      const upload = files?.[0]?.upload_time;
-      if (upload) time[version] = upload;
+      if (!files?.length) continue;
+      let latestUpload: string | undefined;
+      for (const file of files) {
+        const upload = file?.upload_time;
+        if (!upload) continue;
+        if (
+          !latestUpload ||
+          new Date(upload).getTime() > new Date(latestUpload).getTime()
+        ) {
+          latestUpload = upload;
+        }
+      }
+      if (latestUpload) time[version] = latestUpload;
     }
   }
   return time as NpmPackageData["time"];
@@ -94,6 +97,7 @@ export async function fetchPypiPackageData(packageName: string): Promise<{
   data: NpmPackageData;
   readme: string | null;
   distributionSize: DistributionSizeInfo | null;
+  pypiInstall: PypiInstallRequirements;
 }> {
   try {
     const response = await axios.get(
@@ -124,6 +128,12 @@ export async function fetchPypiPackageData(packageName: string): Promise<{
       version,
     );
 
+    const pypiInstall = parsePypiRequiresDist(
+      info.requires_dist,
+      info.provides_extra,
+      info.requires_python,
+    );
+
     return {
       data: {
         name: info.name || packageName,
@@ -142,13 +152,17 @@ export async function fetchPypiPackageData(packageName: string): Promise<{
               .map((k: string) => k.trim())
               .filter(Boolean)
           : undefined,
-        dependencies: parseRequiresDist(info.requires_dist),
+        dependencies: coreDependenciesMap(pypiInstall),
+        engines: pypiInstall.requiresPython
+          ? { python: pypiInstall.requiresPython }
+          : null,
         maintainers: undefined,
         time,
         distTags: { latest: version },
       },
       readme,
       distributionSize,
+      pypiInstall,
     };
   } catch (error: unknown) {
     if (axios.isAxiosError(error) && error.response?.status === 404) {

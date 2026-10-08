@@ -312,13 +312,13 @@ export function TransitiveDepsPanel({
         <p>
           <strong className="text-gray-900 dark:text-white">Direct</strong>{" "}
           dependencies are declared in this package&apos;s{" "}
-          <span className="font-mono text-xs">package.json</span> — what Chart
+          <span className="font-mono text-xs">package.json</span> - what Chart
           and List show from the registry.
         </p>
         <p>
           <strong className="text-gray-900 dark:text-white">Transitive</strong>{" "}
           dependencies are brought in by those packages (and their dependencies)
-          when npm resolves the install tree — often most of what actually
+          when npm resolves the install tree - often most of what actually
           ships. Risks here don&apos;t appear in your top-level manifest. Each
           row shows how it is reached from this package (shortest path first).
           Expand a row when the same resolved version appears on multiple routes.

@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { fetchJson } from "@/lib/fetch-client";
 import { apiPaths } from "@/lib/api/paths";
-import type { PackageDependency } from "@/lib/package-deps";
+import {
+  dependencyReactKey,
+  type PackageDependency,
+} from "@/lib/package-deps";
 import { describeDependencySpec } from "@/lib/describe-dependency-spec";
 import { TransitiveDepsPanel } from "@/components/analysis/TransitiveDepsPanel";
 import {
@@ -12,10 +15,30 @@ import {
   type PackageEcosystem,
 } from "@/lib/package-routes";
 import { featuresForEcosystem } from "@/lib/ecosystem-features";
+import {
+  combinePypiDepsForView,
+  normalizePypiMeta,
+  PypiDependenciesPanel,
+  pypiHasAnyRequirements,
+  type PypiDependenciesMeta,
+} from "@/components/analysis/PypiDependenciesPanel";
 
 const GRAPH_CAP = 18;
 
-function KindBadge({ kind }: { kind: PackageDependency["kind"] }) {
+function KindBadge({
+  kind,
+  ecosystem,
+}: {
+  kind: PackageDependency["kind"];
+  ecosystem: PackageEcosystem;
+}) {
+  if (ecosystem === "pypi") {
+    return (
+      <span className="inline-flex shrink-0 rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-700 dark:bg-gray-700/70 dark:text-gray-200">
+        Required
+      </span>
+    );
+  }
   const peer = kind === "peer";
   return (
     <span
@@ -125,12 +148,25 @@ function DependencyRow({
             >
               {dep.name}
             </Link>
-            <KindBadge kind={dep.kind} />
+            <KindBadge kind={dep.kind} ecosystem={ecosystem} />
+            {dep.marker ? (
+              <span
+                className="inline-flex max-w-[12rem] truncate rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
+                title={dep.marker}
+              >
+                conditional
+              </span>
+            ) : null}
           </div>
           <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400 font-mono truncate">
             {dep.range}
             {explained ? ` · ${explained.label}` : ""}
           </p>
+          {dep.marker ? (
+            <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400 font-mono break-all">
+              ; {dep.marker}
+            </p>
+          ) : null}
         </div>
       </div>
       {open && (
@@ -147,14 +183,16 @@ function DependencyRow({
           )}
           {!loading && children && children.length === 0 && !error && (
             <p className="py-2 pl-4 text-xs text-gray-500 dark:text-gray-400">
-              No further runtime or peer dependencies.
+              {ecosystem === "pypi"
+                ? "No further install requirements."
+                : "No further runtime or peer dependencies."}
             </p>
           )}
           {!loading && children && children.length > 0 && (
             <ul className="divide-y divide-gray-100 dark:divide-gray-700/80">
-              {children.map((child) => (
+              {children.map((child, childIndex) => (
                 <DependencyRow
-                  key={`${child.kind}:${child.name}`}
+                  key={dependencyReactKey(child, childIndex)}
                   dep={child}
                   depth={depth + 1}
                   ecosystem={ecosystem}
@@ -177,9 +215,9 @@ function DependencyList({
 }) {
   return (
     <ul className="divide-y divide-gray-100 dark:divide-gray-700 rounded-lg border border-gray-200 dark:border-gray-700 px-2 sm:px-3">
-      {deps.map((dep) => (
+      {deps.map((dep, index) => (
         <DependencyRow
-          key={`${dep.kind}:${dep.name}`}
+          key={dependencyReactKey(dep, index)}
           dep={dep}
           ecosystem={ecosystem}
         />
@@ -221,7 +259,7 @@ function DependenciesGraph({
       cos > 0.35 ? "start" : cos < -0.35 ? "end" : "middle";
     const dy =
       sin > 0.45 ? "0.9em" : sin < -0.45 ? "-0.35em" : "0.35em";
-    return { ...dep, angle, x, y, lx, ly, textAnchor, dy };
+    return { ...dep, angle, x, y, lx, ly, textAnchor, dy, graphIndex: index };
   });
 
   return (
@@ -240,7 +278,7 @@ function DependenciesGraph({
         >
           {nodes.map((node) => (
             <line
-              key={`edge-${node.kind}-${node.name}`}
+              key={`edge-${dependencyReactKey(node, node.graphIndex)}`}
               x1={cx}
               y1={cy}
               x2={node.x}
@@ -274,7 +312,7 @@ function DependenciesGraph({
             const peer = node.kind === "peer";
             return (
               <a
-                key={`node-${node.kind}-${node.name}`}
+                key={`node-${dependencyReactKey(node, node.graphIndex)}`}
                 href={packagePagePath(ecosystem, node.name)}
               >
                 <circle
@@ -288,7 +326,13 @@ function DependenciesGraph({
                   }
                 />
                 <title>
-                  {node.name}@{node.range} ({peer ? "peer" : "runtime"})
+                  {node.name}@{node.range} (
+                  {ecosystem === "pypi"
+                    ? "required"
+                    : peer
+                      ? "peer"
+                      : "runtime"}
+                  )
                 </title>
                 <text
                   x={node.lx}
@@ -304,16 +348,18 @@ function DependenciesGraph({
           })}
         </svg>
       </div>
-      <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-gray-500 dark:text-gray-400">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block size-2.5 rounded-full bg-gray-700 dark:bg-gray-300" />
-          Runtime
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block size-2.5 rounded-full bg-violet-500" />
-          Peer
-        </span>
-      </div>
+      {ecosystem !== "pypi" ? (
+        <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-gray-500 dark:text-gray-400">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block size-2.5 rounded-full bg-gray-700 dark:bg-gray-300" />
+            Runtime
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block size-2.5 rounded-full bg-violet-500" />
+            Peer
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -345,6 +391,8 @@ export function DependenciesCard({
 }) {
   const features = featuresForEcosystem(ecosystem);
   const [deps, setDeps] = useState<PackageDependency[] | null>(null);
+  const [pypiMeta, setPypiMeta] = useState<PypiDependenciesMeta | null>(null);
+  const [pypiExtra, setPypiExtra] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"chart" | "list" | "transitive">("chart");
@@ -354,10 +402,13 @@ export function DependenciesCard({
     setLoading(true);
     setError(null);
     setDeps(null);
+    setPypiMeta(null);
+    setPypiExtra(null);
     setView("chart");
 
     void fetchJson<{
       dependencies?: PackageDependency[];
+      pypi?: PypiDependenciesMeta;
       error?: string;
     }>(`${apiPaths.packages.dependencies}?package=${encodeURIComponent(packageName)}&ecosystem=${ecosystem}`, {
       signal: controller.signal,
@@ -371,7 +422,16 @@ export function DependenciesCard({
           setDeps([]);
           return;
         }
-        setDeps(data.dependencies ?? []);
+        if (ecosystem === "pypi" && data.pypi) {
+          const meta = normalizePypiMeta(
+            data.pypi,
+            data.dependencies ?? [],
+          );
+          setPypiMeta(meta);
+          setDeps(combinePypiDepsForView(meta, null));
+        } else {
+          setDeps(data.dependencies ?? []);
+        }
       })
       .catch(() => {
         if (!controller.signal.aborted) {
@@ -387,11 +447,27 @@ export function DependenciesCard({
   }, [packageName, ecosystem]);
 
   useEffect(() => {
+    if (!pypiMeta || ecosystem !== "pypi") return;
+    setDeps(combinePypiDepsForView(pypiMeta, pypiExtra));
+  }, [pypiMeta, pypiExtra, ecosystem]);
+
+  useEffect(() => {
     if (!features.transitiveDepsTree && view === "transitive") {
       setView("list");
     }
   }, [features.transitiveDepsTree, view]);
 
+  const hasDepsToPlot = (deps?.length ?? 0) > 0;
+  const pypiShowChart = ecosystem !== "pypi" || hasDepsToPlot;
+
+  useEffect(() => {
+    if (ecosystem === "pypi" && !hasDepsToPlot && view === "chart") {
+      setView("list");
+    }
+  }, [ecosystem, hasDepsToPlot, view]);
+
+  const coreCount = pypiMeta?.core?.length ?? 0;
+  const conditionalCount = pypiMeta?.conditional?.length ?? 0;
   const runtimeCount = (deps ?? []).filter((d) => d.kind === "runtime").length;
   const peerCount = (deps ?? []).filter((d) => d.kind === "peer").length;
 
@@ -405,11 +481,16 @@ export function DependenciesCard({
     );
   }
 
-  if (!deps || deps.length === 0) {
+  const pypiEmpty =
+    ecosystem === "pypi" && pypiMeta && !pypiHasAnyRequirements(pypiMeta);
+
+  if (!deps || (deps.length === 0 && !pypiMeta?.requiresPython && pypiEmpty)) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          No runtime or peer dependencies declared for the latest version.
+          {ecosystem === "pypi"
+            ? "No install requirements declared for the latest release."
+            : "No runtime or peer dependencies declared for the latest version."}
         </p>
       </div>
     );
@@ -420,16 +501,18 @@ export function DependenciesCard({
       <div className="flex flex-wrap items-center justify-between gap-3">
         {view !== "transitive" ? (
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Direct dependencies for the latest release
-            {" · "}
-            {runtimeCount} runtime
-            {peerCount > 0 ? ` · ${peerCount} peer` : ""}
+            {ecosystem === "pypi"
+              ? pypiExtra
+                ? `Showing default + extra “${pypiExtra}” · ${runtimeCount} packages`
+                : `Core install · ${coreCount} required${conditionalCount > 0 ? ` · ${conditionalCount} conditional` : ""}`
+              : `Direct dependencies for the latest release · ${runtimeCount} runtime${peerCount > 0 ? ` · ${peerCount} peer` : ""}`}
           </p>
         ) : (
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Resolved install tree (direct + transitive)
           </p>
         )}
+        {pypiShowChart || features.transitiveDepsTree ? (
         <div
           role="radiogroup"
           aria-label="Dependencies view"
@@ -437,8 +520,12 @@ export function DependenciesCard({
         >
           {(
             [
-              { id: "chart" as const, label: "Chart" },
-              { id: "list" as const, label: "List" },
+              ...(pypiShowChart
+                ? [
+                    { id: "chart" as const, label: "Chart" },
+                    { id: "list" as const, label: "List" },
+                  ]
+                : []),
               ...(features.transitiveDepsTree
                 ? [{ id: "transitive" as const, label: "Full tree" }]
                 : []),
@@ -463,20 +550,30 @@ export function DependenciesCard({
             );
           })}
         </div>
+        ) : null}
       </div>
+
+      {ecosystem === "pypi" && pypiMeta ? (
+        <PypiDependenciesPanel
+          packageName={packageName}
+          meta={pypiMeta}
+          selectedExtra={pypiExtra}
+          onSelectExtra={setPypiExtra}
+        />
+      ) : null}
 
       {view === "transitive" && features.transitiveDepsTree ? (
         <TransitiveDepsPanel packageName={packageName} ecosystem={ecosystem} />
-      ) : (
+      ) : pypiShowChart ? (
         <>
           {/* Mobile: list when not chart */}
           <div className="md:hidden">
             {view === "list" ? (
-              <DependencyList deps={deps} ecosystem={ecosystem} />
+              <DependencyList deps={deps ?? []} ecosystem={ecosystem} />
             ) : (
               <DependenciesGraph
                 packageName={packageName}
-                dependencies={deps}
+                dependencies={deps ?? []}
                 ecosystem={ecosystem}
               />
             )}
@@ -487,15 +584,20 @@ export function DependenciesCard({
             {view === "chart" ? (
               <DependenciesGraph
                 packageName={packageName}
-                dependencies={deps}
+                dependencies={deps ?? []}
                 ecosystem={ecosystem}
               />
             ) : (
-              <DependencyList deps={deps} ecosystem={ecosystem} />
+              <DependencyList deps={deps ?? []} ecosystem={ecosystem} />
             )}
           </div>
         </>
-      )}
+      ) : ecosystem === "pypi" ? (
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          This install option has no dependency packages to list. Choose Default
+          install or another optional extra, or see Requires Python above.
+        </p>
+      ) : null}
     </div>
   );
 }

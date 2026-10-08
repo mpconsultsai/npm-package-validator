@@ -226,7 +226,7 @@ export function OpenSSFScorecardStrip({
   if (!repository?.trim()) {
     return shell(
       <p className="text-xs text-gray-500 dark:text-gray-400">
-        No GitHub repository in package metadata — Scorecard needs a public repo URL.
+        No GitHub repository in package metadata - Scorecard needs a public repo URL.
       </p>,
     );
   }
@@ -253,7 +253,7 @@ export function OpenSSFScorecardStrip({
   if (!data) return null;
 
   const overall =
-    data.overallScore != null ? data.overallScore.toFixed(1) : "—";
+    data.overallScore != null ? data.overallScore.toFixed(1) : "-";
   const scoredDate = data.scoredAt
     ? new Date(data.scoredAt).toLocaleDateString("en-GB", {
         day: "numeric",

@@ -115,7 +115,7 @@ function PeerChangeRow({ change }: { change: PeerChange }) {
 }
 
 function formatVulnCount(security: SecuritySummary | null | undefined): string {
-  if (!security || typeof security.totalCount !== "number") return "—";
+  if (!security || typeof security.totalCount !== "number") return "-";
   if (security.totalCount === 0) return "none";
   return String(security.totalCount);
 }

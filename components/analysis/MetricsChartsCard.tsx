@@ -293,7 +293,7 @@ function MetricLineChart({
   );
 }
 
-/** Histogram of publishes per month — right chart for release cadence. */
+/** Histogram of publishes per month - right chart for release cadence. */
 function ReleaseCadenceChart({
   points,
   registryLabel = "npm",
@@ -372,7 +372,7 @@ function ReleaseCadenceChart({
 }
 
 /**
- * Overall major/minor/patch share — clearer for adoption decisions than
+ * Overall major/minor/patch share - clearer for adoption decisions than
  * monthly stacked bars.
  */
 function ReleaseTypeMixChart({ mix }: { mix: ReleaseTypeMixResult }) {
@@ -478,7 +478,7 @@ function ReleaseTypeMixChart({ mix }: { mix: ReleaseTypeMixResult }) {
               >
                 <span className="font-mono text-sm font-semibold">v{m.version}</span>
                 <span className="text-xs text-gray-500 dark:text-gray-400">
-                  {formatPublishDate(m.date) ?? "—"}
+                  {formatPublishDate(m.date) ?? "-"}
                 </span>
               </li>
             ))}

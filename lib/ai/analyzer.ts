@@ -115,7 +115,7 @@ function detectPackageHealthFlags(data: PackageAnalysisResult): PackageHealthFla
         ? ` (${daysSincePublish} days since last publish)`
         : "";
     reasons.push(
-      `No meaningful maintenance activity for a long time${daysPart} — this package appears unmaintained.`,
+      `No meaningful maintenance activity for a long time${daysPart} - this package appears unmaintained.`,
     );
   } else if (unmaintained && readmeWarning && reasons.length === 0) {
     reasons.push(
@@ -258,7 +258,7 @@ function normalizeRecommendation(
 
 /**
  * Force a hard negative recommendation when package is deprecated,
- * archived, or clearly unmaintained — do not trust the model alone.
+ * archived, or clearly unmaintained - do not trust the model alone.
  */
 function applyHealthRecommendationOverrides(
   analysis: AIPackageAnalysis,
@@ -284,7 +284,7 @@ function applyHealthRecommendationOverrides(
     maintenanceRating: "poor",
     overallScore: Math.min(analysis.overallScore, flags.deprecated || flags.archived ? 25 : 35),
     concerns: concerns.length > 0 ? concerns : ["Package appears unsafe to adopt for new work."],
-    // Keep reasons in concerns only — do not also paste them into reasoning
+    // Keep reasons in concerns only - do not also paste them into reasoning
     reasoning: mergeReasoning(
       ["Do not use this package for new projects"],
       analysis.reasoning || "",
@@ -343,7 +343,7 @@ function assessBundleSize(data: PackageAnalysisResult): {
   if (gzip >= 200_000 || size >= 500_000) {
     return {
       level: "very-large",
-      note: `Very large browser bundle (${formatBytes(gzip)} gzip / ${formatBytes(size)} minified) — likely to hurt client-side load performance.`,
+      note: `Very large browser bundle (${formatBytes(gzip)} gzip / ${formatBytes(size)} minified) - likely to hurt client-side load performance.`,
       gzip,
       size,
     };
@@ -351,7 +351,7 @@ function assessBundleSize(data: PackageAnalysisResult): {
   if (gzip >= 100_000 || size >= 250_000) {
     return {
       level: "large",
-      note: `Large browser bundle (${formatBytes(gzip)} gzip / ${formatBytes(size)} minified) — may affect page load performance in the browser.`,
+      note: `Large browser bundle (${formatBytes(gzip)} gzip / ${formatBytes(size)} minified) - may affect page load performance in the browser.`,
       gzip,
       size,
     };
@@ -373,7 +373,7 @@ function assessBundleSize(data: PackageAnalysisResult): {
 }
 
 /**
- * Ensure large/very-large bundles are called out in AI concerns —
+ * Ensure large/very-large bundles are called out in AI concerns -
  * but not for packages that look server-only (browser payload is less relevant).
  */
 function applyBundleSizeNotes(
@@ -608,7 +608,7 @@ function daysSince(iso?: string | null): number | null {
 const COMPLETE_UTILITY_TEXT =
   /\b(math|mathematic|algorithm|numeric|number|precision|decimal|bigint|statistics|statistical|ieee|754|floating|matrix|vector|hash|crc|checksum|constant|encode|decode|uuid|slug|semver|normalize|is-even|is-odd|prime|factorial|combinator|probability|tensor|linear algebra|trigonometry|geometry)\b/i;
 
-/** Narrow, often "done" libraries (math, tiny utils) — slow releases are normal. */
+/** Narrow, often "done" libraries (math, tiny utils) - slow releases are normal. */
 function isLikelyCompleteUtility(data: PackageAnalysisResult): boolean {
   const npm = data.npm;
   const text = [
@@ -666,7 +666,7 @@ function maintenanceContext(
   const popular = adoption === 'widely-adopted';
 
   if (publish === null) {
-    return 'unknown publish date — do not infer abandonment';
+    return 'unknown publish date - do not infer abandonment';
   }
   if (publish < 90) {
     return `healthy (${publish}d since publish). Not stale; never use-with-caution for cadence alone.`;
@@ -686,16 +686,16 @@ function maintenanceContext(
     return `slow (${publish}d). Caution only with vulns, deprecation, or no commits.`;
   }
   if (completeUtility && !popular) {
-    return `long gap (${publish}d) but likely complete micro-library — judge on security/adoption, not release frequency alone.`;
+    return `long gap (${publish}d) but likely complete micro-library - judge on security/adoption, not release frequency alone.`;
   }
   if (popular && commit !== null && commit < 90) {
-    return `long publish gap (${publish}d) but recent git — often stable major, not abandonment.`;
+    return `long publish gap (${publish}d) but recent git - often stable major, not abandonment.`;
   }
   if (completeUtility && popular) {
-    return `long gap (${publish}d) on widely used narrow utility — often stable/finished; excellent/good maintenance OK if secure.`;
+    return `long gap (${publish}d) on widely used narrow utility - often stable/finished; excellent/good maintenance OK if secure.`;
   }
   if (publish >= 365 && (commit === null || commit >= 180) && !popular) {
-    return `likely unmaintained (${publish}d since publish) — may justify caution or do-not-use.`;
+    return `likely unmaintained (${publish}d since publish) - may justify caution or do-not-use.`;
   }
   return `long publish gap (${publish}d). Popular + secure may still be recommended with a maintenance note.`;
 }
@@ -824,11 +824,11 @@ function createAnalysisPrompt(
     let bundleLine = `Bundle: ${formatBytes(bundleAssessment.size)} min / ${formatBytes(bundleAssessment.gzip)} gzip (${bundleAssessment.level})`;
     if (runtimeKind === "server") {
       bundleLine +=
-        " — server-oriented package: do NOT list browser bundle size as a concern";
+        " - server-oriented package: do NOT list browser bundle size as a concern";
     } else if (bundleAssessment.level === "large" || bundleAssessment.level === "very-large") {
-      bundleLine += " — MUST list in concerns for browser/client use; not a strength";
+      bundleLine += " - MUST list in concerns for browser/client use; not a strength";
     } else if (bundleAssessment.level === "notable") {
-      bundleLine += " — optional concern if front-end relevant";
+      bundleLine += " - optional concern if front-end relevant";
     }
     lines.push(bundleLine);
   }
@@ -851,7 +851,7 @@ function createAnalysisPrompt(
   lines.push(
     "",
     "Rules:",
-    "- Weigh security, adoption, quality, true abandonment — not normal publish gaps on popular packages.",
+    "- Weigh security, adoption, quality, true abandonment - not normal publish gaps on popular packages.",
     "- <90d since publish is healthy. Widely adopted packages often go months between releases.",
     "- use-with-caution: concrete risk (unpatched high/crit vulns, likely malware/typosquat, niche + worrying signals).",
     "- do-not-use: deprecated, archived, README deprecation/migration, or clearly unmaintained.",
@@ -859,17 +859,17 @@ function createAnalysisPrompt(
     "- High open issues on huge repos ≠ red flag alone.",
     "- No cadence padding in concerns when healthy; use [\"None\"] if none. Score: no penalty for normal cadence on widely adopted.",
     "- Maintenance rating: excellent ~<90d or widely adopted + recent commits; good ~6mo (or longer if popular+secure); fair/poor only for real inactivity.",
-    "- Complete micro-libraries (math, algorithms, tiny single-purpose utils): maintenance can be good/excellent when stable, adopted, and secure — no ongoing feature work expected.",
+    "- Complete micro-libraries (math, algorithms, tiny single-purpose utils): maintenance can be good/excellent when stable, adopted, and secure - no ongoing feature work expected.",
     "- Background repo hygiene may lightly inform securityRating/quality only. Do NOT mention OpenSSF, Scorecard, scorecard.dev, or named hygiene checks in summary, strengths, concerns, or reasoning. Low hygiene alone is not do-not-use if advisories are clean and the package is mature.",
     "",
     "Fields:",
-    "- summary: 3-4 sentences — what it is, who for / how used, notable capabilities. From desc/keywords/README. No metrics lead (downloads, stars, vulns, publish age). No scorecard product names.",
+    "- summary: 3-4 sentences - what it is, who for / how used, notable capabilities. From desc/keywords/README. No metrics lead (downloads, stars, vulns, publish age). No scorecard product names.",
     "- recommendation: recommended|use-with-caution|not-recommended|do-not-use",
     "- strengths: 3-5 short bullets",
-    "- concerns: 2-4 short distinct risk bullets (or [\"None\"]). Facts only — do NOT restate them in reasoning.",
+    "- concerns: 2-4 short distinct risk bullets (or [\"None\"]). Facts only - do NOT restate them in reasoning.",
     "- overallScore: 0-100",
     "- securityRating, qualityRating, maintenanceRating: excellent|good|fair|poor",
-    "- reasoning: 1-2 sentences WHY the recommendation — tradeoffs / decision. Do NOT repeat concern wording or themes.",
+    "- reasoning: 1-2 sentences WHY the recommendation - tradeoffs / decision. Do NOT repeat concern wording or themes.",
     ecosystem === "pypi"
       ? `- competitors: 4-6 real PyPI alternatives (same job, not plugins/wrappers of this). Exact PyPI project names. Lowercase, no versions. Never "${packageName}".`
       : `- competitors: 4-6 real npm alternatives (same job, not plugins/wrappers of this). Exact registry names with @ if scoped. Lowercase, no versions. Never "${packageName}".`,

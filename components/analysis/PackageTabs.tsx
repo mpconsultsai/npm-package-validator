@@ -7,9 +7,9 @@ import {
 } from "./SecuritySeverityBadges";
 import { CopyButton } from "@/components/CopyButton";
 
-/** Top row — package facts that load with analyse */
+/** Top row - package facts that load with analyse */
 export type OverviewTabId = "info" | "charts" | "dependencies";
-/** Bottom row — deeper review (AI is slowest) */
+/** Bottom row - deeper review (AI is slowest) */
 export type InsightTabId = "ai" | "security" | "related";
 
 /** @deprecated Use OverviewTabId */

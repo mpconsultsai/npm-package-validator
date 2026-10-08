@@ -8,6 +8,8 @@ const svgPath = path.join(root, "app", "icon.svg");
 const svg = fs.readFileSync(svgPath);
 
 const pngSizes = [
+  { file: path.join(root, "public", "icon-32.png"), size: 32 },
+  { file: path.join(root, "app", "icon-32.png"), size: 32 },
   { file: path.join(root, "public", "icon.png"), size: 192 },
   { file: path.join(root, "public", "icon-192.png"), size: 192 },
   { file: path.join(root, "public", "icon-512.png"), size: 512 },
@@ -15,13 +17,18 @@ const pngSizes = [
   { file: path.join(root, "public", "apple-icon.png"), size: 180 },
 ];
 
-fs.copyFileSync(svgPath, path.join(root, "public", "icon.svg"));
-console.log("Wrote public/icon.svg");
-
 for (const { file, size } of pngSizes) {
   await sharp(svg, { density: 512 })
     .resize(size, size)
     .png()
     .toFile(file);
   console.log(`Wrote ${path.relative(root, file)} (${size}x${size})`);
+}
+
+for (const dest of [
+  path.join(root, "public", "favicon.ico"),
+  path.join(root, "app", "favicon.ico"),
+]) {
+  fs.copyFileSync(path.join(root, "public", "icon-32.png"), dest);
+  console.log(`Wrote ${path.relative(root, dest)} (from icon-32.png)`);
 }

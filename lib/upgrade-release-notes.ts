@@ -274,7 +274,7 @@ export const collectBreakingNotes = (input: {
           ? items
           : [
               {
-                text: "Major release — treat as potentially breaking (no explicit breaking-change notes found in the GitHub release body).",
+                text: "Major release - treat as potentially breaking (no explicit breaking-change notes found in the GitHub release body).",
               },
             ],
       inferredMajor: items.length === 0 && isMajorLine,

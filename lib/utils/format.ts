@@ -31,7 +31,7 @@ export function formatPublishDate(iso: string | undefined | null): string | null
 /** Human-readable byte size (decimal units, matching Bundlephobia-style labels). */
 export function formatBytes(bytes: number): string {
   const value = Number(bytes);
-  if (!Number.isFinite(value) || value < 0) return "—";
+  if (!Number.isFinite(value) || value < 0) return "-";
   if (value < 1000) return `${Math.round(value)} B`;
   if (value < 1_000_000) {
     const kb = value / 1000;

@@ -1,5 +1,5 @@
 /**
- * Groq model IDs — required env vars so retiring/renaming models is a config change.
+ * Groq model IDs - required env vars so retiring/renaming models is a config change.
  * See https://console.groq.com/docs/models and https://console.groq.com/docs/deprecations
  */
 

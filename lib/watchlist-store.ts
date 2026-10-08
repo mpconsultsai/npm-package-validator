@@ -35,7 +35,7 @@ export interface WatchlistEntry {
   fresh?: WatchlistFresh;
 }
 
-/** Poll at most once per day — typical npm releases are weeks/months apart. */
+/** Poll at most once per day - typical npm releases are weeks/months apart. */
 export const WATCHLIST_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 const STORAGE_KEY = "npv-watchlist-v2";
@@ -46,7 +46,7 @@ type Listener = () => void;
 
 const listeners = new Set<Listener>();
 
-/** Cached snapshot for useSyncExternalStore — must be referentially stable until data changes. */
+/** Cached snapshot for useSyncExternalStore - must be referentially stable until data changes. */
 const EMPTY_SNAPSHOT: WatchlistEntry[] = [];
 let snapshot: WatchlistEntry[] = EMPTY_SNAPSHOT;
 /** True after localStorage has been read on the client (post-hydration). */
@@ -141,7 +141,7 @@ function writeRaw(entries: WatchlistEntry[]) {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   } catch {
-    // Quota or private mode — ignore
+    // Quota or private mode - ignore
   }
   snapshot = next;
   storageHydrated = true;
@@ -211,7 +211,7 @@ export function countWatchlistAlerts(entries: WatchlistEntry[] = listWatchlist()
   return entries.filter(watchlistEntryHasAlerts).length;
 }
 
-/** Counts packages with each change type — for the watchlist icon badge. */
+/** Counts packages with each change type - for the watchlist icon badge. */
 export function summarizeWatchlistAlerts(
   entries: WatchlistEntry[] = listWatchlist(),
 ): {
@@ -387,7 +387,7 @@ export function applyWatchlistFreshStatuses(
       deprecated: update.deprecated,
     };
 
-    // First successful poll with no baseline — adopt as reviewed snapshot
+    // First successful poll with no baseline - adopt as reviewed snapshot
     const summary =
       entry.summary ??
       ({

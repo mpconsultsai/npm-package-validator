@@ -2,10 +2,10 @@
  * Canonical API paths. Prefer these over hard-coded strings in the client.
  *
  * Groups:
- * - packages — lookup & graph around a package
- * - analysis — full package report (metrics / AI)
- * - upgrade — version-range upgrade guidance
- * - watchlist / health — app utilities
+ * - packages - lookup & graph around a package
+ * - analysis - full package report (metrics / AI)
+ * - upgrade - version-range upgrade guidance
+ * - watchlist / health - app utilities
  */
 export const apiPaths = {
   health: "/api/v1/health",

@@ -72,7 +72,7 @@ export async function fetchNpmDependentPackages(
     if (!entry || typeof entry !== "object") continue;
     const row = entry as Record<string, unknown>;
     const status = typeof row.status === "string" ? row.status.toLowerCase() : "";
-    // Match npm's dependents count more closely — skip unpublished/removed packages.
+    // Match npm's dependents count more closely - skip unpublished/removed packages.
     if (status === "removed" || status === "unpublished") continue;
 
     const name = typeof row.name === "string" ? row.name.trim() : "";

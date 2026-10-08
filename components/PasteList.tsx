@@ -93,7 +93,7 @@ function isPyPiUpdateAvailable(
 }
 
 function SpecifiedCell({ requested }: { requested?: string }) {
-  if (!requested) return "—";
+  if (!requested) return "-";
   const desc = describeDependencySpec(requested);
   return (
     <span className="block">
@@ -169,7 +169,7 @@ function buildMarkdownReport(rows: AnalysisRow[]): string {
     if (row.deprecated) notes.push("deprecated");
     if (row.updateAvailable) notes.push("update available");
     lines.push(
-      `| ${escapeMdCell(row.name)} | ${escapeMdCell(row.requested ?? "—")} | ${escapeMdCell(row.version ? `v${row.version}` : "—")} | ${typeof row.vulnerabilityCount === "number" ? String(row.vulnerabilityCount) : "—"} | ${typeof row.qualityScore === "number" ? `${row.qualityScore}/100` : "—"} | ${escapeMdCell(statusLabel(row))} | ${escapeMdCell(notes.join(", ") || "—")} |`,
+      `| ${escapeMdCell(row.name)} | ${escapeMdCell(row.requested ?? "-")} | ${escapeMdCell(row.version ? `v${row.version}` : "-")} | ${typeof row.vulnerabilityCount === "number" ? String(row.vulnerabilityCount) : "-"} | ${typeof row.qualityScore === "number" ? `${row.qualityScore}/100` : "-"} | ${escapeMdCell(statusLabel(row))} | ${escapeMdCell(notes.join(", ") || "-")} |`,
     );
   }
 
@@ -419,11 +419,13 @@ export function PasteListPanel({
           htmlFor={textareaId}
           className="block text-sm font-medium text-gray-900 dark:text-white"
         >
-          {isPyPi ? "Analyse requirements.txt" : "Analyse package.json"}
+          {isPyPi
+            ? "Analyse dependency file"
+            : "Analyse package.json"}
         </label>
         <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
           {isPyPi
-            ? `requirements.txt or PEP 508 lines (max ${PASTE_LIST_MAX_PACKAGES}).`
+            ? `requirements.txt, pyproject.toml, or PEP 508 lines (max ${PASTE_LIST_MAX_PACKAGES}).`
             : `package.json, package-lock.json, yarn.lock, or a list of package names (max ${PASTE_LIST_MAX_PACKAGES}).`}
         </p>
         <textarea
@@ -434,7 +436,7 @@ export function PasteListPanel({
           spellCheck={false}
           placeholder={
             isPyPi
-              ? "requests>=2.28.0\ndjango>=4.2,<5\nnumpy==1.26.4"
+              ? "[project]\nname = \"my-app\"\ndependencies = [\n  \"requests>=2.28.0\",\n  \"django>=4.2,<5\",\n]\n\n# or requirements.txt lines:\n# numpy==1.26.4"
               : `{\n  "dependencies": {\n    "react": "^19.0.0",\n    "lodash": "^4.17.21"\n  }\n}`
           }
           className="mt-2 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white px-3 py-2 font-mono outline-none focus:border-blue-500 focus:ring-2 focus:ring-inset focus:ring-blue-500/30 dark:focus:border-blue-400"
@@ -592,7 +594,7 @@ export function PasteListPanel({
                             )}
                           </span>
                         ) : (
-                          "—"
+                          "-"
                         )}
                       </td>
                       <td className="px-3 py-2 tabular-nums">
@@ -607,13 +609,13 @@ export function PasteListPanel({
                             {row.vulnerabilityCount}
                           </span>
                         ) : (
-                          "—"
+                          "-"
                         )}
                       </td>
                       <td className="px-3 py-2 text-gray-700 dark:text-gray-300 tabular-nums">
                         {typeof row.qualityScore === "number"
                           ? `${row.qualityScore}/100`
-                          : "—"}
+                          : "-"}
                       </td>
                       <td className="px-3 py-2">
                         <StatusBadge row={row} />

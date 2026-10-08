@@ -245,7 +245,7 @@ const issueSnapshotDates = (): string[] => {
   const now = new Date();
   const asOfDates: string[] = [];
 
-  // End of each of the last 24 months — align with the downloads window.
+  // End of each of the last 24 months - align with the downloads window.
   for (let i = 23; i >= 0; i--) {
     const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i + 1, 0));
     const endIso = end.toISOString().slice(0, 10);

@@ -120,10 +120,10 @@ export async function fetchJson<T = unknown>(
 
 export function friendlyFetchError(err: unknown): string {
   if (err instanceof FetchTimeoutError) {
-    return "The request timed out. The server may be restarting — please try again.";
+    return "The request timed out. The server may be restarting - please try again.";
   }
   if (err instanceof TypeError && err.message === "Failed to fetch") {
-    return "Could not reach the server. It may be restarting — please try again.";
+    return "Could not reach the server. It may be restarting - please try again.";
   }
   if (err instanceof Error) return err.message;
   return "An unexpected error occurred";

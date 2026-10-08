@@ -18,6 +18,9 @@ export const metadata: Metadata = {
     template: `%s | ${siteName}`,
   },
   description: siteDescription,
+  alternates: {
+    canonical: "/",
+  },
   applicationName: siteName,
   manifest: "/manifest.webmanifest",
   appleWebApp: {
@@ -27,11 +30,14 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
+      { url: "/favicon.ico", sizes: "32x32" },
+      { url: "/icon-32.png", type: "image/png", sizes: "32x32" },
       { url: "/icon.svg", type: "image/svg+xml" },
       { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
       { url: "/icon-512.png", type: "image/png", sizes: "512x512" },
     ],
-    apple: [{ url: "/apple-icon.png", sizes: "180x180" }],
+    shortcut: ["/favicon.ico"],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
   },
   openGraph: {
     type: "website",

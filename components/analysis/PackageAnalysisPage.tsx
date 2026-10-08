@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import semver from "semver";
+import { listStablePypiVersions } from "@/lib/pypi-version";
 import type { PackageEcosystem } from "@/lib/package-routes";
 import { featuresForEcosystem } from "@/lib/ecosystem-features";
 import { setEcosystemPreference } from "@/lib/ecosystem-pref";
@@ -368,7 +369,7 @@ function PackagePageContent({
     const controller = new AbortController();
     aiAbort.current = controller;
     void loadAiAnalysis(nameFromPath, controller.signal);
-    // Do not abort in cleanup when deps like aiLoading change — that was
+    // Do not abort in cleanup when deps like aiLoading change - that was
     // cancelling the request and leaving aiLoading stuck true.
   }, [
     aiPrefReady,
@@ -486,22 +487,13 @@ function PackagePageContent({
   ]);
 
   const availableVersions = analysisData?.npm?.time
-    ? Object.keys(analysisData.npm.time)
-        .filter((k) => !["created", "modified", "unpublished"].includes(k))
-        .filter((v) =>
-          ecosystem === "pypi"
-            ? true
-            : semver.valid(v) && !semver.prerelease(v),
-        )
-        .sort((a, b) => {
-          if (ecosystem === "pypi") {
-            const ta = analysisData.npm!.time![a];
-            const tb = analysisData.npm!.time![b];
-            return new Date(tb).getTime() - new Date(ta).getTime();
-          }
-          return semver.compare(b, a);
-        })
-        .slice(0, 10)
+    ? (ecosystem === "pypi"
+        ? listStablePypiVersions(analysisData.npm.time)
+        : Object.keys(analysisData.npm.time)
+            .filter((k) => !["created", "modified", "unpublished"].includes(k))
+            .filter((v) => Boolean(semver.valid(v)) && !semver.prerelease(v))
+            .sort((a, b) => semver.compare(b, a))
+      ).slice(0, 10)
     : [];
 
   // Ensure latest is in the selector list even if filtered out

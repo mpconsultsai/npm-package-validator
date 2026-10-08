@@ -140,7 +140,7 @@ export function extractChangelogBreakingNotes(input: {
           ? filtered.slice(0, 8)
           : [
               {
-                text: "Major release listed in CHANGELOG — review the full changelog for migration notes.",
+                text: "Major release listed in CHANGELOG - review the full changelog for migration notes.",
               },
             ],
       inferredMajor: filtered.length === 0 && isMajorLine,

@@ -89,7 +89,7 @@ function stationDetail(toolCalls: string[], id: StationId): string | null {
 
 const STAGE_IDS = new Set<string>(STATIONS.map((s) => s.id));
 
-/** Pipeline of graph stations — clearer than a Sankey for this linear decision path. */
+/** Pipeline of graph stations - clearer than a Sankey for this linear decision path. */
 export function AgentGraphSteps({
   toolCalls,
   activeStage,

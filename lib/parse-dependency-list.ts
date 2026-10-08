@@ -22,6 +22,7 @@ export interface ParseDependencyListResult {
     | "package-lock"
     | "yarn.lock"
     | "requirements.txt"
+    | "pyproject.toml"
     | "text"
     | "empty";
 }

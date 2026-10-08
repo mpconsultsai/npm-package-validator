@@ -159,7 +159,7 @@ export function PackageCompareTable({
                       key={column.name}
                       className="px-3 py-2 text-gray-900 dark:text-gray-100 tabular-nums"
                     >
-                      {value ?? "—"}
+                      {value ?? "-"}
                     </td>
                   );
                 })}

@@ -14,7 +14,7 @@ export function sortBySeverity<T extends { severity: string }>(items: T[]): T[] 
   });
 }
 
-/** Background + text — low uses dark text for WCAG contrast on yellow. */
+/** Background + text - low uses dark text for WCAG contrast on yellow. */
 export function severityBadgeClass(severity: string): string {
   switch (severity.toLowerCase()) {
     case "critical":

@@ -13,6 +13,7 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { InfoCards } from "@/components/InfoCards";
 import { PageHeader } from "@/components/PageHeader";
+import { SiteFooter } from "@/components/SiteFooter";
 import { PackageSearchForm } from "@/components/PackageSearchForm";
 import { smoothNavigate } from "@/lib/smooth-navigate";
 import {
@@ -113,6 +114,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               {hideRoutePanel && route ? <InfoCards /> : children}
             </div>
+            <SiteFooter />
           </div>
         </div>
       </main>

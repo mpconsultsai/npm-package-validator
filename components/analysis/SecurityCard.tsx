@@ -42,7 +42,7 @@ interface SecurityCardProps {
   packageName: string;
   latestVersion?: string;
   availableVersions: string[];
-  /** npm packument `time` map — version → ISO publish date */
+  /** npm packument `time` map - version → ISO publish date */
   versionTimes?: Record<string, string>;
   selectedVersion: string;
   onVersionChange: (v: string) => void;
@@ -206,7 +206,7 @@ export function SecurityCard({
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
       <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
-        GitHub advisories plus OSV, CISA KEV, and EPSS — ordered by known
+        GitHub advisories plus OSV, CISA KEV, and EPSS - ordered by known
         exploitation, severity, then exploit likelihood.
       </p>
       <div

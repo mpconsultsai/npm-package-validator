@@ -4,6 +4,19 @@ export interface PackageDependency {
   name: string;
   range: string;
   kind: DependencyKind;
+  /** PEP 508 environment marker (PyPI conditional requirements). */
+  marker?: string;
+}
+
+/** Stable list keys when the same package appears more than once (e.g. PyPI markers). */
+export function dependencyReactKey(
+  dep: PackageDependency,
+  index: number,
+): string {
+  const markerPart = dep.marker
+    ? dep.marker.replace(/\s+/g, " ").slice(0, 120)
+    : "";
+  return `${dep.kind}:${dep.name}:${dep.range}:${markerPart}:${index}`;
 }
 
 const asDeps = (

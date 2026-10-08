@@ -12,7 +12,7 @@ import { CopyButton } from "@/components/CopyButton";
 import type { PackageEcosystem } from "@/lib/package-routes";
 import { featuresForEcosystem } from "@/lib/ecosystem-features";
 
-/** npm search `dependents` count — badge when widely depended-on. */
+/** npm search `dependents` count - badge when widely depended-on. */
 const POPULAR_MIN_DEPENDENTS = 1000;
 const VERY_POPULAR_MIN_DEPENDENTS = 10_000;
 const MAX_KEYWORD_BADGES = 10;
@@ -191,6 +191,7 @@ export function PackageInfoCard({
   const licenseInfo = describeLicense(packageInfo.license);
   const nodeEngine = packageInfo.engines?.node?.trim() || null;
   const npmEngine = packageInfo.engines?.npm?.trim() || null;
+  const pythonEngine = packageInfo.engines?.python?.trim() || null;
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
@@ -340,7 +341,34 @@ export function PackageInfoCard({
               </div>
             )}
 
-            {nodeEngine && (
+            {pythonEngine && ecosystem === "pypi" && (
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <svg
+                    className="w-5 h-5 text-sky-600 dark:text-sky-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+                    />
+                  </svg>
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Requires Python
+                  </span>
+                </div>
+                <p className="text-lg font-semibold text-gray-900 dark:text-white font-mono">
+                  {pythonEngine}
+                </p>
+              </div>
+            )}
+
+            {nodeEngine && ecosystem !== "pypi" && (
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <svg

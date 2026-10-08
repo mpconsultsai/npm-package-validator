@@ -148,7 +148,7 @@ export function buildUpgradeAdvice(input: {
       verdict: "current",
       headline: "Already on the latest release",
       summary:
-        "No upgrade needed — this matches the latest stable version on npm.",
+        "No upgrade needed - this matches the latest stable version on npm.",
       releasesBehind: 0,
       majorsCrossed: 0,
       fromPublishedAt,
@@ -188,7 +188,7 @@ export function buildUpgradeAdvice(input: {
       verdict: "patch",
       headline: "Patch upgrade available",
       summary:
-        "Usually low risk — bug fixes and security patches. Review the changelog if subtle behaviour matters.",
+        "Usually low risk - bug fixes and security patches. Review the changelog if subtle behaviour matters.",
       releasesBehind,
       majorsCrossed: 0,
       fromPublishedAt,
@@ -227,7 +227,7 @@ export function buildUpgradeAdvice(input: {
     verdict: "major",
     headline:
       majorsCrossed > 1
-        ? `Major upgrade — crosses ${majorsCrossed} major lines`
+        ? `Major upgrade - crosses ${majorsCrossed} major lines`
         : "Major upgrade available",
     summary:
       majorsCrossed > 1

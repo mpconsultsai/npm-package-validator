@@ -474,7 +474,7 @@ export function PackageSearchForm({
   const pasteFeatures = featuresForEcosystem(ecosystem);
   const showPasteList = pasteFeatures.pasteList;
   const pasteLabel = ecosystem === "pypi"
-    ? "Analyse requirements.txt"
+    ? "Analyse dependency file"
     : "Analyse package.json";
   const { enabled: aiEnabled, setEnabled: setAiEnabled, ready: aiPrefReady } =
     useAiAnalysisPref();
@@ -531,7 +531,7 @@ export function PackageSearchForm({
                     role="tab"
                     aria-selected={selected}
                     onClick={() => setEcosystem(option.id)}
-                    className={`-mb-px pb-2 text-sm font-semibold border-b-2 transition-colors ${
+                    className={`-mb-px pb-2 text-base font-semibold border-b-2 transition-colors ${
                       selected
                         ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400"
                         : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
@@ -646,7 +646,7 @@ export function PackageSearchForm({
             </div>
           </div>
           <div ref={containerRef} className="relative">
-            <label htmlFor="packageName" className="sr-only">
+            <label id="package-name-label" htmlFor="packageName" className="sr-only">
               Package name
             </label>
             <div className="relative">
@@ -658,6 +658,7 @@ export function PackageSearchForm({
                 type="search"
                 id="packageName"
                 name="packageName"
+                aria-labelledby="package-name-label"
                 value={value}
                 onChange={(e) => {
                   allowDropdownRef.current = true;
@@ -700,6 +701,15 @@ export function PackageSearchForm({
                 </button>
               )}
             </div>
+            <button
+              type="submit"
+              className="sr-only"
+              disabled={disabled || loading || !value.trim()}
+            >
+              {ecosystem === "pypi"
+                ? "Analyse PyPI package"
+                : "Analyse npm package"}
+            </button>
             {loading && !utilityPanel && (
               <p
                 className="mt-2.5 text-xs text-gray-500 dark:text-gray-400"

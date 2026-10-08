@@ -70,7 +70,7 @@ export async function analyzePackage(
     return result;
   }
 
-  // Fetch npm registry data (required) — README comes from the same packument
+  // Fetch npm registry data (required) - README comes from the same packument
   try {
     const { data, readme } = await fetchNpmPackageData(packageName);
     result.npm = data;

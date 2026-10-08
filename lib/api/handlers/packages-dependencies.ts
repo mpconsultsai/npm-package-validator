@@ -11,10 +11,23 @@ export const GET = withHandler(
     const { packageName, ecosystem } =
       requirePackageFromQueryWithEcosystem(request);
     try {
-      const { data } =
-        ecosystem === "pypi"
-          ? await fetchPypiPackageData(packageName)
-          : await fetchNpmPackageData(packageName);
+      if (ecosystem === "pypi") {
+        const { data, pypiInstall } = await fetchPypiPackageData(packageName);
+        return jsonOk({
+          name: data.name || packageName,
+          version: data.version,
+          dependencies: pypiInstall.core,
+          pypi: {
+            requiresPython: pypiInstall.requiresPython,
+            providesExtra: pypiInstall.providesExtra,
+            core: pypiInstall.core,
+            conditional: pypiInstall.conditional,
+            extras: pypiInstall.extras,
+          },
+        });
+      }
+
+      const { data } = await fetchNpmPackageData(packageName);
       const dependencies = listPackageDependencies(
         data.dependencies,
         data.peerDependencies,
