@@ -31,6 +31,7 @@ import { useWatchlist } from "@/lib/use-watchlist";
 import { useWatchlistRefresh } from "@/lib/use-watchlist-refresh";
 import { summarizeWatchlistAlerts } from "@/lib/watchlist-store";
 import { apiPaths } from "@/lib/api/paths";
+import { EXAMPLE_PACKAGES } from "@/lib/example-packages";
 import {
   ClipboardIcon,
   ClearIcon,
@@ -43,6 +44,11 @@ const THEME_OPTIONS: { value: "light" | "dark"; label: string }[] = [
   { value: "light", label: "Light" },
   { value: "dark", label: "Dark" },
 ];
+
+const REGISTRY_TABS = [
+  { id: "npm" as const, label: "NPM" },
+  { id: "pypi" as const, label: "PyPI" },
+] as const;
 
 const PACKAGE_MANAGER_OPTIONS: {
   value: PackageManagerPreference;
@@ -88,6 +94,9 @@ export function PackageSearchForm({
   const [ecosystem, setEcosystemState] =
     useState<PackageEcosystem>(initialEcosystem);
   const listboxId = useId();
+  const registryId = useId();
+  const registryPanelId = `${registryId}-panel`;
+  const registryTabId = (id: PackageEcosystem) => `${registryId}-${id}`;
   const router = useRouter();
   const pathname = usePathname();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -159,6 +168,28 @@ export function PackageSearchForm({
       router,
     ],
   );
+
+  const onRegistryTabKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const index = REGISTRY_TABS.findIndex((tab) => tab.id === ecosystem);
+    let nextIndex = index;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextIndex = (index + 1) % REGISTRY_TABS.length;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextIndex = (index - 1 + REGISTRY_TABS.length) % REGISTRY_TABS.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = REGISTRY_TABS.length - 1;
+    } else {
+      return;
+    }
+    event.preventDefault();
+    const next = REGISTRY_TABS[nextIndex].id;
+    if (next !== ecosystem) setEcosystem(next);
+    requestAnimationFrame(() => {
+      document.getElementById(registryTabId(next))?.focus();
+    });
+  };
 
   useEffect(() => {
     const route = parsePackageRoute(pathname);
@@ -416,23 +447,23 @@ export function PackageSearchForm({
             <div
               role="tablist"
               aria-label="Package registry"
+              aria-orientation="horizontal"
+              onKeyDown={onRegistryTabKeyDown}
               className="flex min-w-0 flex-1 gap-4"
             >
-              {(
-                [
-                  { id: "npm" as const, label: "NPM" },
-                  { id: "pypi" as const, label: "PyPI" },
-                ] as const
-              ).map((option) => {
+              {REGISTRY_TABS.map((option) => {
                 const selected = ecosystem === option.id;
                 return (
                   <button
                     key={option.id}
                     type="button"
+                    id={registryTabId(option.id)}
                     role="tab"
                     aria-selected={selected}
+                    aria-controls={registryPanelId}
+                    tabIndex={selected ? 0 : -1}
                     onClick={() => setEcosystem(option.id)}
-                    className={`-mb-px pb-2 text-base font-semibold border-b-2 transition-colors ${
+                    className={`-mb-px rounded-none pb-2 text-base font-semibold border-b-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 ${
                       selected
                         ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400"
                         : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
@@ -546,6 +577,12 @@ export function PackageSearchForm({
               </button>
             </div>
           </div>
+          <div
+            id={registryPanelId}
+            role="tabpanel"
+            aria-labelledby={registryTabId(ecosystem)}
+            className="space-y-3"
+          >
           <div ref={containerRef} className="relative">
             <label id="package-name-label" htmlFor="packageName" className="sr-only">
               Package name
@@ -684,6 +721,36 @@ export function PackageSearchForm({
                 })}
               </ul>
             )}
+          </div>
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
+            <span
+              className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500"
+              aria-hidden="true"
+            >
+              Try
+            </span>
+            <ul
+              aria-label={
+                ecosystem === "pypi"
+                  ? "Example PyPI projects"
+                  : "Example npm packages"
+              }
+              className="flex flex-wrap items-center gap-2"
+            >
+              {EXAMPLE_PACKAGES[ecosystem].map((name) => (
+                <li key={name}>
+                  <button
+                    type="button"
+                    onClick={() => runSearch(name)}
+                    disabled={disabled || loading}
+                    className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-700/60 dark:text-gray-200 dark:hover:border-blue-500 dark:hover:bg-blue-900/30 dark:hover:text-blue-300"
+                  >
+                    {name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
           </div>
       </form>
 

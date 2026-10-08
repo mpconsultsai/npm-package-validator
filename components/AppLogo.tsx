@@ -3,6 +3,8 @@ export function AppLogo({ className = "w-10 h-10" }: { className?: string }) {
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 32 32"
+      width="32"
+      height="32"
       className={`block ${className ?? ""}`.trim()}
       aria-hidden="true"
     >

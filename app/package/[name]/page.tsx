@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { permanentRedirect } from "next/navigation";
 
 export default async function LegacyPackagePage({
   params,
@@ -6,5 +6,5 @@ export default async function LegacyPackagePage({
   params: Promise<{ name: string }>;
 }) {
   const { name } = await params;
-  redirect(`/npm/${name}`);
+  permanentRedirect(`/npm/${encodeURIComponent(name)}`);
 }

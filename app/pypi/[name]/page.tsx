@@ -1,15 +1,27 @@
-"use client";
-
-import { useParams } from "next/navigation";
 import { PackageAnalysisPage } from "@/components/analysis/PackageAnalysisPage";
+import {
+  decodePackageParam,
+  packagePageMetadata,
+} from "@/lib/package-page-meta";
 
-export default function PypiPackagePage() {
-  const params = useParams();
-  const nameFromPath = params.name
-    ? decodeURIComponent(String(params.name))
-    : "";
+type PypiPackagePageProps = {
+  params: Promise<{ name: string }>;
+};
+
+export async function generateMetadata({ params }: PypiPackagePageProps) {
+  const { name } = await params;
+  return packagePageMetadata("pypi", name);
+}
+
+export default async function PypiPackagePage({
+  params,
+}: PypiPackagePageProps) {
+  const { name } = await params;
 
   return (
-    <PackageAnalysisPage ecosystem="pypi" nameFromPath={nameFromPath} />
+    <PackageAnalysisPage
+      ecosystem="pypi"
+      nameFromPath={decodePackageParam(name)}
+    />
   );
 }

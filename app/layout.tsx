@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/site-brand";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TITLE } from "@/lib/site-brand";
 import { getSiteUrl } from "@/lib/site-url";
 import { AppShell } from "@/components/AppShell";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -14,13 +14,10 @@ const siteUrl = getSiteUrl();
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: siteName,
+    default: SITE_TITLE,
     template: `%s | ${siteName}`,
   },
   description: siteDescription,
-  alternates: {
-    canonical: "/",
-  },
   applicationName: siteName,
   manifest: "/manifest.webmanifest",
   appleWebApp: {
@@ -44,22 +41,13 @@ export const metadata: Metadata = {
     locale: "en_GB",
     url: "/",
     siteName,
-    title: siteName,
+    title: SITE_TITLE,
     description: siteDescription,
-    images: [
-      {
-        url: "/icon-512.png",
-        width: 512,
-        height: 512,
-        alt: siteName,
-      },
-    ],
   },
   twitter: {
-    card: "summary",
-    title: siteName,
+    card: "summary_large_image",
+    title: SITE_TITLE,
     description: siteDescription,
-    images: ["/icon-512.png"],
   },
   robots: {
     index: true,

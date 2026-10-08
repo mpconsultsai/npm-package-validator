@@ -1,15 +1,25 @@
-"use client";
-
-import { useParams } from "next/navigation";
 import { PackageAnalysisPage } from "@/components/analysis/PackageAnalysisPage";
+import {
+  decodePackageParam,
+  packagePageMetadata,
+} from "@/lib/package-page-meta";
 
-export default function NpmPackagePage() {
-  const params = useParams();
-  const nameFromPath = params.name
-    ? decodeURIComponent(String(params.name))
-    : "";
+type NpmPackagePageProps = {
+  params: Promise<{ name: string }>;
+};
+
+export async function generateMetadata({ params }: NpmPackagePageProps) {
+  const { name } = await params;
+  return packagePageMetadata("npm", name);
+}
+
+export default async function NpmPackagePage({ params }: NpmPackagePageProps) {
+  const { name } = await params;
 
   return (
-    <PackageAnalysisPage ecosystem="npm" nameFromPath={nameFromPath} />
+    <PackageAnalysisPage
+      ecosystem="npm"
+      nameFromPath={decodePackageParam(name)}
+    />
   );
 }
