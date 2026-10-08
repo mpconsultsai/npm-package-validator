@@ -451,20 +451,24 @@ export function DependenciesCard({
     setDeps(combinePypiDepsForView(pypiMeta, pypiExtra));
   }, [pypiMeta, pypiExtra, ecosystem]);
 
-  useEffect(() => {
-    if (!features.transitiveDepsTree && view === "transitive") {
-      setView("list");
-    }
-  }, [features.transitiveDepsTree, view]);
-
   const hasDepsToPlot = (deps?.length ?? 0) > 0;
-  const pypiShowChart = ecosystem !== "pypi" || hasDepsToPlot;
+  const showChartList = hasDepsToPlot;
+  const showTransitiveTab = features.transitiveDepsTree && hasDepsToPlot;
 
   useEffect(() => {
-    if (ecosystem === "pypi" && !hasDepsToPlot && view === "chart") {
+    if (
+      (!features.transitiveDepsTree || !hasDepsToPlot) &&
+      view === "transitive"
+    ) {
       setView("list");
     }
-  }, [ecosystem, hasDepsToPlot, view]);
+  }, [features.transitiveDepsTree, hasDepsToPlot, view]);
+
+  useEffect(() => {
+    if (!hasDepsToPlot && view === "chart") {
+      setView("list");
+    }
+  }, [hasDepsToPlot, view]);
 
   const coreCount = pypiMeta?.core?.length ?? 0;
   const conditionalCount = pypiMeta?.conditional?.length ?? 0;
@@ -484,13 +488,26 @@ export function DependenciesCard({
   const pypiEmpty =
     ecosystem === "pypi" && pypiMeta && !pypiHasAnyRequirements(pypiMeta);
 
-  if (!deps || (deps.length === 0 && !pypiMeta?.requiresPython && pypiEmpty)) {
+  if (ecosystem === "npm" && !hasDepsToPlot) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          {ecosystem === "pypi"
-            ? "No install requirements declared for the latest release."
-            : "No runtime or peer dependencies declared for the latest version."}
+          No runtime or peer dependencies declared for the latest version.
+        </p>
+      </div>
+    );
+  }
+
+  if (
+    ecosystem === "pypi" &&
+    !hasDepsToPlot &&
+    !pypiMeta?.requiresPython &&
+    pypiEmpty
+  ) {
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          No install requirements declared for the latest release.
         </p>
       </div>
     );
@@ -512,7 +529,7 @@ export function DependenciesCard({
             Resolved install tree (direct + transitive)
           </p>
         )}
-        {pypiShowChart || features.transitiveDepsTree ? (
+        {showChartList || showTransitiveTab ? (
         <div
           role="radiogroup"
           aria-label="Dependencies view"
@@ -520,13 +537,13 @@ export function DependenciesCard({
         >
           {(
             [
-              ...(pypiShowChart
+              ...(showChartList
                 ? [
                     { id: "chart" as const, label: "Chart" },
                     { id: "list" as const, label: "List" },
                   ]
                 : []),
-              ...(features.transitiveDepsTree
+              ...(showTransitiveTab
                 ? [{ id: "transitive" as const, label: "Full tree" }]
                 : []),
             ] as const
@@ -564,7 +581,7 @@ export function DependenciesCard({
 
       {view === "transitive" && features.transitiveDepsTree ? (
         <TransitiveDepsPanel packageName={packageName} ecosystem={ecosystem} />
-      ) : pypiShowChart ? (
+      ) : showChartList ? (
         <>
           {/* Mobile: list when not chart */}
           <div className="md:hidden">

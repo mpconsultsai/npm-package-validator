@@ -1,0 +1,11 @@
+export type { IconProps } from "@/components/icons/icon-props";
+export { CheckIcon } from "@/components/icons/CheckIcon";
+export { ClearIcon } from "@/components/icons/ClearIcon";
+export { ClipboardIcon } from "@/components/icons/ClipboardIcon";
+export { CogIcon } from "@/components/icons/CogIcon";
+export { CopyIcon } from "@/components/icons/CopyIcon";
+export { SearchIcon } from "@/components/icons/SearchIcon";
+export { StarIcon } from "@/components/icons/StarIcon";
+export { StrokeIcon } from "@/components/icons/StrokeIcon";
+export { TrashIcon } from "@/components/icons/TrashIcon";
+export { GitHubIcon, SnykIcon } from "@/components/BrandIcons";
