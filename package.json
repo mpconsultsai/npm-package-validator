@@ -1,5 +1,5 @@
 {
-  "name": "npm-package-validator",
+  "name": "pkglens",
   "version": "0.1.0",
   "private": true,
   "scripts": {

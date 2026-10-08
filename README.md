@@ -1,54 +1,44 @@
-# NPM Package Validator
+# pkglens
 
-A full-stack application that validates npm packages based on security, quality, and reliability criteria before installation.
+AI-assisted package reviews - security, quality and dependencies at a glance.
+
+pkglens reviews packages from **npm** and **PyPI** before you install them. Choose a registry in the search bar, then open a package at `/npm/<name>` or `/pypi/<name>`.
 
 ## Features
 
-- 🔒 **Security Analysis** - GitHub Advisory Database with intelligent filtering (excludes patched vulnerabilities)
-- 📊 **Quality Metrics** - Custom quality score based on stars, downloads, maintenance, and security
-- 🤖 **AI-Powered** - Triple-layer fallback (Gemini Flash → Flash-Lite → Groq) for maximum reliability
-- 📈 **GitHub Integration** - Analyses stars, forks, issues, and repository activity
-- 📦 **npm Registry** - Fetches download stats, package metadata, and README content
-- 📝 **README Analysis** - Detects deprecation notices and maintenance warnings
-- ⏰ **Release Tracking** - Shows days since last release
+Both registries:
 
-## Tech Stack
+- **Security** - GitHub Advisory Database for the package version, with patched issues filtered out. Advisories are enriched with CVE identifiers, CISA Known Exploited Vulnerabilities, and EPSS scores when available
+- **Health signals** - GitHub stars, forks, issues, and release activity when the package links a GitHub repository; days since the latest release; README deprecation and maintenance warnings
+- **Quality score** - A 0–100 score from the signals that are available for that package
+- **AI insights** - Recommendation, strengths, concerns, and scores. Gemini 2.5 Flash falls back to Flash-Lite, then Groq
+- **Dependencies** - Direct dependencies before you add the package
+- **Trends** - Release history and GitHub issue history
+- **Watchlist** - Saved packages checked again from the browser
+- **Paste a list** - Analyse many packages from a dependency file
+
+npm also includes monthly downloads and download charts, Bundlephobia size, dependents, a transitive dependency graph (deps.dev), OpenSSF Scorecard, related packages, and an upgrade advisor with an optional Groq upgrade brief.
+
+PyPI uses the PyPI JSON API for project metadata, versions, license, and description. It shows distribution size (wheel or sdist), `Requires-Python`, core requirements, extras, and environment markers. Paste analysis accepts `requirements.txt`, `pyproject.toml`, or PEP 508 lines. PyPI reviews do not include download totals, download charts, a transitive dependency tree, related packages, or the upgrade advisor.
+
+## Tech stack
 
 - **Framework**: Next.js 15 (App Router)
 - **Language**: TypeScript
-- **Styling**: Tailwind CSS 4.0
-- **AI**: Google Gemini 2.5 (Flash + Flash-Lite) + Groq (GPT-OSS 120B)
-- **APIs**: npm Registry, GitHub GraphQL, GitHub Advisory Database
+- **Styling**: Tailwind CSS 4
+- **AI**: Google Gemini 2.5 (Flash, then Flash-Lite) and Groq
+- **Registries**: npm Registry, PyPI
+- **Other APIs**: GitHub GraphQL, GitHub Advisory Database, deps.dev and OpenSSF Scorecard (npm), Bundlephobia (npm)
 
-## Key Improvements
-
-### Smart Security Filtering
-Only displays vulnerabilities that affect the **latest version** of a package. Historical vulnerabilities that have been patched are automatically excluded, giving users an accurate security assessment.
-
-### AI Resilience
-Triple-layer automatic fallback system ensures maximum uptime:
-1. **Gemini Flash**: 20 requests/day (primary)
-2. **Gemini Flash-Lite**: 20 requests/day (first fallback)
-3. **Groq (GPT-OSS 120B)**: 14,400 requests/day (final fallback - 720x capacity!)
-
-This provides effectively unlimited AI analysis for most users.
-
-### Custom Quality Scoring
-Replaced outdated npms.io (last updated 2023) with a real-time quality algorithm that considers:
-- Current GitHub metrics
-- Recent download statistics
-- Active maintenance status
-- Security posture
-
-## Getting Started
+## Getting started
 
 ### Prerequisites
 
-- Node.js 20+ 
-- npm or yarn
-- Google API Key (for Gemini - primary AI provider)
-- Groq API Key (optional but recommended - provides 14,400 AI requests/day as fallback)
-- GitHub Personal Access Token (optional, for higher rate limits on security scanning)
+- Node.js 20+
+- npm
+- `GOOGLE_API_KEY` for Gemini
+- `GROQ_API_KEY`, `GROQ_MODEL`, and `GROQ_UPGRADE_AGENT_MODEL` for the Groq fallback and the npm upgrade brief
+- `GITHUB_TOKEN` (recommended) for advisory lookups and higher GitHub rate limits
 
 ### Installation
 
@@ -59,163 +49,106 @@ Replaced outdated npms.io (last updated 2023) with a real-time quality algorithm
 npm install
 ```
 
-3. Copy `.env.local.example` to `.env.local` and add your API keys:
+3. Copy the example env file and add your keys:
 
 ```bash
 cp .env.local.example .env.local
 ```
 
-4. Run the development server:
+4. Start the development server:
 
 ```bash
 npm run dev
 ```
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser
+5. Open [http://localhost:3000](http://localhost:3000)
 
-## Project Structure
+## Project structure
 
 ```
-npm-package-validator/
+pkglens/
 ├── app/
-│   ├── api/
-│   │   ├── analyze/       # Standard package analysis
-│   │   ├── analyze-ai/    # AI-powered analysis
-│   │   ├── security-check/ # Security advisories for specific version
-│   │   └── health/        # API health check
-│   ├── layout.tsx         # Root layout
-│   ├── page.tsx           # Main analysis interface
-│   └── globals.css        # Global styles
-├── lib/
-│   ├── ai/
-│   │   └── analyzer.ts    # AI integration (Gemini + Groq) with triple-layer fallback
-│   ├── data-fetchers/
-│   │   ├── npm-registry.ts   # npm package & download data
-│   │   ├── github.ts         # GitHub repository data
-│   │   ├── security.ts       # Security vulnerability scanning
-│   │   └── package-analyzer.ts  # Orchestrates all data sources
-│   └── types/
-│       └── package-data.ts   # TypeScript interfaces
-
+│   ├── api/v1/          # Analysis, packages, upgrade, watchlist, health
+│   ├── npm/[name]/      # npm package page
+│   ├── pypi/[name]/     # PyPI package page
+│   ├── page.tsx         # Home
+│   └── layout.tsx
+├── components/          # Search, analysis, and registry-specific panels
+└── lib/
+    ├── ai/              # Gemini and Groq analysis, upgrade agent
+    ├── api/             # Route handlers and path constants
+    ├── data-fetchers/   # npm, PyPI, GitHub, security, deps.dev
+    └── ecosystem-features.ts
 ```
 
-## Development Status
+## API
 
-- ✅ Next.js 15 setup with TypeScript and Tailwind CSS 4.0
-- ✅ API data fetching layer (npm Registry, GitHub GraphQL, GitHub Advisory Database)
-- ✅ Google Gemini 2.5 Flash AI with automatic Flash-Lite fallback
-- ✅ Custom quality score algorithm (removed outdated npms.io dependency)
-- ✅ Smart security filtering (excludes vulnerabilities already patched in latest version)
-- ✅ README parsing for deprecation detection
-- ✅ Interactive UI with color-coded severity badges and filtering
-- ✅ Enhanced error handling and graceful AI degradation
-- ✅ UK English localisation throughout
+Routes live under `/api/v1` (`lib/api/paths.ts`). Pass `ecosystem=npm` or `ecosystem=pypi` (`pip` is accepted as an alias for PyPI). When the parameter is omitted, the ecosystem is npm.
 
-## API Endpoints
-
-Routes live under `/api/v1` (see `lib/api/paths.ts`).
-
-### Analysis Endpoints
-
-- **`GET /api/v1/analysis/ai?package=<name>`** - Full analysis with AI insights
-  - Returns: Package info, metrics, security vulnerabilities, AI recommendations
-  - Requires: `GOOGLE_API_KEY` environment variable
-  - Features: Automatic Gemini Flash → Flash-Lite fallback on rate limits
-  
-- **`GET /api/v1/analysis/metrics?package=<name>`** - Standard analysis (no AI)
-  - Returns: Package info, metrics, security vulnerabilities
-  - No API keys required (uses public APIs)
-
-- **`GET /api/v1/packages/security?package=<name>&version=<ver>`** - Security advisories for a specific version
-  - Returns: Security vulnerabilities affecting the specified version
-  - Use when you need to check security for a particular version (e.g. an older version in use)
-  - Example: `?package=react&version=18.2.0`
-  
-- **`GET /api/v1/health`** - Health check
-  - Returns: API status and configured environment variables
-
-### Example Requests
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/v1/analysis/ai?package=&ecosystem=` | Metrics plus an AI recommendation. Needs `GOOGLE_API_KEY` |
+| GET, POST | `/api/v1/analysis/metrics` | Registry, GitHub, and security data without an LLM |
+| GET, POST | `/api/v1/packages/security` | Advisories for one version. Query: `package`, `version`, `ecosystem` |
+| GET | `/api/v1/packages/search` | Registry search |
+| GET | `/api/v1/packages/dependencies` | Direct dependencies. PyPI responses include extras and markers |
+| GET | `/api/v1/packages/dependencies/graph` | Transitive graph for npm |
+| GET | `/api/v1/packages/charts` | Download, release, and issue series. Download series are npm-only |
+| GET | `/api/v1/packages/similar` | Related npm packages |
+| GET | `/api/v1/packages/dependents` | Packages that depend on an npm package |
+| GET | `/api/v1/packages/scorecard` | OpenSSF Scorecard for an npm package's GitHub repo |
+| GET | `/api/v1/upgrade` | npm upgrade notes for a version range |
+| POST | `/api/v1/upgrade/agent` | Groq upgrade brief for npm |
+| POST | `/api/v1/watchlist/check` | Refresh saved packages |
+| GET | `/api/v1/health` | Process health and which API keys are set |
 
 ```bash
-# Full analysis with AI
-curl "http://localhost:3000/api/v1/analysis/ai?package=react"
+# npm analysis with AI
+curl "http://localhost:3000/api/v1/analysis/ai?package=react&ecosystem=npm"
 
-# Security check for a specific version
-curl "http://localhost:3000/api/v1/packages/security?package=react&version=18.2.0"
+# PyPI analysis without AI
+curl "http://localhost:3000/api/v1/analysis/metrics?package=requests&ecosystem=pypi"
 
-# Or via POST
-curl -X POST http://localhost:3000/api/v1/packages/security \
-  -H "Content-Type: application/json" \
-  -d '{"packageName": "react", "version": "18.2.0"}'
+# Advisories for one PyPI version
+curl "http://localhost:3000/api/v1/packages/security?package=requests&version=2.31.0&ecosystem=pypi"
 ```
 
 ## Usage
 
-Simply enter any npm package name (e.g. `react`, `express`, `lodash`) and click **Analyse Package** to get:
+Select **NPM** or **PyPI**, enter a package name, and choose **Analyse npm package** or **Analyse PyPI package**.
 
-- **Package Information**: Name, latest version, license, days since last release
-- **Metrics**: 
-  - Monthly downloads
-  - GitHub stars
-  - Custom quality score (0-100) based on popularity, maintenance, and security
-  - Security issues breakdown (Critical/High/Moderate/Low)
-- **AI Analysis**: 
-  - Intelligent recommendations (recommended/use-with-caution/not-recommended)
-  - Key strengths and concerns
-  - Overall AI score with security, quality, and maintenance ratings
-  - Reasoning for the recommendation
-- **Security Vulnerabilities**: 
-  - Only shows issues affecting the latest version
-  - Interactive color-coded severity badges with filtering
-  - Detailed advisory information with GitHub links
-- **Maintenance Detection**: 
-  - Analyses README for deprecation notices
-  - Considers publish/commit frequency
-  - Flags unmaintained packages
+A review includes:
 
-## Quality Score Algorithm
+- **Package information** - Name, latest version, license, description, and days since the last release
+- **Metrics** - Quality score, GitHub stars when a repository is linked, and security counts (critical, high, moderate, low). npm also shows monthly downloads, dependents, and bundle size. PyPI shows distribution size
+- **AI analysis** - `recommended`, `use-with-caution`, or `not-recommended`, with strengths, concerns, and scores
+- **Security** - Advisories that affect the selected version, with severity filters and links
+- **Dependencies** - npm dependencies and peer dependencies, or PyPI `Requires-Dist` (core, conditional, and extras)
+- **Maintenance** - README deprecation language and publish or commit frequency
 
-The quality score (0-100) is calculated from:
+## Quality score
 
-1. **GitHub Stars** (30 points max)
-   - 10,000+ stars: 30 pts
-   - 5,000+: 25 pts
-   - 1,000+: 20 pts
-   - 500+: 15 pts
-   - 100+: 10 pts
+The score is 0–100. Each available factor contributes up to 25 points, then the total is normalised by the number of factors present. A missing signal is left out rather than scored as zero. PyPI packages usually have no download or dependents count, so those factors are omitted.
 
-2. **Downloads** (25 points max)
-   - 10M+/month: 25 pts
-   - 1M+: 20 pts
-   - 100K+: 15 pts
-   - 10K+: 10 pts
-
-3. **Maintenance** (25 points max)
-   - Last release < 90 days: 25 pts
-   - < 180 days: 20 pts
-   - < 365 days: 15 pts
-   - < 730 days: 10 pts
-
-4. **Security** (20 points max)
-   - 0 vulnerabilities: 20 pts
-   - 1-2: 15 pts
-   - 3-5: 10 pts
-   - 6+: 5 pts
+1. **Adoption** (25) - The higher of GitHub stars and dependents
+   - Stars: 5,000+ → 25; 1,000+ → 22; 500+ → 18; 100+ → 14; 10+ → 10; otherwise 5
+   - Dependents: 10,000+ → 25; 1,000+ → 22; 100+ → 18; 10+ → 14; otherwise 5
+2. **Downloads** (25) - Monthly downloads when the registry provides them
+   - 10M+ → 25; 1M+ → 20; 100k+ → 15; 10k+ → 10; otherwise 5
+3. **Maintenance** (25) - Days since the current version was published
+   - Under 90 → 25; under 180 → 20; under 365 → 15; under 730 → 10; otherwise 5
+4. **Security** (20) - Advisories on the version under review
+   - None → 20; 1–2 → 15; 3–5 → 10; 6 or more → 5
 
 ## Deployment
 
-### Render
-Use the included `render.yaml` or configure manually:
-- **Type**: Web Service (not Static Site)
-- **Build**: `npm install && npm run build`
-- **Start**: `npm start`
-- **Environment**: Add `GOOGLE_API_KEY`, `GROQ_API_KEY`, `GROQ_MODEL`, `GROQ_UPGRADE_AGENT_MODEL`, and `GITHUB_TOKEN`
+On Render, create a **Web Service** (this app serves API routes, so it is not a static site).
 
-### Vercel
-Automatic detection with `vercel.json` included. Add environment variables in project settings.
-
-### Netlify
-Use `netlify.toml` with `@netlify/plugin-nextjs`. Add environment variables in site settings.
+- **Build command**: `npm install && npm run build`
+- **Start command**: `npm start`
+- **Health check path**: `/api/v1/health`
+- **Root directory**: leave blank
+- **Environment**: `GOOGLE_API_KEY`, `GROQ_API_KEY`, `GROQ_MODEL`, `GROQ_UPGRADE_AGENT_MODEL`, and `GITHUB_TOKEN`. Set `NEXT_PUBLIC_SITE_URL` for Open Graph, sitemap, and robots. On Render, `RENDER_EXTERNAL_URL` is used when that variable is unset
 
 ## License
 
