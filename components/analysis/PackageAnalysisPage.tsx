@@ -83,6 +83,7 @@ function AIAnalysisSkeleton() {
           <div className="h-4 w-4/5 rounded bg-gray-200 dark:bg-gray-700" />
         </div>
         <div className="space-y-2 bg-white p-4 dark:bg-gray-800 sm:p-6">
+          <div className="h-3 w-10 rounded bg-gray-200 dark:bg-gray-700" />
           <div className="h-4 w-full rounded bg-gray-200 dark:bg-gray-700" />
           <div className="h-4 w-3/4 rounded bg-gray-200 dark:bg-gray-700" />
         </div>

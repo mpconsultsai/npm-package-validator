@@ -58,9 +58,15 @@ export function AIAnalysisCard({ ai }: AIAnalysisCardProps) {
             </p>
           )}
           {reasoning && (
-            <p className="bg-white p-4 text-sm font-medium leading-relaxed text-gray-800 dark:bg-gray-800 dark:text-gray-100 sm:p-6">
-              {reasoning}
-            </p>
+            <div className="bg-violet-50/40 p-4 ring-1 ring-inset ring-violet-200/70 dark:bg-gray-800 dark:ring-violet-400/15 sm:p-6">
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-violet-700/70 dark:text-violet-300/70">
+                <AiSparkIcon />
+                AI
+              </p>
+              <p className="text-sm font-medium leading-relaxed text-gray-800 dark:text-gray-100">
+                {reasoning}
+              </p>
+            </div>
           )}
         </div>
       )}
@@ -149,6 +155,28 @@ export function AIAnalysisCard({ ai }: AIAnalysisCardProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+function AiSparkIcon() {
+  return (
+    <svg
+      className="h-4 w-4 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 2v4" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M22 4h-4" />
+      <circle cx="4" cy="20" r="2" strokeWidth={2} />
+    </svg>
   );
 }
 
