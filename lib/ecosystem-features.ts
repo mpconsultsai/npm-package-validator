@@ -10,11 +10,26 @@ export type EcosystemFeatures = {
   relatedPackages: boolean;
   pasteList: boolean;
   npmPackageManagerSettings: boolean;
+  /** When download metrics are shown, NuGet's figure is a lifetime total. */
+  downloadsAreTotal: boolean;
 };
 
 export function featuresForEcosystem(
   ecosystem: PackageEcosystem,
 ): EcosystemFeatures {
+  if (ecosystem === "nuget") {
+    return {
+      chartsTab: true,
+      downloadCharts: false,
+      downloadMetrics: true,
+      transitiveDepsTree: false,
+      upgradeAdvisor: false,
+      relatedPackages: false,
+      pasteList: true,
+      npmPackageManagerSettings: false,
+      downloadsAreTotal: true,
+    };
+  }
   if (ecosystem !== "npm") {
     return {
       chartsTab: true,
@@ -25,6 +40,7 @@ export function featuresForEcosystem(
       relatedPackages: false,
       pasteList: true,
       npmPackageManagerSettings: false,
+      downloadsAreTotal: false,
     };
   }
   return {
@@ -36,5 +52,6 @@ export function featuresForEcosystem(
     relatedPackages: true,
     pasteList: true,
     npmPackageManagerSettings: true,
+    downloadsAreTotal: false,
   };
 }

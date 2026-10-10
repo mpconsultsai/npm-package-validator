@@ -12,6 +12,7 @@ import { CopyButton } from "@/components/CopyButton";
 import type { PackageEcosystem } from "@/lib/package-routes";
 import { registryLabel } from "@/lib/package-routes";
 import { featuresForEcosystem } from "@/lib/ecosystem-features";
+import { dotnetApiReferenceUrl } from "@/lib/nuget-description";
 
 /** npm search `dependents` count - badge when widely depended-on. */
 const POPULAR_MIN_DEPENDENTS = 1000;
@@ -32,6 +33,9 @@ interface PackageInfo {
   dependents?: number;
   keywords?: string[];
   engines?: Record<string, string> | null;
+  supportedFrameworks?: string[] | null;
+  commonlyUsedTypes?: string[] | null;
+  descriptionNote?: string | null;
 }
 
 interface PackageInfoCardProps {
@@ -194,6 +198,9 @@ export function PackageInfoCard({
   const npmEngine = packageInfo.engines?.npm?.trim() || null;
   const pythonEngine = packageInfo.engines?.python?.trim() || null;
   const dotnetEngine = packageInfo.engines?.dotnet?.trim() || null;
+  const supportedFrameworks = (packageInfo.supportedFrameworks ?? []).filter(
+    (framework) => framework.trim().length > 0,
+  );
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
@@ -250,6 +257,7 @@ export function PackageInfoCard({
           <MetricsCard
             metrics={metrics}
             showDownloads={features.downloadMetrics}
+            downloadsAreTotal={features.downloadsAreTotal}
             embedded
           />
         )
@@ -273,6 +281,42 @@ export function PackageInfoCard({
               <p className="text-base font-semibold leading-relaxed text-gray-800 dark:text-gray-100 sm:text-lg">
                 {packageInfo.description}
               </p>
+              {(packageInfo.commonlyUsedTypes?.length ?? 0) > 0 && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Commonly used types
+                  </h3>
+                  <ul className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
+                    {packageInfo.commonlyUsedTypes!.map((typeName) => {
+                      const href = dotnetApiReferenceUrl(typeName);
+                      return (
+                        <li
+                          key={typeName}
+                          className="font-mono text-sm leading-6 text-gray-800 dark:text-gray-200"
+                        >
+                          {href ? (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 underline underline-offset-2 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                            >
+                              {typeName}
+                            </a>
+                          ) : (
+                            typeName
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+              {packageInfo.descriptionNote && (
+                <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
+                  {packageInfo.descriptionNote}
+                </p>
+              )}
               {badgeRow && <div className="mt-3">{badgeRow}</div>}
             </div>
           )}
@@ -370,7 +414,43 @@ export function PackageInfoCard({
               </div>
             )}
 
-            {dotnetEngine && ecosystem === "nuget" && (
+            {ecosystem === "nuget" && supportedFrameworks.length > 0 && (
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 md:col-span-2">
+                <div className="flex items-center gap-2 mb-2">
+                  <svg
+                    className="w-5 h-5 text-violet-600 dark:text-violet-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+                    />
+                  </svg>
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Supported frameworks
+                  </span>
+                </div>
+                <ul className="flex flex-wrap gap-2" aria-label="Supported frameworks">
+                  {supportedFrameworks.map((framework) => (
+                    <li
+                      key={framework}
+                      className="rounded-full bg-white px-2.5 py-1 font-mono text-sm text-gray-900 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-100 dark:ring-gray-600"
+                    >
+                      {framework}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {dotnetEngine &&
+              ecosystem === "nuget" &&
+              supportedFrameworks.length === 0 && (
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <svg
@@ -471,7 +551,7 @@ export function PackageInfoCard({
                   Licence
                 </span>
               </div>
-              <p className="text-lg font-semibold text-gray-900 dark:text-white">
+              <p className="text-lg font-semibold text-gray-900 dark:text-white break-all">
                 {licenseInfo?.href ? (
                   <a
                     href={licenseInfo.href}

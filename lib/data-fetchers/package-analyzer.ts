@@ -34,11 +34,20 @@ export async function analyzePackage(
         result.readme = readme;
         result.distributionSize = distributionSize;
       } else {
-        const { data, readme, distributionSize } =
+        const { data, readme, distributionSize, totalDownloads } =
           await fetchNugetPackageData(packageName);
         result.npm = data;
         result.readme = readme;
         result.distributionSize = distributionSize;
+        if (totalDownloads) {
+          result.downloads = {
+            downloads: totalDownloads,
+            start: "",
+            end: "",
+            package: data.name,
+            period: "total",
+          };
+        }
       }
     } catch (error: unknown) {
       const message =

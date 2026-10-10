@@ -307,6 +307,14 @@ export const describeLicense = (license: unknown): LicenseInfo | null => {
     };
   }
 
+  if (/^https?:\/\/\S+$/i.test(display)) {
+    return {
+      id: display,
+      summary: "Licence terms published with this package.",
+      href: display,
+    };
+  }
+
   return {
     id: display,
     summary: "Check the package’s licence file - this is not a standard SPDX id.",

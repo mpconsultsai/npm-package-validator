@@ -7,6 +7,7 @@ import {
   validatePackageNameForEcosystem,
 } from '../validation';
 import { registryLabel, type PackageEcosystem } from '../package-routes';
+import { isStableDotnetPlatformPackage } from '../dotnet-platform';
 import { classifyRuntimeEnvironment } from '../runtime-environment';
 import type { RuntimeKind } from '../runtime-environment';
 import { getGroqModel, groqModelLabel } from './groq-config';
@@ -292,6 +293,41 @@ function applyHealthRecommendationOverrides(
   };
 }
 
+function applyStableDotnetPlatformReview(
+  analysis: AIPackageAnalysis,
+  data: PackageAnalysisResult,
+): AIPackageAnalysis {
+  if (!isStableDotnetPlatformPackage(data)) return analysis;
+  const flags = detectPackageHealthFlags(data);
+  if (flags.deprecated || flags.archived) return analysis;
+  if ((data.security?.totalCount ?? 0) > 0) return analysis;
+
+  const concerns = dedupeConcerns(
+    analysis.concerns.filter((item) => {
+      if (concernTheme(item) === "maintenance") return false;
+      return !/^none$/i.test(item.trim());
+    }),
+  );
+  const maintenanceRating =
+    analysis.maintenanceRating === "poor" ||
+    analysis.maintenanceRating === "fair"
+      ? "good"
+      : analysis.maintenanceRating;
+  const name = data.npm?.name || data.packageName;
+  const downloads = data.downloads?.downloads?.toLocaleString() ?? "very high";
+  const lifted = analysis.recommendation !== "recommended";
+
+  return {
+    ...analysis,
+    recommendation: "recommended",
+    maintenanceRating,
+    concerns,
+    reasoning: lifted
+      ? `${name} is a .NET platform package with ${downloads} lifetime downloads and no advisories on this version. The older publish date reflects a stable inbox assembly.`
+      : analysis.reasoning,
+  };
+}
+
 type BundleSizeLevel = "ok" | "notable" | "large" | "very-large";
 
 function packageRuntimeKind(data: PackageAnalysisResult): RuntimeKind {
@@ -504,9 +540,12 @@ function finalizeAiAnalysis(
   analysis: AIPackageAnalysis,
   data: PackageAnalysisResult,
 ): AIPackageAnalysis {
-  const withHealth = applyHealthRecommendationOverrides(
-    analysis,
-    detectPackageHealthFlags(data),
+  const withHealth = applyStableDotnetPlatformReview(
+    applyHealthRecommendationOverrides(
+      analysis,
+      detectPackageHealthFlags(data),
+    ),
+    data,
   );
   const withBundle = applyBundleSizeNotes(withHealth, data);
   const concerns = dedupeConcerns(filterScorecardBullets(withBundle.concerns)).slice(
@@ -760,7 +799,11 @@ function createAnalysisPrompt(
 
   const adoptionBits = [`adoption=${adoption}`];
   if (monthlyDownloads !== undefined) {
-    adoptionBits.push(`downloads/mo=${monthlyDownloads.toLocaleString()}`);
+    adoptionBits.push(
+      data.downloads?.period === "total"
+        ? `downloads total=${monthlyDownloads.toLocaleString()}`
+        : `downloads/mo=${monthlyDownloads.toLocaleString()}`,
+    );
   }
   if (popularity?.dependents !== undefined) {
     adoptionBits.push(`dependents=${popularity.dependents.toLocaleString()}`);
@@ -790,6 +833,11 @@ function createAnalysisPrompt(
   }
 
   lines.push(`Maintenance (authoritative): ${cadenceNote}`);
+  if (isStableDotnetPlatformPackage(data)) {
+    lines.push(
+      "Profile: stable .NET platform package (System.* or Microsoft.*). Lifetime downloads are the adoption signal. A publish date years ago is normal for an inbox assembly. When advisories are clear, recommendation=recommended and maintenanceRating=good or excellent. Do not list age, a long publish gap, or infrequent releases as a concern.",
+    );
+  }
   if (completeUtility) {
     lines.push(
       "Profile: likely complete/narrow utility (math, algorithm, or single-purpose). Do not penalize maintenance for lack of frequent releases unless security/README say otherwise.",

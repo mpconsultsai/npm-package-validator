@@ -2,6 +2,7 @@ import axios from "axios";
 import { errorMessage } from "@/lib/utils/error-message";
 import { validatePackageNameForEcosystem } from "@/lib/validation";
 import { sanitizeDescription } from "@/lib/sanitize";
+import { formatNugetDescription } from "@/lib/nuget-description";
 import type { NpmPackageData } from "@/lib/types/package-data";
 import type { DistributionSizeInfo } from "@/lib/data-fetchers/pypi-distribution-size";
 import {
@@ -90,6 +91,49 @@ function frameworkRank(targetFramework: string | undefined): number {
   return preferred.length - index;
 }
 
+function listSupportedFrameworks(
+  groups: NugetDependencyGroup[] | undefined,
+): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const group of groups ?? []) {
+    const name = group.targetFramework?.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push(name);
+  }
+  return names;
+}
+
+async function fetchNugetTotalDownloads(
+  packageId: string,
+): Promise<number | null> {
+  try {
+    const response = await axios.get<{
+      data?: { id?: string; totalDownloads?: number }[];
+    }>(SEARCH_URL, {
+      headers: HEADERS,
+      params: {
+        q: `packageid:${packageId}`,
+        take: 5,
+        prerelease: false,
+      },
+    });
+    const want = packageId.toLowerCase();
+    const hit = (response.data.data ?? []).find(
+      (item) => item.id?.trim().toLowerCase() === want,
+    );
+    const total = hit?.totalDownloads;
+    return typeof total === "number" && Number.isFinite(total) && total > 0
+      ? total
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function pickDependencyGroup(
   groups: NugetDependencyGroup[] | undefined,
 ): { framework: string | null; dependencies: Record<string, string> } {
@@ -169,6 +213,7 @@ export async function fetchNugetPackageData(packageName: string): Promise<{
   data: NpmPackageData;
   readme: string | null;
   distributionSize: DistributionSizeInfo | null;
+  totalDownloads: number | null;
 }> {
   try {
     const entries = await loadCatalogEntries(packageName);
@@ -188,7 +233,8 @@ export async function fetchNugetPackageData(packageName: string): Promise<{
 
     const flatId = idPath(id);
     const flatVersion = versionPath(version);
-    const [nuspecResult, readmeResult, sizeResult] = await Promise.all([
+    const [nuspecResult, readmeResult, sizeResult, totalDownloads] =
+      await Promise.all([
       axios
         .get<string>(
           `${FLAT_CONTAINER}/${flatId}/${flatVersion}/${flatId}.nuspec`,
@@ -215,6 +261,7 @@ export async function fetchNugetPackageData(packageName: string): Promise<{
           },
         )
         .catch(() => null),
+      fetchNugetTotalDownloads(id),
     ]);
 
     const nuspec =
@@ -232,25 +279,31 @@ export async function fetchNugetPackageData(packageName: string): Promise<{
           }
         : null;
 
+    const formatted = formatNugetDescription(
+      latest.description || latest.summary || "",
+    );
+
     return {
       data: {
         name: id,
         version,
-        description: sanitizeDescription(
-          latest.summary || latest.description || "",
-        ),
+        description: formatted.description,
         license: latest.licenseExpression || latest.licenseUrl || undefined,
         repository,
         homepage: latest.projectUrl,
         keywords: parseTags(latest.tags),
         dependencies,
         engines: framework ? { dotnet: framework } : null,
+        supportedFrameworks: listSupportedFrameworks(latest.dependencyGroups),
+        commonlyUsedTypes: formatted.commonlyUsedTypes,
+        descriptionNote: formatted.note,
         author: latest.authors,
         time: time as NpmPackageData["time"],
         distTags: { latest: version },
       },
       readme: readmeRaw ? readmeRaw.slice(0, 2000) : null,
       distributionSize,
+      totalDownloads,
     };
   } catch (error: unknown) {
     if (error instanceof Error && /not found on NuGet/.test(error.message)) {
@@ -287,7 +340,10 @@ export async function searchNugetPackages(
     seen.add(name.toLowerCase());
     packages.push({
       name,
-      description: sanitizeDescription(item.description) || "No description",
+      description:
+        formatNugetDescription(item.description).description ||
+        sanitizeDescription(item.description) ||
+        "No description",
       version: item.version || "Unknown",
     });
     if (packages.length >= limit) break;

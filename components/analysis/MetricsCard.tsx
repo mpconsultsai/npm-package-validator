@@ -15,6 +15,8 @@ interface MetricsCardProps {
     distributionFilename?: string;
   };
   showDownloads?: boolean;
+  /** NuGet downloads are a lifetime total. npm downloads are monthly. */
+  downloadsAreTotal?: boolean;
   /** Omit the outer card chrome when nested in another panel */
   embedded?: boolean;
 }
@@ -22,6 +24,7 @@ interface MetricsCardProps {
 export function MetricsCard({
   metrics,
   showDownloads = true,
+  downloadsAreTotal = false,
   embedded = false,
 }: MetricsCardProps) {
   const hasBundleSize =
@@ -46,7 +49,7 @@ export function MetricsCard({
         {showDownloads && (
           <div>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Downloads (month)
+              {downloadsAreTotal ? "Downloads" : "Downloads (month)"}
             </p>
             <p className="text-2xl font-bold break-words">
               {metrics.downloads.toLocaleString()}
@@ -129,7 +132,11 @@ export function MetricsCard({
       </div>
       <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
         *Quality score is calculated from GitHub stars or dependents
-        {showDownloads ? ", monthly downloads," : ","} time since last publish,
+        {showDownloads
+          ? downloadsAreTotal
+            ? ", total downloads,"
+            : ", monthly downloads,"
+          : ","} time since last publish,
         and known vulnerabilities.
       </p>
     </>

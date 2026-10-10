@@ -7,6 +7,7 @@ import type { AIPackageAnalysis } from "@/lib/ai/analyzer";
 import { classifyRuntimeEnvironment } from "@/lib/runtime-environment";
 import { licenseDisplayName } from "@/lib/license-info";
 import { registryPackageUrl } from "@/lib/package-routes";
+import { isStableDotnetPlatformPackage } from "@/lib/dotnet-platform";
 
 export function getDaysSinceLastRelease(
   packageData: PackageAnalysisResult,
@@ -88,7 +89,15 @@ export function calculateQualityScore(
 
   if (packageData.downloads?.downloads) {
     const downloads = packageData.downloads.downloads;
-    if (downloads >= 10000000) score += 25;
+    const lifetime = packageData.downloads.period === "total";
+    if (lifetime) {
+      if (downloads >= 1_000_000_000) score += 25;
+      else if (downloads >= 100_000_000) score += 22;
+      else if (downloads >= 10_000_000) score += 18;
+      else if (downloads >= 1_000_000) score += 14;
+      else if (downloads >= 100_000) score += 10;
+      else score += 5;
+    } else if (downloads >= 10000000) score += 25;
     else if (downloads >= 1000000) score += 20;
     else if (downloads >= 100000) score += 15;
     else if (downloads >= 10000) score += 10;
@@ -103,11 +112,15 @@ export function calculateQualityScore(
         (Date.now() - new Date(lastPublished).getTime()) /
           (1000 * 60 * 60 * 24),
       );
-      if (daysSince < 90) score += 25;
-      else if (daysSince < 180) score += 20;
-      else if (daysSince < 365) score += 15;
-      else if (daysSince < 730) score += 10;
-      else score += 5;
+      let maintenance = 5;
+      if (daysSince < 90) maintenance = 25;
+      else if (daysSince < 180) maintenance = 20;
+      else if (daysSince < 365) maintenance = 15;
+      else if (daysSince < 730) maintenance = 10;
+      if (isStableDotnetPlatformPackage(packageData)) {
+        maintenance = Math.max(maintenance, 20);
+      }
+      score += maintenance;
       factors++;
     }
   }
@@ -157,6 +170,9 @@ export function buildAnalysisResponse(
         (k): k is string => typeof k === "string" && k.trim().length > 0,
       ),
       engines: packageData.npm?.engines ?? null,
+      supportedFrameworks: packageData.npm?.supportedFrameworks ?? null,
+      commonlyUsedTypes: packageData.npm?.commonlyUsedTypes ?? null,
+      descriptionNote: packageData.npm?.descriptionNote ?? null,
       runtime: {
         kind: runtime.kind,
         label: runtime.label,

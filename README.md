@@ -21,7 +21,7 @@ npm also includes monthly downloads and download charts, Bundlephobia size, depe
 
 PyPI uses the PyPI JSON API for project metadata, versions, license, and description. It shows distribution size (wheel or sdist), `Requires-Python`, core requirements, extras, and environment markers. Paste analysis accepts `requirements.txt`, `pyproject.toml`, or PEP 508 lines. PyPI reviews do not include download totals, download charts, a transitive dependency tree, related packages, or the upgrade advisor.
 
-NuGet uses the NuGet registration and flat-container APIs. It shows the latest stable version, package size, the dependency group's target framework, and direct package dependencies. Paste analysis accepts `PackageReference` entries from a `.csproj` or `Directory.Packages.props`, or a plain list of package ids. NuGet reviews match PyPI: no download totals, download charts, transitive dependency tree, related packages, or upgrade advisor.
+NuGet uses the NuGet registration, flat-container, and search APIs. It shows the latest stable version, package size, lifetime downloads, every target framework the package supports, and direct package dependencies. Paste analysis accepts `PackageReference` entries from a `.csproj` or `Directory.Packages.props`, or a plain list of package ids. NuGet reviews omit download charts, a transitive dependency tree, related packages, and the upgrade advisor. Widely downloaded `System.*` and `Microsoft.*` packages stay recommended when the latest stable release is old and advisories are clear.
 
 ## Tech stack
 
@@ -126,7 +126,7 @@ Select **NPM**, **PyPI**, or **NuGet**, enter a package name, and choose **Analy
 A review includes:
 
 - **Package information** - Name, latest version, license, description, and days since the last release
-- **Metrics** - Quality score, GitHub stars when a repository is linked, and security counts (critical, high, moderate, low). npm also shows monthly downloads, dependents, and bundle size. PyPI shows distribution size. NuGet shows package size and target framework
+- **Metrics** - Quality score, GitHub stars when a repository is linked, and security counts (critical, high, moderate, low). npm also shows monthly downloads, dependents, and bundle size. PyPI shows distribution size. NuGet shows lifetime downloads, package size, and supported frameworks
 - **AI analysis** - `recommended`, `use-with-caution`, or `not-recommended`, with strengths, concerns, and scores
 - **Security** - Advisories that affect the selected version, with severity filters and links
 - **Dependencies** - npm dependencies and peer dependencies, PyPI `Requires-Dist` (core, conditional, and extras), or NuGet package dependencies for the selected target framework
@@ -134,15 +134,15 @@ A review includes:
 
 ## Quality score
 
-The score is 0–100. Each available factor contributes up to 25 points, then the total is normalised by the number of factors present. A missing signal is left out rather than scored as zero. PyPI and NuGet packages usually have no download or dependents count, so those factors are omitted.
+The score is 0–100. Each available factor contributes up to 25 points, then the total is normalised by the number of factors present. A missing signal is left out rather than scored as zero. PyPI packages usually have no download or dependents count, so those factors are omitted. NuGet uses lifetime downloads: 1 billion or more scores 25.
 
 1. **Adoption** (25) - The higher of GitHub stars and dependents
    - Stars: 5,000+ → 25; 1,000+ → 22; 500+ → 18; 100+ → 14; 10+ → 10; otherwise 5
    - Dependents: 10,000+ → 25; 1,000+ → 22; 100+ → 18; 10+ → 14; otherwise 5
-2. **Downloads** (25) - Monthly downloads when the registry provides them
-   - 10M+ → 25; 1M+ → 20; 100k+ → 15; 10k+ → 10; otherwise 5
+2. **Downloads** (25) - Monthly downloads for npm (10M+ → 25; 1M+ → 20; 100k+ → 15; 10k+ → 10; otherwise 5). Lifetime downloads for NuGet (1B+ → 25; 100M+ → 22; 10M+ → 18; 1M+ → 14; 100k+ → 10; otherwise 5)
 3. **Maintenance** (25) - Days since the current version was published
    - Under 90 → 25; under 180 → 20; under 365 → 15; under 730 → 10; otherwise 5
+   - `System.*` and `Microsoft.*` packages with at least 100 million lifetime downloads score at least 20 here
 4. **Security** (20) - Advisories on the version under review
    - None → 20; 1–2 → 15; 3–5 → 10; 6 or more → 5
 

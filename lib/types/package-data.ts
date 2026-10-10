@@ -31,6 +31,12 @@ export interface NpmPackageData {
   /** package.json bin */
   bin?: unknown;
   engines?: Record<string, string> | null;
+  /** NuGet target frameworks declared for the latest stable version. */
+  supportedFrameworks?: string[];
+  /** Types listed under "Commonly Used Types" in a NuGet description. */
+  commonlyUsedTypes?: string[];
+  /** Short note that followed the NuGet type list. */
+  descriptionNote?: string | null;
   /** package.json exports */
   exports?: unknown;
   maintainers?: Array<{ name: string; email: string }>;
@@ -50,6 +56,8 @@ export interface NpmDownloadStats {
   start: string;
   end: string;
   package: string;
+  /** NuGet reports a lifetime total. npm reports a monthly window. */
+  period?: "month" | "total";
 }
 
 export interface GitHubRepoData {
