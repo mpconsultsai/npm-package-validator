@@ -15,7 +15,7 @@ export type EcosystemFeatures = {
 export function featuresForEcosystem(
   ecosystem: PackageEcosystem,
 ): EcosystemFeatures {
-  if (ecosystem === "pypi") {
+  if (ecosystem !== "npm") {
     return {
       chartsTab: true,
       downloadCharts: false,

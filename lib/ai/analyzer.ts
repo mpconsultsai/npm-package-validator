@@ -6,7 +6,7 @@ import {
   normalizeNpmPackageName,
   validatePackageNameForEcosystem,
 } from '../validation';
-import type { PackageEcosystem } from '../types/package-data';
+import { registryLabel, type PackageEcosystem } from '../package-routes';
 import { classifyRuntimeEnvironment } from '../runtime-environment';
 import type { RuntimeKind } from '../runtime-environment';
 import { getGroqModel, groqModelLabel } from './groq-config';
@@ -718,7 +718,7 @@ function createAnalysisPrompt(
     popularity,
     bundleSize,
   } = data;
-  const registryLabel = ecosystem === "pypi" ? "PyPI" : "npm";
+  const registryLabelName = registryLabel(ecosystem);
 
   const lastPublished =
     npm?.time && npm.version ? npm.time[npm.version] : null;
@@ -739,7 +739,7 @@ function createAnalysisPrompt(
   );
 
   const lines: string[] = [
-    `Analyse ${registryLabel} package "${packageName}". JSON only.`,
+    `Analyse ${registryLabelName} package "${packageName}". JSON only.`,
     "",
     `v${npm?.version || "?"}; license ${npm?.license || "?"}`,
     `Desc: ${npm?.description || "none"}`,
@@ -872,7 +872,9 @@ function createAnalysisPrompt(
     "- reasoning: 1-2 sentences WHY the recommendation - tradeoffs / decision. Do NOT repeat concern wording or themes.",
     ecosystem === "pypi"
       ? `- competitors: 4-6 real PyPI alternatives (same job, not plugins/wrappers of this). Exact PyPI project names. Lowercase, no versions. Never "${packageName}".`
-      : `- competitors: 4-6 real npm alternatives (same job, not plugins/wrappers of this). Exact registry names with @ if scoped. Lowercase, no versions. Never "${packageName}".`,
+      : ecosystem === "nuget"
+        ? `- competitors: 4-6 real NuGet alternatives (same job, not plugins/wrappers of this). Exact NuGet package ids. No versions. Never "${packageName}".`
+        : `- competitors: 4-6 real npm alternatives (same job, not plugins/wrappers of this). Exact registry names with @ if scoped. Lowercase, no versions. Never "${packageName}".`,
     "",
     "JSON shape:",
     '{"summary":"","recommendation":"","strengths":[],"concerns":[],"overallScore":0,"securityRating":"","qualityRating":"","maintenanceRating":"","reasoning":"","competitors":[]}',
@@ -911,17 +913,20 @@ function parseCompetitorNames(
   const names: string[] = [];
   for (const entry of raw) {
     const normalized =
-      ecosystem === "pypi"
-        ? normalizeAiString(entry).toLowerCase()
-        : normalizeNpmPackageName(normalizeAiString(entry));
+      ecosystem === "npm"
+        ? normalizeNpmPackageName(normalizeAiString(entry))
+        : ecosystem === "pypi"
+          ? normalizeAiString(entry).toLowerCase()
+          : normalizeAiString(entry);
     const name = normalized;
+    const key = name.toLowerCase();
     if (
       !name ||
-      seen.has(name) ||
+      seen.has(key) ||
       !validatePackageNameForEcosystem(name, ecosystem).valid
     )
       continue;
-    seen.add(name);
+    seen.add(key);
     names.push(name);
     if (names.length >= 6) break;
   }
@@ -1024,12 +1029,12 @@ export async function analyzePackageWithAI(
   const scorecard = await loadScorecardForAnalysis(data);
   const prompt = createAnalysisPrompt(data, scorecard);
 
-  const registryLabel = data.ecosystem === "pypi" ? "PyPI" : "npm";
+  const registryName = registryLabel(data.ecosystem ?? "npm");
   const systemPrompt =
-    `Expert engineer advising on ${registryLabel} package adoption. ` +
+    `Expert engineer advising on ${registryName} package adoption. ` +
     'Summary = what it is/for (from desc/README), not a metrics recap. ' +
     'Normal publish gaps on popular or feature-complete narrow libraries are not caution. ' +
-    `Weigh ${registryLabel} advisories and maintainer signals; never highlight OpenSSF Scorecard in user-facing text. JSON only.`;
+    `Weigh ${registryName} advisories and maintainer signals; never highlight OpenSSF Scorecard in user-facing text. JSON only.`;
 
   const fullPrompt = `${systemPrompt}\n\n${prompt}`;
 

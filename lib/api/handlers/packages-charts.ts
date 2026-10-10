@@ -6,6 +6,7 @@ import {
   fetchNpmPackageData,
 } from "@/lib/data-fetchers/npm-registry";
 import { fetchPypiPackageData } from "@/lib/data-fetchers/pypi-registry";
+import { fetchNugetPackageData } from "@/lib/data-fetchers/nuget-registry";
 import {
   fetchOpenIssuesByMonth,
   parseGitHubUrl,
@@ -40,7 +41,7 @@ export const GET = withHandler(
     let downloadsNote: string | undefined;
 
     const downloadsPromise =
-      wantDownloads && ecosystem !== "pypi"
+      wantDownloads && ecosystem === "npm"
         ? fetchNpmDownloadTrends(packageName)
           .then((data) =>
             aggregateDownloadsForCharts(data.downloads || [], ecosystem),
@@ -65,9 +66,12 @@ export const GET = withHandler(
       Promise.resolve([]);
 
     if (wantIssues) {
-      issuesPromise = (ecosystem === "pypi"
-        ? fetchPypiPackageData(packageName)
-        : fetchNpmPackageData(packageName)
+      issuesPromise = (
+        ecosystem === "pypi"
+          ? fetchPypiPackageData(packageName)
+          : ecosystem === "nuget"
+            ? fetchNugetPackageData(packageName)
+            : fetchNpmPackageData(packageName)
       )
         .then(({ data: meta }) => {
           const githubInfo = meta.repository?.url

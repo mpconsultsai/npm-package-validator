@@ -2,11 +2,11 @@
 
 AI-assisted package reviews - security, quality and dependencies at a glance.
 
-pkglens reviews packages from **npm** and **PyPI** before you install them. Choose a registry in the search bar, then open a package at `/npm/<name>` or `/pypi/<name>`.
+pkglens reviews packages from **npm**, **PyPI**, and **NuGet** before you install them. Choose a registry in the search bar, then open a package at `/npm/<name>`, `/pypi/<name>`, or `/nuget/<name>`.
 
 ## Features
 
-Both registries:
+All three registries:
 
 - **Security** - GitHub Advisory Database for the package version, with patched issues filtered out. Advisories are enriched with CVE identifiers, CISA Known Exploited Vulnerabilities, and EPSS scores when available
 - **Health signals** - GitHub stars, forks, issues, and release activity when the package links a GitHub repository; days since the latest release; README deprecation and maintenance warnings
@@ -21,13 +21,15 @@ npm also includes monthly downloads and download charts, Bundlephobia size, depe
 
 PyPI uses the PyPI JSON API for project metadata, versions, license, and description. It shows distribution size (wheel or sdist), `Requires-Python`, core requirements, extras, and environment markers. Paste analysis accepts `requirements.txt`, `pyproject.toml`, or PEP 508 lines. PyPI reviews do not include download totals, download charts, a transitive dependency tree, related packages, or the upgrade advisor.
 
+NuGet uses the NuGet registration and flat-container APIs. It shows the latest stable version, package size, the dependency group's target framework, and direct package dependencies. Paste analysis accepts `PackageReference` entries from a `.csproj` or `Directory.Packages.props`, or a plain list of package ids. NuGet reviews match PyPI: no download totals, download charts, transitive dependency tree, related packages, or upgrade advisor.
+
 ## Tech stack
 
 - **Framework**: Next.js 15 (App Router)
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS 4
 - **AI**: Google Gemini 2.5 (Flash, then Flash-Lite) and Groq
-- **Registries**: npm Registry, PyPI
+- **Registries**: npm Registry, PyPI, NuGet
 - **Other APIs**: GitHub GraphQL, GitHub Advisory Database, deps.dev and OpenSSF Scorecard (npm), Bundlephobia (npm)
 
 ## Getting started
@@ -71,19 +73,20 @@ pkglens/
 │   ├── api/v1/          # Analysis, packages, upgrade, watchlist, health
 │   ├── npm/[name]/      # npm package page
 │   ├── pypi/[name]/     # PyPI package page
+│   ├── nuget/[name]/    # NuGet package page
 │   ├── page.tsx         # Home
 │   └── layout.tsx
 ├── components/          # Search, analysis, and registry-specific panels
 └── lib/
     ├── ai/              # Gemini and Groq analysis, upgrade agent
     ├── api/             # Route handlers and path constants
-    ├── data-fetchers/   # npm, PyPI, GitHub, security, deps.dev
+    ├── data-fetchers/   # npm, PyPI, NuGet, GitHub, security, deps.dev
     └── ecosystem-features.ts
 ```
 
 ## API
 
-Routes live under `/api/v1` (`lib/api/paths.ts`). Pass `ecosystem=npm` or `ecosystem=pypi` (`pip` is accepted as an alias for PyPI). When the parameter is omitted, the ecosystem is npm.
+Routes live under `/api/v1` (`lib/api/paths.ts`). Pass `ecosystem=npm`, `ecosystem=pypi`, or `ecosystem=nuget` (`pip` is accepted as an alias for PyPI). When the parameter is omitted, the ecosystem is npm.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -111,24 +114,27 @@ curl "http://localhost:3000/api/v1/analysis/metrics?package=requests&ecosystem=p
 
 # Advisories for one PyPI version
 curl "http://localhost:3000/api/v1/packages/security?package=requests&version=2.31.0&ecosystem=pypi"
+
+# NuGet analysis without AI
+curl "http://localhost:3000/api/v1/analysis/metrics?package=Newtonsoft.Json&ecosystem=nuget"
 ```
 
 ## Usage
 
-Select **NPM** or **PyPI**, enter a package name, and choose **Analyse npm package** or **Analyse PyPI package**.
+Select **NPM**, **PyPI**, or **NuGet**, enter a package name, and choose **Analyse npm package**, **Analyse PyPI package**, or **Analyse NuGet package**.
 
 A review includes:
 
 - **Package information** - Name, latest version, license, description, and days since the last release
-- **Metrics** - Quality score, GitHub stars when a repository is linked, and security counts (critical, high, moderate, low). npm also shows monthly downloads, dependents, and bundle size. PyPI shows distribution size
+- **Metrics** - Quality score, GitHub stars when a repository is linked, and security counts (critical, high, moderate, low). npm also shows monthly downloads, dependents, and bundle size. PyPI shows distribution size. NuGet shows package size and target framework
 - **AI analysis** - `recommended`, `use-with-caution`, or `not-recommended`, with strengths, concerns, and scores
 - **Security** - Advisories that affect the selected version, with severity filters and links
-- **Dependencies** - npm dependencies and peer dependencies, or PyPI `Requires-Dist` (core, conditional, and extras)
+- **Dependencies** - npm dependencies and peer dependencies, PyPI `Requires-Dist` (core, conditional, and extras), or NuGet package dependencies for the selected target framework
 - **Maintenance** - README deprecation language and publish or commit frequency
 
 ## Quality score
 
-The score is 0–100. Each available factor contributes up to 25 points, then the total is normalised by the number of factors present. A missing signal is left out rather than scored as zero. PyPI packages usually have no download or dependents count, so those factors are omitted.
+The score is 0–100. Each available factor contributes up to 25 points, then the total is normalised by the number of factors present. A missing signal is left out rather than scored as zero. PyPI and NuGet packages usually have no download or dependents count, so those factors are omitted.
 
 1. **Adoption** (25) - The higher of GitHub stars and dependents
    - Stars: 5,000+ → 25; 1,000+ → 22; 500+ → 18; 100+ → 14; 10+ → 10; otherwise 5

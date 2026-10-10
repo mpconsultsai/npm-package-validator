@@ -2,6 +2,7 @@ import { jsonOk, withHandler } from "@/lib/api/http";
 import { parseEcosystem } from "@/lib/api/params";
 import { searchNpmPackages } from "@/lib/data-fetchers/npm-registry";
 import { searchPypiPackages } from "@/lib/data-fetchers/pypi-registry";
+import { searchNugetPackages } from "@/lib/data-fetchers/nuget-registry";
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 100;
@@ -56,7 +57,9 @@ export const GET = withHandler(
     const packages =
       ecosystem === "pypi"
         ? await searchPypiPackages(q, limit)
-        : await searchNpmPackages(q, limit);
+        : ecosystem === "nuget"
+          ? await searchNugetPackages(q, limit)
+          : await searchNpmPackages(q, limit);
     setCached(cacheKey, packages);
     return jsonOk({ packages });
   },

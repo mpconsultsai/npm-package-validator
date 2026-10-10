@@ -3,6 +3,9 @@
 import type { SecuritySummary } from '../data-fetchers/security';
 import type { BundleSizeInfo } from '../data-fetchers/bundlephobia';
 import type { DistributionSizeInfo } from '../data-fetchers/pypi-distribution-size';
+import type { PackageEcosystem } from "../package-routes";
+
+export type { PackageEcosystem };
 
 export interface NpmPackageData {
   name: string;
@@ -89,8 +92,6 @@ export interface NpmPackagePopularity {
   qualityScore: number;
   maintenanceScore: number;
 }
-
-export type PackageEcosystem = "npm" | "pypi";
 
 export interface PackageAnalysisResult {
   packageName: string;

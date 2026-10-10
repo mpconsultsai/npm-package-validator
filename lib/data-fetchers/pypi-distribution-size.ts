@@ -84,6 +84,15 @@ export function distributionSizeCaption(info: DistributionSizeInfo): {
         : "Source tarball from PyPI",
     };
   }
+  if (info.packagetype === "nupkg") {
+    return {
+      context: "Latest release",
+      fileLabel: info.filename ?? "NuGet package (.nupkg)",
+      title: info.filename
+        ? `NuGet package: ${info.filename}`
+        : "NuGet package (.nupkg)",
+    };
+  }
   return {
     context: "Latest release",
     fileLabel: info.filename ?? "PyPI distribution file",

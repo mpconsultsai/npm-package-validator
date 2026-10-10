@@ -74,7 +74,12 @@ export function subscribeWatchlist(listener: Listener): () => void {
 function normalizeEntry(entry: WatchlistEntry): WatchlistEntry {
   return {
     ...entry,
-    ecosystem: entry.ecosystem === "pypi" ? "pypi" : "npm",
+    ecosystem:
+      entry.ecosystem === "pypi"
+        ? "pypi"
+        : entry.ecosystem === "nuget"
+          ? "nuget"
+          : "npm",
   };
 }
 

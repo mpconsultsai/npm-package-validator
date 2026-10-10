@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { registryLabel } from "@/lib/package-routes";
 import {
   Bar,
   BarChart,
@@ -525,7 +526,7 @@ export function MetricsChartsCard({
   keywords?: string[] | null;
   competitors?: string[] | null;
 }) {
-  const registryLabel = ecosystem === "pypi" ? "PyPI" : "npm";
+  const registryName = registryLabel(ecosystem);
   const keywordsKey = (keywords ?? []).join(",");
   const competitorsKey = (competitors ?? []).join(",");
   const [data, setData] = useState<ChartsPayload>({
@@ -866,7 +867,7 @@ export function MetricsChartsCard({
           ) : null}
           <ReleaseCadenceChart
             points={releasePoints}
-            registryLabel={registryLabel}
+            registryLabel={registryName}
           />
           <ReleaseTypeMixChart mix={releaseTypeMix} />
         </div>

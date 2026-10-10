@@ -5,9 +5,11 @@ import {
   fetchNpmPackagePopularity,
 } from "./npm-registry";
 import { fetchPypiPackageData } from "./pypi-registry";
+import { fetchNugetPackageData } from "./nuget-registry";
 import { fetchGitHubDataFromUrl, parseGitHubUrl } from "./github";
 import { checkPackageSecurity } from "./security";
 import { fetchBundleSize } from "./bundlephobia";
+import { advisoryEcosystem } from "@/lib/package-routes";
 
 /**
  * Analyze a package by fetching data from multiple sources
@@ -23,16 +25,24 @@ export async function analyzePackage(
     errors: {},
   };
 
-  if (ecosystem === "pypi") {
+  if (ecosystem === "pypi" || ecosystem === "nuget") {
     try {
-      const { data, readme, distributionSize } =
-        await fetchPypiPackageData(packageName);
-      result.npm = data;
-      result.readme = readme;
-      result.distributionSize = distributionSize;
+      if (ecosystem === "pypi") {
+        const { data, readme, distributionSize } =
+          await fetchPypiPackageData(packageName);
+        result.npm = data;
+        result.readme = readme;
+        result.distributionSize = distributionSize;
+      } else {
+        const { data, readme, distributionSize } =
+          await fetchNugetPackageData(packageName);
+        result.npm = data;
+        result.readme = readme;
+        result.distributionSize = distributionSize;
+      }
     } catch (error: unknown) {
       const message =
-        error instanceof Error ? error.message : "Unknown PyPI error";
+        error instanceof Error ? error.message : "Unknown registry error";
       result.errors!.npm = message;
       throw new Error(`Failed to fetch package data: ${message}`);
     }
@@ -40,6 +50,7 @@ export async function analyzePackage(
     const version = result.npm.version;
     const repoUrl = result.npm.repository?.url;
     const canFetchGitHub = Boolean(repoUrl && parseGitHubUrl(repoUrl));
+    const securityEcosystem = advisoryEcosystem(ecosystem);
 
     await Promise.all([
       (async () => {
@@ -58,7 +69,7 @@ export async function analyzePackage(
           result.security = await checkPackageSecurity(
             packageName,
             version,
-            "pip",
+            securityEcosystem,
           );
         } catch (error: unknown) {
           result.errors!.security =

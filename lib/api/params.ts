@@ -17,6 +17,7 @@ export const parseEcosystem = (
 ): PackageEcosystem => {
   const value = (raw || "").trim().toLowerCase();
   if (value === "pypi" || value === "pip") return "pypi";
+  if (value === "nuget") return "nuget";
   if (value === "npm") return "npm";
   return fallback;
 };

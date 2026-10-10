@@ -15,7 +15,7 @@ export function SiteFooter() {
     <footer className="mt-10 border-t border-gray-200 pt-6 dark:border-gray-700">
       <div className="space-y-3 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
         <p>
-          Analysis uses public npm, PyPI, GitHub, and security advisory data.
+          Analysis uses public npm, PyPI, NuGet, GitHub, and security advisory data.
           Optional AI summaries are{" "}
           <strong className="font-medium text-gray-600 dark:text-gray-300">
             advisory only

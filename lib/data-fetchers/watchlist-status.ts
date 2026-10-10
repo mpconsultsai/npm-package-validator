@@ -1,7 +1,11 @@
 import axios from "axios";
-import type { PackageEcosystem } from "@/lib/package-routes";
+import {
+  advisoryEcosystem,
+  type PackageEcosystem,
+} from "@/lib/package-routes";
 import { checkPackageSecurity } from "./security";
 import { fetchPypiPackageData } from "./pypi-registry";
+import { fetchNugetPackageData } from "./nuget-registry";
 
 const NPM_REGISTRY_URL = "https://registry.npmjs.org";
 
@@ -49,6 +53,20 @@ async function fetchPypiLatestMeta(
   }
 }
 
+async function fetchNugetLatestMeta(
+  packageName: string,
+): Promise<{ version: string; deprecated: boolean } | null> {
+  try {
+    const { data } = await fetchNugetPackageData(packageName);
+    return {
+      version: data.version,
+      deprecated: Boolean(data.deprecated),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchWatchlistPackageStatus(
   packageName: string,
   ecosystem: PackageEcosystem = "npm",
@@ -56,7 +74,9 @@ export async function fetchWatchlistPackageStatus(
   const meta =
     ecosystem === "pypi"
       ? await fetchPypiLatestMeta(packageName)
-      : await fetchNpmLatestMeta(packageName);
+      : ecosystem === "nuget"
+        ? await fetchNugetLatestMeta(packageName)
+        : await fetchNpmLatestMeta(packageName);
   if (!meta?.version) return null;
 
   let vulnerabilityCount = 0;
@@ -64,7 +84,7 @@ export async function fetchWatchlistPackageStatus(
     const security = await checkPackageSecurity(
       packageName,
       meta.version,
-      ecosystem === "pypi" ? "pip" : "npm",
+      advisoryEcosystem(ecosystem),
     );
     vulnerabilityCount = security.totalCount;
   } catch {

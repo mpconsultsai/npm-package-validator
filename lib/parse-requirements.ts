@@ -3,6 +3,8 @@ import {
   looksLikePyprojectToml,
 } from "@/lib/parse-pyproject-toml";
 import { parsePep508Line } from "@/lib/parse-pep508-line";
+import { parseNugetPackageList } from "@/lib/parse-nuget-list";
+import type { PackageEcosystem } from "@/lib/package-routes";
 import {
   parseDependencyList,
   PASTE_LIST_MAX_PACKAGES,
@@ -78,9 +80,9 @@ export function parseRequirementsList(input: string): ParseDependencyListResult 
 
 export function parseDependencyListForEcosystem(
   input: string,
-  ecosystem: "npm" | "pypi",
+  ecosystem: PackageEcosystem,
 ): ParseDependencyListResult {
-  return ecosystem === "pypi"
-    ? parseRequirementsList(input)
-    : parseDependencyList(input);
+  if (ecosystem === "pypi") return parseRequirementsList(input);
+  if (ecosystem === "nuget") return parseNugetPackageList(input);
+  return parseDependencyList(input);
 }

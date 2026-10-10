@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { PackageEcosystem } from "@/lib/package-routes";
 import { SITE_NAME } from "@/lib/site-brand";
+import { registryLabel } from "@/lib/package-routes";
 
 export function decodePackageParam(rawName: string): string {
   try {
@@ -15,12 +16,14 @@ export function packagePageMetadata(
   rawName: string,
 ): Metadata {
   const packageName = decodePackageParam(rawName);
-  const registry = ecosystem === "pypi" ? "PyPI" : "npm";
+  const registry = registryLabel(ecosystem);
   const title = `${packageName} ${registry} package review`;
   const description =
-    ecosystem === "pypi"
-      ? `Review the PyPI project ${packageName} before you install it. Security advisories, maintenance, dependencies, distribution size, and an optional AI summary.`
-      : `Review the npm package ${packageName} before you install it. Security advisories, maintenance, dependencies, downloads, and an optional AI summary.`;
+    ecosystem === "npm"
+      ? `Review the npm package ${packageName} before you install it. Security advisories, maintenance, dependencies, downloads, and an optional AI summary.`
+      : ecosystem === "pypi"
+        ? `Review the PyPI project ${packageName} before you install it. Security advisories, maintenance, dependencies, distribution size, and an optional AI summary.`
+        : `Review the NuGet package ${packageName} before you install it. Security advisories, maintenance, dependencies, package size, and an optional AI summary.`;
   const path = `/${ecosystem}/${encodeURIComponent(packageName)}`;
   const socialTitle = `${title} | ${SITE_NAME}`;
 

@@ -11,6 +11,7 @@ import {
   packagePagePath,
   type PackageEcosystem,
 } from "@/lib/package-routes";
+import { isNugetUpdateAvailable } from "@/lib/nuget-version";
 import { describeDependencySpec } from "@/lib/describe-dependency-spec";
 import { useWatchlistActions } from "@/lib/use-watchlist";
 import type { WatchlistSummary } from "@/lib/watchlist-store";
@@ -192,7 +193,6 @@ export function PasteListPanel({
 }: {
   ecosystem?: PackageEcosystem;
 }) {
-  const isPyPi = ecosystem === "pypi";
   const headingId = useId();
   const textareaId = useId();
   const selectAllId = useId();
@@ -357,9 +357,12 @@ export function PasteListPanel({
                         ...row,
                         status: "done",
                         version: latest,
-                        updateAvailable: isPyPi
-                          ? isPyPiUpdateAvailable(entry.requested, latest)
-                          : isUpdateAvailable(entry.requested, latest),
+                        updateAvailable:
+                          ecosystem === "pypi"
+                            ? isPyPiUpdateAvailable(entry.requested, latest)
+                            : ecosystem === "nuget"
+                              ? isNugetUpdateAvailable(entry.requested, latest)
+                              : isUpdateAvailable(entry.requested, latest),
                         vulnerabilityCount: data?.security?.totalCount,
                         qualityScore: data?.metrics?.qualityScore,
                         deprecated: Boolean(data?.npm?.deprecated),
@@ -394,7 +397,7 @@ export function PasteListPanel({
 
     await Promise.all(workers);
     if (!cancelledRef.current) setRunning(false);
-  }, [text, ecosystem, isPyPi]);
+  }, [text, ecosystem]);
 
   const doneRows = rows.filter((row) => row.status === "done");
   const updateCount = rows.filter((row) => row.updateAvailable).length;
@@ -419,14 +422,18 @@ export function PasteListPanel({
           htmlFor={textareaId}
           className="block text-sm font-medium text-gray-900 dark:text-white"
         >
-          {isPyPi
+          {ecosystem === "pypi"
             ? "Analyse dependency file"
-            : "Analyse package.json"}
+            : ecosystem === "nuget"
+              ? "Analyse project file"
+              : "Analyse package.json"}
         </label>
         <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-          {isPyPi
+          {ecosystem === "pypi"
             ? `requirements.txt, pyproject.toml, or PEP 508 lines (max ${PASTE_LIST_MAX_PACKAGES}).`
-            : `package.json, package-lock.json, yarn.lock, or a list of package names (max ${PASTE_LIST_MAX_PACKAGES}).`}
+            : ecosystem === "nuget"
+              ? `csproj PackageReference entries, or a list of package ids (max ${PASTE_LIST_MAX_PACKAGES}).`
+              : `package.json, package-lock.json, yarn.lock, or a list of package names (max ${PASTE_LIST_MAX_PACKAGES}).`}
         </p>
         <textarea
           id={textareaId}
@@ -435,9 +442,11 @@ export function PasteListPanel({
           rows={6}
           spellCheck={false}
           placeholder={
-            isPyPi
+            ecosystem === "pypi"
               ? "[project]\nname = \"my-app\"\ndependencies = [\n  \"requests>=2.28.0\",\n  \"django>=4.2,<5\",\n]\n\n# or requirements.txt lines:\n# numpy==1.26.4"
-              : `{\n  "dependencies": {\n    "react": "^19.0.0",\n    "lodash": "^4.17.21"\n  }\n}`
+              : ecosystem === "nuget"
+                ? "<Project>\n  <ItemGroup>\n    <PackageReference Include=\"Newtonsoft.Json\" Version=\"13.0.3\" />\n    <PackageReference Include=\"Serilog\" Version=\"4.0.0\" />\n  </ItemGroup>\n</Project>"
+                : `{\n  "dependencies": {\n    "react": "^19.0.0",\n    "lodash": "^4.17.21"\n  }\n}`
           }
           className="mt-2 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white px-3 py-2 font-mono outline-none focus:border-blue-500 focus:ring-2 focus:ring-inset focus:ring-blue-500/30 dark:focus:border-blue-400"
           disabled={running}

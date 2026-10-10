@@ -32,7 +32,9 @@ function parseWatchlistCheckItems(raw: unknown[]): WatchlistCheckItem[] {
       const ecosystem =
         obj.ecosystem === "pypi" || obj.ecosystem === "pip"
           ? "pypi"
-          : "npm";
+          : obj.ecosystem === "nuget"
+            ? "nuget"
+            : "npm";
       if (name && validatePackageNameForEcosystem(name, ecosystem).valid) {
         items.push({ name, ecosystem });
       }

@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "pkglens, npm and PyPI package reviews";
+export const alt = "pkglens, npm, PyPI and NuGet package reviews";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -29,7 +29,7 @@ export default function OpenGraphImage() {
             color: "#93c5fd",
           }}
         >
-          npm and PyPI
+          npm, PyPI and NuGet
         </div>
         <div
           style={{

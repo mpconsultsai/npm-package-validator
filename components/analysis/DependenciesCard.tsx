@@ -488,7 +488,7 @@ export function DependenciesCard({
   const pypiEmpty =
     ecosystem === "pypi" && pypiMeta && !pypiHasAnyRequirements(pypiMeta);
 
-  if (ecosystem === "npm" && !hasDepsToPlot) {
+  if (ecosystem !== "pypi" && !hasDepsToPlot) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
         <p className="text-sm text-gray-500 dark:text-gray-400">

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import semver from "semver";
 import { listStablePypiVersions } from "@/lib/pypi-version";
+import { listStableNugetVersions } from "@/lib/nuget-version";
 import type { PackageEcosystem } from "@/lib/package-routes";
 import { featuresForEcosystem } from "@/lib/ecosystem-features";
 import { setEcosystemPreference } from "@/lib/ecosystem-pref";
@@ -129,7 +130,6 @@ function PackagePageContent({
   const [overviewTab, setOverviewTab] = useState<OverviewTabId>("info");
   const [insightTab, setInsightTab] = useState<InsightTabId>("ai");
   const [chartsOpened, setChartsOpened] = useState(false);
-  const [relatedOpened, setRelatedOpened] = useState(false);
   const versionCheckRequestId = useRef(0);
   const versionCheckAbort = useRef<AbortController | null>(null);
   const analysisAbort = useRef<AbortController | null>(null);
@@ -232,7 +232,6 @@ function PackagePageContent({
       setOverviewTab("info");
       setInsightTab(withAi ? "ai" : "security");
       setChartsOpened(false);
-      setRelatedOpened(false);
       resetSecurityCheck();
 
       // Start AI in parallel with metrics so the LLM is not blocked on analyze.
@@ -323,7 +322,6 @@ function PackagePageContent({
   };
 
   const handleInsightTabChange = (tab: InsightTabId) => {
-    if (tab === "related") setRelatedOpened(true);
     setInsightTab(tab);
   };
 
@@ -489,10 +487,12 @@ function PackagePageContent({
   const availableVersions = analysisData?.npm?.time
     ? (ecosystem === "pypi"
         ? listStablePypiVersions(analysisData.npm.time)
-        : Object.keys(analysisData.npm.time)
-            .filter((k) => !["created", "modified", "unpublished"].includes(k))
-            .filter((v) => Boolean(semver.valid(v)) && !semver.prerelease(v))
-            .sort((a, b) => semver.compare(b, a))
+        : ecosystem === "nuget"
+          ? listStableNugetVersions(analysisData.npm.time)
+          : Object.keys(analysisData.npm.time)
+              .filter((k) => !["created", "modified", "unpublished"].includes(k))
+              .filter((v) => Boolean(semver.valid(v)) && !semver.prerelease(v))
+              .sort((a, b) => semver.compare(b, a))
       ).slice(0, 10)
     : [];
 
@@ -504,9 +504,12 @@ function PackagePageContent({
     return [latest, ...availableVersions];
   })();
 
-  const shellLoading = loading || (aiEnabled && aiLoading);
+  // Metrics can return well before the AI request. Hold every section until
+  // both are settled so the page does not fill in piece by piece.
+  const awaitingAi = aiEnabled && aiLoading && !aiError;
+  const reportLoading = loading || awaitingAi;
   const showResults = Boolean(nameFromPath);
-  useShellSearchLoading(shellLoading);
+  useShellSearchLoading(loading);
   const { updateSummary } = useWatchlistActions();
 
   const packageDisplayName =
@@ -516,13 +519,13 @@ function PackagePageContent({
     : undefined;
 
   useEffect(() => {
-    if (!packageDisplayName || !analysisData || loading) return;
+    if (!packageDisplayName || !analysisData || reportLoading) return;
     updateSummary(
       packageDisplayName,
       summaryFromAnalysis(analysisData),
       ecosystem,
     );
-  }, [packageDisplayName, analysisData, loading, updateSummary, ecosystem]);
+  }, [packageDisplayName, analysisData, reportLoading, updateSummary, ecosystem]);
 
   return (
     <>
@@ -567,24 +570,23 @@ function PackagePageContent({
               />
 
               {overviewTab === "info" &&
-                (loading || !analysisData?.packageInfo ? (
+                (reportLoading || !analysisData?.packageInfo ? (
                   <PanelSkeleton label="Loading package info" />
                 ) : (
                   <PackageInfoCard
                     packageInfo={analysisData.packageInfo}
                     ecosystem={ecosystem}
                     metrics={analysisData.metrics}
-                    metricsLoading={loading || !analysisData.metrics}
+                    metricsLoading={!analysisData.metrics}
                     versionTimes={analysisData.npm?.time}
                     latestSecurity={analysisData.security}
                   />
                 ))}
 
-              {features.chartsTab &&
-                chartsOpened &&
-                overviewTab === "charts" &&
-                analysisData?.packageInfo &&
-                !loading && (
+              {features.chartsTab && overviewTab === "charts" &&
+                (reportLoading || !analysisData?.packageInfo ? (
+                  <PanelSkeleton label="Loading charts" />
+                ) : (
                   <MetricsChartsCard
                     packageName={analysisData.packageInfo.name}
                     ecosystem={ecosystem}
@@ -596,10 +598,10 @@ function PackagePageContent({
                       aiEnabled ? analysisData.ai?.competitors : undefined
                     }
                   />
-                )}
+                ))}
 
               {overviewTab === "dependencies" &&
-                (loading || !analysisData?.packageInfo ? (
+                (reportLoading || !analysisData?.packageInfo ? (
                   <PanelSkeleton label="Loading dependencies" />
                 ) : (
                   <DependenciesCard
@@ -617,44 +619,46 @@ function PackagePageContent({
               <InsightTabs
                 active={insightTab}
                 onChange={handleInsightTabChange}
-                aiModel={analysisData?.ai?.model}
-                security={analysisData?.security}
+                aiModel={reportLoading ? undefined : analysisData?.ai?.model}
+                security={reportLoading ? undefined : analysisData?.security}
                 showAi={aiPrefReady && aiEnabled}
                 showRelated={features.relatedPackages && aiEnabled}
               />
 
               {aiPrefReady && aiEnabled && insightTab === "ai" && (
                 <div className="space-y-4 sm:space-y-6">
-                  {aiLoading || (loading && !analysisData?.ai) ? (
-                    <AIAnalysisSkeleton />
-                  ) : analysisData?.ai ? (
-                    <AIAnalysisCard ai={analysisData.ai} />
+                  {reportLoading || !analysisData?.ai ? (
+                    aiError && !aiLoading ? (
+                      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
+                        <p className="text-gray-600 dark:text-gray-400">
+                          AI analysis could not be completed. Please try again.
+                        </p>
+                        {nameFromPath && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              aiAbort.current?.abort();
+                              const controller = new AbortController();
+                              aiAbort.current = controller;
+                              void loadAiAnalysis(nameFromPath, controller.signal);
+                            }}
+                            className="mt-3 text-sm font-medium text-blue-600 dark:text-blue-400 underline hover:no-underline"
+                          >
+                            Try again
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <AIAnalysisSkeleton />
+                    )
                   ) : (
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
-                      <p className="text-gray-600 dark:text-gray-400">
-                        AI analysis could not be completed. Please try again.
-                      </p>
-                      {nameFromPath && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            aiAbort.current?.abort();
-                            const controller = new AbortController();
-                            aiAbort.current = controller;
-                            void loadAiAnalysis(nameFromPath, controller.signal);
-                          }}
-                          className="mt-3 text-sm font-medium text-blue-600 dark:text-blue-400 underline hover:no-underline"
-                        >
-                          Try again
-                        </button>
-                      )}
-                    </div>
+                    <AIAnalysisCard ai={analysisData.ai} />
                   )}
                 </div>
               )}
 
               {insightTab === "security" &&
-                (loading || !analysisData?.packageInfo ? (
+                (reportLoading || !analysisData?.packageInfo ? (
                   <PanelSkeleton label="Loading security" />
                 ) : (
                   <SecurityCard
@@ -673,17 +677,11 @@ function PackagePageContent({
                 ))}
 
               {features.relatedPackages &&
-                relatedOpened &&
                 insightTab === "related" &&
                 aiEnabled &&
-                aiLoading && <PanelSkeleton label="Loading related packages" />}
-
-              {features.relatedPackages &&
-                relatedOpened &&
-                insightTab === "related" &&
-                analysisData &&
-                !loading &&
-                !(aiEnabled && aiLoading) && (
+                (reportLoading || !analysisData ? (
+                  <PanelSkeleton label="Loading related packages" />
+                ) : (
                   <SimilarPackagesCard
                     packageName={analysisData.packageInfo?.name ?? nameFromPath}
                     ecosystem={ecosystem}
@@ -696,7 +694,7 @@ function PackagePageContent({
                       analysisData.packageInfo?.name ?? nameFromPath,
                     )}
                   />
-                )}
+                ))}
             </div>
           )}
 

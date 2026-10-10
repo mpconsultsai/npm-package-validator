@@ -3,6 +3,7 @@ import { jsonOk, withHandler } from "@/lib/api/http";
 import { requirePackageFromQueryWithEcosystem } from "@/lib/api/params";
 import { fetchNpmPackageData } from "@/lib/data-fetchers/npm-registry";
 import { fetchPypiPackageData } from "@/lib/data-fetchers/pypi-registry";
+import { fetchNugetPackageData } from "@/lib/data-fetchers/nuget-registry";
 import { listPackageDependencies } from "@/lib/package-deps";
 
 /** GET /api/v1/packages/dependencies?package=&ecosystem= */
@@ -24,6 +25,16 @@ export const GET = withHandler(
             conditional: pypiInstall.conditional,
             extras: pypiInstall.extras,
           },
+        });
+      }
+
+      if (ecosystem === "nuget") {
+        const { data } = await fetchNugetPackageData(packageName);
+        return jsonOk({
+          name: data.name || packageName,
+          version: data.version,
+          dependencies: listPackageDependencies(data.dependencies),
+          targetFramework: data.engines?.dotnet ?? null,
         });
       }
 

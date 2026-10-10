@@ -1,4 +1,5 @@
 import { checkPackageSecurity } from "@/lib/data-fetchers/security";
+import { advisoryEcosystem } from "@/lib/package-routes";
 import { jsonOk, withHandler } from "@/lib/api/http";
 import {
   parseEcosystem,
@@ -13,7 +14,7 @@ const securityCheck = async (
   version: string,
   ecosystem: import("@/lib/package-routes").PackageEcosystem,
 ) => {
-  const securityEcosystem = ecosystem === "pypi" ? "pip" : "npm";
+  const securityEcosystem = advisoryEcosystem(ecosystem);
   const security = await checkPackageSecurity(
     packageName,
     version,

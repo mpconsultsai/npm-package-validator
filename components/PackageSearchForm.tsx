@@ -48,6 +48,7 @@ const THEME_OPTIONS: { value: "light" | "dark"; label: string }[] = [
 const REGISTRY_TABS = [
   { id: "npm" as const, label: "NPM" },
   { id: "pypi" as const, label: "PyPI" },
+  { id: "nuget" as const, label: "NuGet" },
 ] as const;
 
 const PACKAGE_MANAGER_OPTIONS: {
@@ -405,9 +406,12 @@ export function PackageSearchForm({
   const isHome = pathname === "/";
   const pasteFeatures = featuresForEcosystem(ecosystem);
   const showPasteList = pasteFeatures.pasteList;
-  const pasteLabel = ecosystem === "pypi"
-    ? "Analyse dependency file"
-    : "Analyse package.json";
+  const pasteLabel =
+    ecosystem === "pypi"
+      ? "Analyse dependency file"
+      : ecosystem === "nuget"
+        ? "Analyse project file"
+        : "Analyse package.json";
   const { enabled: aiEnabled, setEnabled: setAiEnabled, ready: aiPrefReady } =
     useAiAnalysisPref();
   const themePreference = useThemePreference();
@@ -477,7 +481,7 @@ export function PackageSearchForm({
             <div
               role="toolbar"
               aria-label="Search utilities"
-              className="flex shrink-0 items-center gap-0.5 pb-0.5 sm:gap-1"
+              className="hidden shrink-0 items-center gap-0.5 pb-0.5 sm:flex sm:gap-1"
             >
               <button
                 type="button"
@@ -610,7 +614,9 @@ export function PackageSearchForm({
                 placeholder={
                   ecosystem === "pypi"
                     ? "Search PyPI projects, e.g. requests, django, langgraph"
-                    : "Search npm packages, e.g. react, lodash, @types/node"
+                    : ecosystem === "nuget"
+                      ? "Search NuGet packages, e.g. Newtonsoft.Json, Serilog, Dapper"
+                      : "Search npm packages, e.g. react, lodash, @types/node"
                 }
                 className={`w-full text-base py-2.5 sm:py-3 border border-gray-300 dark:border-gray-600 rounded-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-inset focus:ring-blue-500/30 dark:focus:border-blue-400 dark:bg-gray-700 dark:text-white disabled:opacity-60 pl-10 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden ${
                   showClear ? "pr-10" : "pr-4"
@@ -646,17 +652,10 @@ export function PackageSearchForm({
             >
               {ecosystem === "pypi"
                 ? "Analyse PyPI package"
-                : "Analyse npm package"}
+                : ecosystem === "nuget"
+                  ? "Analyse NuGet package"
+                  : "Analyse npm package"}
             </button>
-            {loading && !utilityPanel && (
-              <p
-                className="mt-2.5 text-xs text-gray-500 dark:text-gray-400"
-                role="status"
-                aria-live="polite"
-              >
-                Analysing package…
-              </p>
-            )}
             {!loading &&
               !utilityPanel &&
               isSearching &&
@@ -666,7 +665,11 @@ export function PackageSearchForm({
                   role="status"
                   aria-live="polite"
                 >
-                  {ecosystem === "pypi" ? "Searching PyPI…" : "Searching npm…"}
+                  {ecosystem === "pypi"
+                    ? "Searching PyPI…"
+                    : ecosystem === "nuget"
+                      ? "Searching NuGet…"
+                      : "Searching npm…"}
                 </p>
               )}
             {showNoMatches && (
@@ -733,7 +736,9 @@ export function PackageSearchForm({
               aria-label={
                 ecosystem === "pypi"
                   ? "Example PyPI projects"
-                  : "Example npm packages"
+                  : ecosystem === "nuget"
+                    ? "Example NuGet packages"
+                    : "Example npm packages"
               }
               className="flex flex-wrap items-center gap-2"
             >
@@ -886,6 +891,7 @@ export function PackageSearchForm({
             )}
           </div>
 
+          {pasteFeatures.npmPackageManagerSettings ? (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div>
               <p
@@ -921,6 +927,7 @@ export function PackageSearchForm({
               />
             )}
           </div>
+          ) : null}
         </div>
       )}
     </div>

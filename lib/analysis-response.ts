@@ -6,6 +6,7 @@ import type {
 import type { AIPackageAnalysis } from "@/lib/ai/analyzer";
 import { classifyRuntimeEnvironment } from "@/lib/runtime-environment";
 import { licenseDisplayName } from "@/lib/license-info";
+import { registryPackageUrl } from "@/lib/package-routes";
 
 export function getDaysSinceLastRelease(
   packageData: PackageAnalysisResult,
@@ -131,10 +132,7 @@ export function buildAnalysisResponse(
   const ecosystem: PackageEcosystem = packageData.ecosystem ?? "npm";
   const daysSinceLastRelease = getDaysSinceLastRelease(packageData);
   const runtime = getPackageRuntime(packageData);
-  const registryUrl =
-    ecosystem === "pypi"
-      ? `https://pypi.org/project/${packageName}/`
-      : `https://www.npmjs.com/package/${packageName}`;
+  const registryUrl = registryPackageUrl(ecosystem, packageName);
 
   return {
     ...packageData,

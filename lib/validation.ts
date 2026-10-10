@@ -49,13 +49,35 @@ export function validatePyPiPackageName(packageName: string): {
   };
 }
 
+/** NuGet package ids: letters, numbers, ".", "-", and "_". */
+const VALID_NUGET_ID_REGEX =
+  /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
+
+export function validateNugetPackageName(packageName: string): {
+  valid: boolean;
+  error?: string;
+} {
+  const trimmed = extractPackageName(packageName);
+  if (!trimmed) {
+    return { valid: false, error: "Package id is required" };
+  }
+  if (trimmed.length <= 100 && VALID_NUGET_ID_REGEX.test(trimmed)) {
+    return { valid: true };
+  }
+  return {
+    valid: false,
+    error:
+      'Invalid NuGet package id. Use letters, numbers, ".", "-", and "_".',
+  };
+}
+
 export function validatePackageNameForEcosystem(
   packageName: string,
-  ecosystem: "npm" | "pypi",
+  ecosystem: "npm" | "pypi" | "nuget",
 ): { valid: boolean; error?: string } {
-  return ecosystem === "pypi"
-    ? validatePyPiPackageName(packageName)
-    : validatePackageName(packageName);
+  if (ecosystem === "pypi") return validatePyPiPackageName(packageName);
+  if (ecosystem === "nuget") return validateNugetPackageName(packageName);
+  return validatePackageName(packageName);
 }
 
 export function validatePackageName(packageName: string): { valid: boolean; error?: string } {
