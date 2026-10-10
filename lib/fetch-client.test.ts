@@ -1,5 +1,5 @@
 import { afterEach, describe, it, vi } from "vitest";
-import { fetchJson } from "@/lib/fetch-client";
+import { fetchJson, isServiceStartingError } from "@/lib/fetch-client";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -25,6 +25,7 @@ describe("fetchJson", () => {
       (error as Error).message.should.equal(
         "pkglens is offline or still starting. Try again in a moment.",
       );
+      isServiceStartingError(error).should.be.true;
     }
   });
 });

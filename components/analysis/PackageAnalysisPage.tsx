@@ -7,9 +7,10 @@ import { listStableNugetVersions } from "@/lib/nuget-version";
 import type { PackageEcosystem } from "@/lib/package-routes";
 import { featuresForEcosystem } from "@/lib/ecosystem-features";
 import { setEcosystemPreference } from "@/lib/ecosystem-pref";
-import { fetchJson, friendlyFetchError } from "@/lib/fetch-client";
+import { fetchJson, friendlyFetchError, isServiceStartingError } from "@/lib/fetch-client";
 import { apiPaths } from "@/lib/api/paths";
 import { useShellSearchLoading } from "@/components/AppShell";
+import { ServiceStartingNotice } from "@/components/ServiceStartingNotice";
 import { usePackageGithubLink } from "@/components/header-github";
 import { InfoCards } from "@/components/InfoCards";
 import { WatchToggle } from "@/components/Watchlist";
@@ -538,6 +539,7 @@ function PackagePageContent({
   const watchSummary = analysisData
     ? summaryFromAnalysis(analysisData)
     : undefined;
+  const serviceStarting = isServiceStartingError(error);
 
   useEffect(() => {
     if (!packageDisplayName || !analysisData || reportLoading) return;
@@ -550,7 +552,9 @@ function PackagePageContent({
 
   return (
     <>
-          {error && (
+          {serviceStarting ? (
+            <ServiceStartingNotice />
+          ) : error ? (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 sm:p-4 mb-4 sm:mb-8">
               <p className="text-red-800 dark:text-red-200">{error}</p>
               {nameFromPath && (
@@ -563,9 +567,9 @@ function PackagePageContent({
                 </button>
               )}
             </div>
-          )}
+          ) : null}
 
-          {showResults && (
+          {showResults && !serviceStarting && (
             <div className="space-y-4 sm:space-y-6 mb-4 sm:mb-8">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <PackageNameHeader
@@ -650,25 +654,29 @@ function PackagePageContent({
                 <div className="space-y-4 sm:space-y-6">
                   {reportLoading || !analysisData?.ai ? (
                     aiError && !aiLoading ? (
-                      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
-                        <p className="text-gray-600 dark:text-gray-400">
-                          AI analysis could not be completed. Please try again.
-                        </p>
-                        {nameFromPath && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              aiAbort.current?.abort();
-                              const controller = new AbortController();
-                              aiAbort.current = controller;
-                              void loadAiAnalysis(nameFromPath, controller.signal);
-                            }}
-                            className="mt-3 text-sm font-medium text-blue-600 dark:text-blue-400 underline hover:no-underline"
-                          >
-                            Try again
-                          </button>
-                        )}
-                      </div>
+                      isServiceStartingError(aiError) ? (
+                        <ServiceStartingNotice />
+                      ) : (
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
+                          <p className="text-gray-600 dark:text-gray-400">
+                            AI analysis could not be completed. Please try again.
+                          </p>
+                          {nameFromPath && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                aiAbort.current?.abort();
+                                const controller = new AbortController();
+                                aiAbort.current = controller;
+                                void loadAiAnalysis(nameFromPath, controller.signal);
+                              }}
+                              className="mt-3 text-sm font-medium text-blue-600 dark:text-blue-400 underline hover:no-underline"
+                            >
+                              Try again
+                            </button>
+                          )}
+                        </div>
+                      )
                     ) : (
                       <AIAnalysisSkeleton />
                     )

@@ -354,10 +354,12 @@ function DependenciesGraph({
             <span className="inline-block size-2.5 rounded-full bg-gray-700 dark:bg-gray-300" />
             Runtime
           </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block size-2.5 rounded-full bg-violet-500" />
-            Peer
-          </span>
+          {ecosystem === "npm" ? (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block size-2.5 rounded-full bg-violet-500" />
+              Peer
+            </span>
+          ) : null}
         </div>
       ) : null}
     </div>

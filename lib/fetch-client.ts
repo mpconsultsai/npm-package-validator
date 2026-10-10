@@ -102,9 +102,7 @@ export async function fetchJson<T = unknown>(
           continue;
         }
         if (RETRYABLE_STATUS.has(response.status)) {
-          throw new Error(
-            "pkglens is offline or still starting. Try again in a moment.",
-          );
+          throw new Error(SERVICE_STARTING_MESSAGE);
         }
         throw new Error("The server returned an unexpected response.");
       }
@@ -131,6 +129,21 @@ export async function fetchJson<T = unknown>(
   }
 
   throw lastError ?? new Error("Request failed");
+}
+
+const SERVICE_STARTING_MESSAGE =
+  "pkglens is offline or still starting. Try again in a moment.";
+
+export function isServiceStartingError(error: unknown): boolean {
+  const message =
+    typeof error === "string"
+      ? error
+      : error instanceof Error
+        ? error.message
+        : "";
+  return /offline or still starting|may be restarting|Could not reach the server/i.test(
+    message,
+  );
 }
 
 export function friendlyFetchError(err: unknown): string {
