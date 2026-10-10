@@ -1,7 +1,10 @@
 import { SITE_NAME } from "@/lib/site-brand";
 
+const DEFAULT_GITHUB_REPO = "mpconsultsai/pkglens";
+
 function githubUrl(): string | null {
-  const slug = process.env.NEXT_PUBLIC_GITHUB_REPO?.trim();
+  const slug =
+    process.env.NEXT_PUBLIC_GITHUB_REPO?.trim() || DEFAULT_GITHUB_REPO;
   if (!slug || slug.includes(" ")) return null;
   return `https://github.com/${slug.replace(/^\/+|\/+$/g, "")}`;
 }
@@ -17,43 +20,36 @@ export function SiteFooter() {
         <p>
           Analysis uses public npm, PyPI, NuGet, GitHub, and security advisory data.
           Optional AI summaries are{" "}
-          <strong className="font-medium text-gray-600 dark:text-gray-300">
-            advisory only
-          </strong>
-          -not legal, security, or procurement advice. Verify before you ship.
-          When AI is enabled, package names and aggregated public metrics may be sent
-          to configured providers (e.g. Google Gemini or Groq).
+          <strong className="font-medium text-gray-600 dark:text-gray-300">advisory only</strong>{". They are not legal, security, or procurement advice. Verify before you ship. When AI is on, the package name and the public figures in the review are sent to Google Gemini. If Gemini is unavailable, that same request is sent to Groq."}
         </p>
         <p>
           We do not require an account. Package names you search may be logged
           for rate limiting and reliability. Registry and AI APIs may impose
           their own limits.
         </p>
-        {(github || contact) && (
-          <nav
-            aria-label="Footer"
-            className="flex flex-wrap gap-x-4 gap-y-1 text-sm"
-          >
-            {github && (
-              <a
-                href={github}
-                className="text-blue-600 underline underline-offset-2 dark:text-blue-400"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Source
-              </a>
-            )}
-            {contact && (
-              <a
-                href={`mailto:${contact}`}
-                className="text-blue-600 underline underline-offset-2 dark:text-blue-400"
-              >
-                Contact
-              </a>
-            )}
-          </nav>
-        )}
+        <nav
+          aria-label="Footer"
+          className="flex flex-wrap gap-x-4 gap-y-1 text-sm"
+        >
+          {github && (
+            <a
+              href={github}
+              className="text-blue-600 underline underline-offset-2 dark:text-blue-400"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              GitHub
+            </a>
+          )}
+          {contact && (
+            <a
+              href={`mailto:${contact}`}
+              className="text-blue-600 underline underline-offset-2 dark:text-blue-400"
+            >
+              Contact
+            </a>
+          )}
+        </nav>
         <p className="text-[11px] text-gray-400 dark:text-gray-500">
           © {year} {SITE_NAME}. All rights reserved.
         </p>

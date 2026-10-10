@@ -171,25 +171,38 @@ export function PackageSearchForm({
   );
 
   const onRegistryTabKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    const index = REGISTRY_TABS.findIndex((tab) => tab.id === ecosystem);
+    const tabs = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+    );
+    if (tabs.length === 0) return;
+    const current = tabs.findIndex((tab) => tab === document.activeElement);
+    const index =
+      current >= 0
+        ? current
+        : REGISTRY_TABS.findIndex((tab) => tab.id === ecosystem);
     let nextIndex = index;
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-      nextIndex = (index + 1) % REGISTRY_TABS.length;
-    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-      nextIndex = (index - 1 + REGISTRY_TABS.length) % REGISTRY_TABS.length;
+    if (event.key === "ArrowRight") {
+      nextIndex = (index + 1) % tabs.length;
+    } else if (event.key === "ArrowLeft") {
+      nextIndex = (index - 1 + tabs.length) % tabs.length;
     } else if (event.key === "Home") {
       nextIndex = 0;
     } else if (event.key === "End") {
-      nextIndex = REGISTRY_TABS.length - 1;
+      nextIndex = tabs.length - 1;
     } else {
       return;
     }
     event.preventDefault();
-    const next = REGISTRY_TABS[nextIndex].id;
-    if (next !== ecosystem) setEcosystem(next);
-    requestAnimationFrame(() => {
-      document.getElementById(registryTabId(next))?.focus();
-    });
+    const nextTab = tabs[nextIndex];
+    const nextId = nextTab?.dataset.ecosystem;
+    if (
+      nextId === "npm" ||
+      nextId === "pypi" ||
+      nextId === "nuget"
+    ) {
+      if (nextId !== ecosystem) setEcosystem(nextId);
+    }
+    nextTab?.focus();
   };
 
   useEffect(() => {
@@ -337,8 +350,10 @@ export function PackageSearchForm({
     isOpen &&
     value.trim().length >= MIN_QUERY_LENGTH &&
     !isSearching;
+  const showSuggestions = showResultsPanel && suggestions.length > 0;
   const showNoMatches =
-    !loading && showResultsPanel && searchCompleted && suggestions.length === 0;
+    showResultsPanel && searchCompleted && suggestions.length === 0;
+  const popupOpen = showSuggestions || showNoMatches;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -356,36 +371,32 @@ export function PackageSearchForm({
       return;
     }
 
-    const showDropdown =
-      isOpen && value.trim().length >= MIN_QUERY_LENGTH && !isSearching;
-
-    if (e.key === "Escape") {
-      if (showDropdown || showNoMatches) {
-        e.preventDefault();
-        dismissDropdown();
-        return;
-      }
-      if (value) {
-        e.preventDefault();
-        handleClear();
-        return;
-      }
-    }
-
-    if (!showDropdown || suggestions.length === 0) {
+    if (e.key === "Escape" && popupOpen) {
+      e.preventDefault();
+      dismissDropdown();
+      inputRef.current?.focus();
       return;
     }
 
+    if (!showSuggestions) return;
+
+    const lastIndex = suggestions.length - 1;
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
-        setHighlightIndex((i) => (i + 1) % suggestions.length);
+        setHighlightIndex((i) => (i >= lastIndex ? 0 : i + 1));
         break;
       case "ArrowUp":
         e.preventDefault();
-        setHighlightIndex((i) =>
-          i <= 0 ? suggestions.length - 1 : i - 1,
-        );
+        setHighlightIndex((i) => (i <= 0 ? lastIndex : i - 1));
+        break;
+      case "Home":
+        e.preventDefault();
+        setHighlightIndex(0);
+        break;
+      case "End":
+        e.preventDefault();
+        setHighlightIndex(lastIndex);
         break;
       case "Enter":
         if (highlightIndex >= 0 && suggestions[highlightIndex]) {
@@ -399,8 +410,15 @@ export function PackageSearchForm({
     }
   };
 
-  const activeDescendantId =
-    highlightIndex >= 0 ? `${listboxId}-option-${highlightIndex}` : undefined;
+  const activeOptionId =
+    showSuggestions && highlightIndex >= 0
+      ? `${listboxId}-option-${highlightIndex}`
+      : undefined;
+
+  useEffect(() => {
+    if (!activeOptionId) return;
+    document.getElementById(activeOptionId)?.scrollIntoView({ block: "nearest" });
+  }, [activeOptionId]);
 
   const showClear = value.length > 0 && !disabled && !loading;
   const isHome = pathname === "/";
@@ -462,15 +480,16 @@ export function PackageSearchForm({
                     key={option.id}
                     type="button"
                     id={registryTabId(option.id)}
+                    data-ecosystem={option.id}
                     role="tab"
                     aria-selected={selected}
                     aria-controls={registryPanelId}
                     tabIndex={selected ? 0 : -1}
                     onClick={() => setEcosystem(option.id)}
-                    className={`-mb-px rounded-none pb-2 text-base font-semibold border-b-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 ${
+                    className={`-mb-px rounded-none border-b-[3px] px-2.5 pt-1 pb-2 text-base transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 ${
                       selected
-                        ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400"
-                        : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                        ? "border-blue-600 bg-blue-50 font-bold text-blue-800 dark:border-blue-400 dark:bg-blue-950/70 dark:text-blue-100"
+                        : "border-transparent font-medium text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
                     }`}
                   >
                     {option.label}
@@ -623,9 +642,16 @@ export function PackageSearchForm({
                 }`}
                 disabled={disabled || loading}
                 role="combobox"
-                aria-expanded={showResultsPanel || showNoMatches}
-                aria-controls={listboxId}
-                aria-activedescendant={activeDescendantId}
+                aria-expanded={popupOpen}
+                aria-controls={
+                  showSuggestions
+                    ? listboxId
+                    : showNoMatches
+                      ? `${listboxId}-empty`
+                      : undefined
+                }
+                aria-activedescendant={activeOptionId}
+                aria-haspopup="listbox"
                 aria-autocomplete="list"
                 autoComplete="off"
                 autoCapitalize="none"
@@ -674,8 +700,8 @@ export function PackageSearchForm({
               )}
             {showNoMatches && (
               <div
-                id={listboxId}
-                role="listbox"
+                id={`${listboxId}-empty`}
+                role="status"
                 className="absolute z-20 mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg px-4 py-3"
               >
                 <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -683,10 +709,11 @@ export function PackageSearchForm({
                 </p>
               </div>
             )}
-            {showResultsPanel && suggestions.length > 0 && (
+            {showSuggestions && (
               <ul
                 id={listboxId}
                 role="listbox"
+                aria-label="Package suggestions"
                 className="absolute z-20 mt-1 w-full max-h-72 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg"
               >
                 {suggestions.map((pkg, index) => {
@@ -697,28 +724,24 @@ export function PackageSearchForm({
                       id={`${listboxId}-option-${index}`}
                       role="option"
                       aria-selected={selected}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onMouseEnter={() => setHighlightIndex(index)}
+                      onClick={() => runSearch(pkg.name)}
+                      className={`cursor-pointer px-4 py-3 text-left transition-colors ${
+                        selected
+                          ? "bg-blue-50 dark:bg-blue-900/30"
+                          : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                      }`}
                     >
-                      <button
-                        type="button"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onMouseEnter={() => setHighlightIndex(index)}
-                        onClick={() => runSearch(pkg.name)}
-                        className={`w-full px-4 py-3 text-left transition-colors ${
-                          selected
-                            ? "bg-blue-50 dark:bg-blue-900/30"
-                            : "hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                        }`}
-                      >
-                        <span className="block font-medium text-gray-900 dark:text-white truncate">
-                          {pkg.name}
-                          <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
-                            v{pkg.version}
-                          </span>
+                      <span className="block font-medium text-gray-900 dark:text-white truncate">
+                        {pkg.name}
+                        <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+                          v{pkg.version}
                         </span>
-                        <span className="block text-sm text-gray-600 dark:text-gray-400 truncate mt-0.5">
-                          {pkg.description}
-                        </span>
-                      </button>
+                      </span>
+                      <span className="block text-sm text-gray-600 dark:text-gray-400 truncate mt-0.5">
+                        {pkg.description}
+                      </span>
                     </li>
                   );
                 })}
