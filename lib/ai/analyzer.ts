@@ -7,7 +7,7 @@ import {
   validatePackageNameForEcosystem,
 } from '../validation';
 import { registryLabel, type PackageEcosystem } from '../package-routes';
-import { isStableDotnetPlatformPackage } from '../dotnet-platform';
+import { isDotnetInboxPackageId, isStableDotnetPlatformPackage } from '../dotnet-platform';
 import { classifyRuntimeEnvironment } from '../runtime-environment';
 import type { RuntimeKind } from '../runtime-environment';
 import { getGroqModel, groqModelLabel } from './groq-config';
@@ -921,7 +921,7 @@ function createAnalysisPrompt(
     ecosystem === "pypi"
       ? `- competitors: 4-6 real PyPI alternatives (same job, not plugins/wrappers of this). Exact PyPI project names. Lowercase, no versions. Never "${packageName}".`
       : ecosystem === "nuget"
-        ? `- competitors: 4-6 real NuGet alternatives (same job, not plugins/wrappers of this). Exact NuGet package ids. No versions. Never "${packageName}".`
+        ? `- competitors: 4-6 real NuGet alternatives (same job, not plugins/wrappers of this). Exact NuGet package ids. No versions. Never "${packageName}". Never System.* or Microsoft.* package ids.`
         : `- competitors: 4-6 real npm alternatives (same job, not plugins/wrappers of this). Exact registry names with @ if scoped. Lowercase, no versions. Never "${packageName}".`,
     "",
     "JSON shape:",
@@ -971,6 +971,7 @@ function parseCompetitorNames(
     if (
       !name ||
       seen.has(key) ||
+      (ecosystem === "nuget" && isDotnetInboxPackageId(name)) ||
       !validatePackageNameForEcosystem(name, ecosystem).valid
     )
       continue;

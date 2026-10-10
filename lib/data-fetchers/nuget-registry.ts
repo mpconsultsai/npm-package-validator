@@ -9,6 +9,7 @@ import {
   compareNugetVersions,
   isNugetPrerelease,
 } from "@/lib/nuget-version";
+import { isDotnetInboxPackageId } from "@/lib/dotnet-platform";
 
 const REGISTRATION =
   "https://api.nuget.org/v3/registration5-gz-semver2";
@@ -349,4 +350,175 @@ export async function searchNugetPackages(
     if (packages.length >= limit) break;
   }
   return packages;
+}
+
+const GENERIC_NUGET_TAGS = new Set([
+  "net",
+  "netcore",
+  "netstandard",
+  "nuget",
+  "csharp",
+  "c#",
+  "dotnet",
+  "library",
+  "package",
+  "microsoft",
+  "system",
+  "framework",
+]);
+
+type NugetSearchHit = {
+  id?: string;
+  version?: string;
+  description?: string;
+  tags?: string | string[];
+  totalDownloads?: number;
+};
+
+function splitNugetTags(tags: NugetSearchHit["tags"]): string[] {
+  const raw = Array.isArray(tags) ? tags.join(" ") : tags ?? "";
+  return raw
+    .split(/[;,\s]+/)
+    .map((tag) => tag.trim())
+    .filter((tag) => tag.length >= 3);
+}
+
+function distinctiveNugetTags(tags: string[] | null | undefined): string[] {
+  const seen = new Set<string>();
+  const distinctive: string[] = [];
+  for (const tag of tags ?? []) {
+    const key = tag.trim().toLowerCase();
+    if (key.length < 3 || GENERIC_NUGET_TAGS.has(key) || seen.has(key)) continue;
+    if (!/^[a-z0-9][a-z0-9.+_-]*$/i.test(tag.trim())) continue;
+    seen.add(key);
+    distinctive.push(tag.trim());
+    if (distinctive.length >= 3) break;
+  }
+  return distinctive;
+}
+
+function nugetNameTokens(id: string): string[] {
+  return id
+    .split(/[.\-_]+/)
+    .map((part) => part.trim())
+    .filter((part) => {
+      const key = part.toLowerCase();
+      return key.length >= 3 && !GENERIC_NUGET_TAGS.has(key);
+    });
+}
+
+async function searchNugetHits(
+  query: string,
+  take: number,
+): Promise<NugetSearchHit[]> {
+  const response = await axios.get<{ data?: NugetSearchHit[] }>(SEARCH_URL, {
+    headers: HEADERS,
+    params: { q: query, take, prerelease: false },
+    timeout: 15_000,
+  });
+  return response.data.data ?? [];
+}
+
+/** Cards for AI-named NuGet alternatives. Inbox assemblies are omitted. */
+export async function fetchNugetPackageCards(
+  names: string[],
+): Promise<NugetSearchResult[]> {
+  const cards = await Promise.all(
+    names.map(async (name) => {
+      if (isDotnetInboxPackageId(name)) return null;
+      if (!validatePackageNameForEcosystem(name, "nuget").valid) return null;
+      try {
+        const hits = await searchNugetHits(`packageid:${name}`, 1);
+        const hit = hits.find(
+          (item) => item.id?.toLowerCase() === name.toLowerCase(),
+        );
+        if (!hit?.id || isDotnetInboxPackageId(hit.id)) return null;
+        return {
+          name: hit.id,
+          description:
+            formatNugetDescription(hit.description).description ||
+            sanitizeDescription(hit.description) ||
+            "No description",
+          version: hit.version || "Unknown",
+        };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return cards.filter((card): card is NugetSearchResult => card !== null);
+}
+
+/**
+ * Related NuGet packages from tag and name overlap.
+ * System.* and Microsoft.* assemblies are left out.
+ */
+export async function fetchSimilarNugetPackages(
+  packageId: string,
+  tags?: string[] | null,
+  limit: number = 30,
+): Promise<NugetSearchResult[]> {
+  try {
+    let sourceTags = distinctiveNugetTags(tags);
+    if (sourceTags.length === 0) {
+      const self = await searchNugetHits(`packageid:${packageId}`, 1);
+      sourceTags = distinctiveNugetTags(splitNugetTags(self[0]?.tags));
+    }
+
+    const queries = new Set<string>();
+    for (const tag of sourceTags) queries.add(`tags:${tag}`);
+    const token = nugetNameTokens(packageId)[0];
+    if (token) queries.add(token);
+    if (queries.size === 0) queries.add(packageId);
+
+    const searches = await Promise.allSettled(
+      [...queries].map((query) => searchNugetHits(query, 20)),
+    );
+
+    const current = packageId.toLowerCase();
+    const sourceTokens = new Set(
+      nugetNameTokens(packageId).map((part) => part.toLowerCase()),
+    );
+    const sourceTagSet = new Set(sourceTags.map((tag) => tag.toLowerCase()));
+    const seen = new Set<string>([current]);
+    const ranked: Array<NugetSearchResult & { score: number }> = [];
+
+    for (const result of searches) {
+      if (result.status !== "fulfilled") continue;
+      for (const hit of result.value) {
+        const name = hit.id?.trim();
+        if (!name || isDotnetInboxPackageId(name)) continue;
+        const key = name.toLowerCase();
+        if (seen.has(key)) continue;
+        if (!validatePackageNameForEcosystem(name, "nuget").valid) continue;
+        seen.add(key);
+
+        const hitTags = splitNugetTags(hit.tags).map((tag) => tag.toLowerCase());
+        const overlap = hitTags.filter((tag) => sourceTagSet.has(tag)).length;
+        const sharedTokens = nugetNameTokens(name).filter((part) =>
+          sourceTokens.has(part.toLowerCase()),
+        ).length;
+        if (overlap === 0 && sharedTokens === 0) continue;
+
+        const downloads = Math.log10((hit.totalDownloads ?? 0) + 1);
+        ranked.push({
+          name,
+          description:
+            formatNugetDescription(hit.description).description ||
+            sanitizeDescription(hit.description) ||
+            "No description",
+          version: hit.version || "Unknown",
+          score: overlap * 4 + sharedTokens * 2 + downloads / 10,
+        });
+      }
+    }
+
+    return ranked
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map(({ name, description, version }) => ({ name, description, version }));
+  } catch (error: unknown) {
+    console.warn("Could not fetch similar NuGet packages:", errorMessage(error));
+    return [];
+  }
 }

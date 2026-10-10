@@ -1,14 +1,24 @@
 import { AppError } from "@/lib/api/errors";
 import { jsonOk, withHandler } from "@/lib/api/http";
-import { requirePackageFromQuery } from "@/lib/api/params";
+import {
+  requireEcosystemFromQuery,
+  requirePackageFromQuery,
+  requirePackageNameForEcosystem,
+} from "@/lib/api/params";
+import {
+  fetchNugetPackageCards,
+  fetchSimilarNugetPackages,
+} from "@/lib/data-fetchers/nuget-registry";
 import {
   fetchNpmPackageCards,
   fetchNpmPackageData,
   fetchSimilarPackages,
 } from "@/lib/data-fetchers/npm-registry";
+import { isDotnetInboxPackageId } from "@/lib/dotnet-platform";
+import type { PackageEcosystem } from "@/lib/package-routes";
 import {
   normalizeNpmPackageName,
-  validatePackageName,
+  validatePackageNameForEcosystem,
 } from "@/lib/validation";
 
 const FIRST_PAGE_SIZE = 6;
@@ -17,20 +27,26 @@ const RELATED_POOL = 30;
 
 type RelatedCursor = { offset: number };
 
-const parseNameList = (param: string | null): string[] => {
+const parseNameList = (
+  param: string | null,
+  ecosystem: PackageEcosystem,
+): string[] => {
   if (!param) return [];
   const seen = new Set<string>();
   const names: string[] = [];
   for (const raw of param.split(",")) {
-    const name = normalizeNpmPackageName(raw);
+    const name =
+      ecosystem === "npm" ? normalizeNpmPackageName(raw) : raw.trim();
+    const key = name.toLowerCase();
     if (
       !name ||
-      seen.has(name.toLowerCase()) ||
-      !validatePackageName(name).valid
+      seen.has(key) ||
+      (ecosystem === "nuget" && isDotnetInboxPackageId(name)) ||
+      !validatePackageNameForEcosystem(name, ecosystem).valid
     ) {
       continue;
     }
-    seen.add(name.toLowerCase());
+    seen.add(key);
     names.push(name);
   }
   return names;
@@ -60,10 +76,17 @@ const decodeCursor = (raw: string | null): number | null => {
   }
 };
 
-/** GET /api/v1/packages/similar?package=&keywords=&competitors=&cursor= */
+/** GET /api/v1/packages/similar?package=&ecosystem=&keywords=&competitors=&cursor= */
 export const GET = withHandler(
   async (request) => {
-    const packageName = requirePackageFromQuery(request);
+    const ecosystem = requireEcosystemFromQuery(request);
+    const packageName =
+      ecosystem === "npm"
+        ? requirePackageFromQuery(request)
+        : requirePackageNameForEcosystem(
+            request.nextUrl.searchParams.get("package"),
+            ecosystem,
+          );
     const keywordsParam = request.nextUrl.searchParams.get("keywords");
     const keywords = keywordsParam
       ? keywordsParam
@@ -73,6 +96,7 @@ export const GET = withHandler(
       : null;
     const competitorNames = parseNameList(
       request.nextUrl.searchParams.get("competitors"),
+      ecosystem,
     ).filter((name) => name.toLowerCase() !== packageName.toLowerCase());
     const cursorParam = request.nextUrl.searchParams.get("cursor");
     const relatedOffset = decodeCursor(cursorParam);
@@ -81,8 +105,12 @@ export const GET = withHandler(
       throw new AppError("Invalid cursor", 400);
     }
 
+    if (ecosystem === "pypi") {
+      return jsonOk({ packages: [], nextCursor: null });
+    }
+
     let keywordList = keywords;
-    if (!keywordList?.length) {
+    if (ecosystem === "npm" && !keywordList?.length) {
       const { data: npmData } = await fetchNpmPackageData(packageName);
       keywordList = npmData.keywords ?? null;
     }
@@ -90,16 +118,22 @@ export const GET = withHandler(
     const isFirstPage = !cursorParam;
     const [competitorCards, related] = await Promise.all([
       isFirstPage && competitorNames.length
-        ? fetchNpmPackageCards(competitorNames)
+        ? ecosystem === "nuget"
+          ? fetchNugetPackageCards(competitorNames)
+          : fetchNpmPackageCards(competitorNames)
         : Promise.resolve([]),
-      fetchSimilarPackages(packageName, keywordList, RELATED_POOL),
+      ecosystem === "nuget"
+        ? fetchSimilarNugetPackages(packageName, keywordList, RELATED_POOL)
+        : fetchSimilarPackages(packageName, keywordList, RELATED_POOL),
     ]);
 
     const competitorSet = new Set(
       competitorCards.map((pkg) => pkg.name.toLowerCase()),
     );
     const relatedOnly = related.filter(
-      (pkg) => !competitorSet.has(pkg.name.toLowerCase()),
+      (pkg) =>
+        !competitorSet.has(pkg.name.toLowerCase()) &&
+        !(ecosystem === "nuget" && isDotnetInboxPackageId(pkg.name)),
     );
 
     if (isFirstPage) {

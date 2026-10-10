@@ -73,10 +73,19 @@ function AIAnalysisSkeleton() {
   return (
     <div className="space-y-4" role="status">
       <span className="sr-only">Generating AI analysis</span>
-      <div className="animate-pulse space-y-2" aria-hidden="true">
-        <div className="h-4 w-full rounded bg-gray-200 dark:bg-gray-700" />
-        <div className="h-4 w-11/12 rounded bg-gray-200 dark:bg-gray-700" />
-        <div className="h-4 w-4/5 rounded bg-gray-200 dark:bg-gray-700" />
+      <div
+        className="grid animate-pulse grid-cols-1 gap-px overflow-hidden rounded-lg bg-gray-200 shadow-lg dark:bg-gray-700 md:grid-cols-2"
+        aria-hidden="true"
+      >
+        <div className="space-y-2 bg-white p-4 dark:bg-gray-800 sm:p-6">
+          <div className="h-4 w-full rounded bg-gray-200 dark:bg-gray-700" />
+          <div className="h-4 w-11/12 rounded bg-gray-200 dark:bg-gray-700" />
+          <div className="h-4 w-4/5 rounded bg-gray-200 dark:bg-gray-700" />
+        </div>
+        <div className="space-y-2 bg-white p-4 dark:bg-gray-800 sm:p-6">
+          <div className="h-4 w-full rounded bg-gray-200 dark:bg-gray-700" />
+          <div className="h-4 w-3/4 rounded bg-gray-200 dark:bg-gray-700" />
+        </div>
       </div>
       <div
         className="animate-pulse rounded-lg bg-white p-4 shadow-lg dark:bg-gray-800 sm:p-6"

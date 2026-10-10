@@ -24,7 +24,7 @@ export function featuresForEcosystem(
       downloadMetrics: true,
       transitiveDepsTree: false,
       upgradeAdvisor: false,
-      relatedPackages: false,
+      relatedPackages: true,
       pasteList: true,
       npmPackageManagerSettings: false,
       downloadsAreTotal: true,

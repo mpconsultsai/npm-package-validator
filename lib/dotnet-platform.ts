@@ -8,7 +8,11 @@ type PlatformPackage = Pick<
   "ecosystem" | "packageName" | "npm" | "downloads"
 >;
 
-/** Inbox .NET assemblies that stay recommended long after the last publish. */
+/** Inbox assemblies such as System.Runtime and Microsoft.Extensions.Logging. */
+export function isDotnetInboxPackageId(name: string): boolean {
+  return /^(system|microsoft)\./i.test(name.trim());
+}
+
 export function isStableDotnetPlatformPackage(
   packageData: PlatformPackage,
 ): boolean {
@@ -20,5 +24,5 @@ export function isStableDotnetPlatformPackage(
     return false;
   }
   const name = (packageData.npm?.name || packageData.packageName || "").trim();
-  return /^(system|microsoft)\./i.test(name);
+  return isDotnetInboxPackageId(name);
 }

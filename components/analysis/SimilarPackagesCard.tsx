@@ -95,7 +95,10 @@ export function SimilarPackagesCard({
     if (!packageName) return;
 
     const controller = new AbortController();
-    const params = new URLSearchParams({ package: packageName });
+    const params = new URLSearchParams({
+      package: packageName,
+      ecosystem,
+    });
     if (keywordsKey) params.set("keywords", keywordsKey);
     if (competitorsKey) params.set("competitors", competitorsKey);
 
@@ -128,7 +131,7 @@ export function SimilarPackagesCard({
     return () => {
       controller.abort();
     };
-  }, [packageName, keywordsKey, competitorsKey]);
+  }, [packageName, ecosystem, keywordsKey, competitorsKey]);
 
   const loadMore = async () => {
     if (!packageName || !nextCursor || loadingMore) return;
@@ -139,6 +142,7 @@ export function SimilarPackagesCard({
 
     const params = new URLSearchParams({
       package: packageName,
+      ecosystem,
       cursor: nextCursor,
     });
     if (keywordsKey) params.set("keywords", keywordsKey);
@@ -198,7 +202,7 @@ export function SimilarPackagesCard({
     const loadOne = async (name: string) => {
       try {
         const { ok, data } = await fetchJson(
-          `${apiPaths.analysis.metrics}?package=${encodeURIComponent(name)}`,
+          `${apiPaths.analysis.metrics}?package=${encodeURIComponent(name)}&ecosystem=${ecosystem}`,
           {
             signal,
             timeoutMs: 60_000,
