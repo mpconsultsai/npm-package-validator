@@ -71,20 +71,29 @@ export function PackageAnalysisPage({
 
 function AIAnalysisSkeleton() {
   return (
-    <div
-      className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6"
-      role="status"
-    >
+    <div className="space-y-4" role="status">
       <span className="sr-only">Generating AI analysis</span>
-      <div className="space-y-3 animate-pulse" aria-hidden="true">
+      <div className="animate-pulse space-y-2" aria-hidden="true">
         <div className="h-4 w-full rounded bg-gray-200 dark:bg-gray-700" />
         <div className="h-4 w-11/12 rounded bg-gray-200 dark:bg-gray-700" />
         <div className="h-4 w-4/5 rounded bg-gray-200 dark:bg-gray-700" />
+      </div>
+      <div
+        className="animate-pulse rounded-lg bg-white p-4 shadow-lg dark:bg-gray-800 sm:p-6"
+        aria-hidden="true"
+      >
         <div className="h-4 w-full rounded bg-gray-200 dark:bg-gray-700" />
-        <div className="h-4 w-2/3 rounded bg-gray-200 dark:bg-gray-700" />
-        <div className="h-4 w-5/6 rounded bg-gray-200 dark:bg-gray-700" />
-        <div className="h-4 w-3/4 rounded bg-gray-200 dark:bg-gray-700" />
-        <div className="h-4 w-1/2 rounded bg-gray-200 dark:bg-gray-700" />
+        <div className="mt-2 h-4 w-3/4 rounded bg-gray-200 dark:bg-gray-700" />
+        <div className="mt-4 flex items-center justify-between gap-4">
+          <div className="h-7 w-28 rounded-full bg-gray-200 dark:bg-gray-700" />
+          <div className="h-7 w-20 rounded bg-gray-200 dark:bg-gray-700" />
+        </div>
+        <div className="mt-3 h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700" />
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="h-14 rounded-lg bg-gray-200 dark:bg-gray-700" />
+          <div className="h-14 rounded-lg bg-gray-200 dark:bg-gray-700" />
+          <div className="h-14 rounded-lg bg-gray-200 dark:bg-gray-700" />
+        </div>
       </div>
     </div>
   );

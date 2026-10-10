@@ -20,6 +20,23 @@ export function isHighQualityAiScore(score: number): boolean {
   return score >= 90;
 }
 
+/** Visible recommendation label. The badge carries this; there is no separate heading. */
+export function recommendationLabel(recommendation: string): string {
+  const value = recommendation.toLowerCase().trim();
+  if (value === "do-not-use" || value === "not-recommended") return "Do not use";
+  if (value === "use-with-caution") return "Use with caution";
+  if (value === "recommended") return "Recommended";
+  return recommendation.replace(/-/g, " ");
+}
+
+export function ratingTextClass(rating: string): string {
+  const value = rating.toLowerCase().trim();
+  if (value === "excellent") return "text-emerald-700 dark:text-emerald-300";
+  if (value === "good") return "text-blue-700 dark:text-blue-300";
+  if (value === "fair") return "text-amber-700 dark:text-amber-300";
+  return "text-red-700 dark:text-red-300";
+}
+
 /** Recommendation pill colours aligned with the AI score palette. */
 export function recommendationBadgeClass(recommendation: string): string {
   const value = recommendation.toLowerCase().trim();

@@ -4,7 +4,9 @@ import {
   aiScoreBarClass,
   aiScoreTextClass,
   isHighQualityAiScore,
+  ratingTextClass,
   recommendationBadgeClass,
+  recommendationLabel,
 } from "@/lib/utils/ai-score";
 
 interface AIAnalysis {
@@ -24,133 +26,186 @@ interface AIAnalysisCardProps {
   ai: AIAnalysis;
 }
 
+const RATINGS = [
+  { key: "securityRating" as const, label: "Security" },
+  { key: "qualityRating" as const, label: "Quality" },
+  { key: "maintenanceRating" as const, label: "Maintenance" },
+];
+
 export function AIAnalysisCard({ ai }: AIAnalysisCardProps) {
-  const score = ai.overallScore;
+  const score = Math.min(100, Math.max(0, ai.overallScore));
+  const label = recommendationLabel(ai.recommendation);
+  const strengths = (ai.strengths ?? []).map((item) => item.trim()).filter(Boolean);
+  const concerns = (ai.concerns ?? [])
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0 && !isPlaceholderNote(item));
+  const reasoning = ai.reasoning?.trim() ?? "";
 
   return (
-    <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg shadow-lg p-4 sm:p-6">
-      <div className="space-y-4">
-        <div>
-          <h3 className="font-semibold text-lg mb-2">Summary</h3>
-          <p className="text-gray-700 dark:text-gray-300">{ai.summary}</p>
-        </div>
+    <div className="space-y-4">
+      {ai.summary?.trim() && (
+        <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+          {ai.summary}
+        </p>
+      )}
 
-        <div>
-          <h3 className="font-semibold text-lg mb-2">Recommendation</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
+      {reasoning && (
+        <p className="text-sm font-medium leading-relaxed text-gray-800 dark:text-gray-100">
+          {reasoning}
+        </p>
+      )}
+
+      <div
+        className={`flex flex-nowrap items-center justify-between gap-3 ${
+          reasoning ? "mt-4" : ""
+        }`}
+      >
+        <span
+          className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-sm font-semibold ${recommendationBadgeClass(ai.recommendation)}`}
+        >
+          {label}
+        </span>
+        <p className="inline-flex min-w-0 items-baseline gap-1">
+          <span className="sr-only">Overall score</span>
           <span
-            className={`inline-block px-4 py-2 rounded-full font-semibold ${recommendationBadgeClass(ai.recommendation)}`}
+            className={`text-xl font-bold tabular-nums leading-none max-[480px]:text-base ${aiScoreTextClass(score)}`}
           >
-            {ai.recommendation === "do-not-use" ||
-            ai.recommendation === "not-recommended"
-              ? "DO NOT USE"
-              : ai.recommendation.toUpperCase().replace(/-/g, " ")}
+            {score}
           </span>
-        </div>
-
-        <div>
-          <h3 className="font-semibold text-lg mb-2">Overall score</h3>
-          <div className="flex items-center gap-4">
-            <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-4">
-              <div
-                className={`${aiScoreBarClass(score)} h-4 rounded-full transition-all duration-500`}
-                style={{ width: `${Math.min(100, Math.max(0, score))}%` }}
-              />
-            </div>
+          <span
+            className={`text-xl font-bold tabular-nums leading-none max-[480px]:text-base ${aiScoreTextClass(score)}`}
+          >
+            /100
+          </span>
+          {isHighQualityAiScore(score) && (
             <span
-              className={`font-bold text-xl inline-flex items-center gap-1 ${aiScoreTextClass(score)}`}
+              className="text-base text-amber-400 dark:text-amber-300 max-[480px]:text-sm"
+              title="High-quality package"
+              aria-label="High-quality package"
             >
-              {score}/100
-              {isHighQualityAiScore(score) && (
-                <span
-                  className="text-amber-400 dark:text-amber-300"
-                  title="High-quality package"
-                  aria-label="High-quality package"
-                >
-                  ★
-                </span>
-              )}
+              ★
             </span>
-          </div>
-        </div>
+          )}
+        </p>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Security</p>
-            <p className="font-semibold capitalize">{ai.securityRating}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Quality</p>
-            <p className="font-semibold capitalize">{ai.qualityRating}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Maintenance
-            </p>
-            <p className="font-semibold capitalize">{ai.maintenanceRating}</p>
-          </div>
-        </div>
+      <div
+        className="mt-3 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700"
+        role="meter"
+        aria-label="Overall score"
+        aria-valuenow={score}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <div
+          className={`${aiScoreBarClass(score)} h-full rounded-full transition-[width] duration-500`}
+          style={{ width: `${score}%` }}
+        />
+      </div>
 
-        {ai.strengths && ai.strengths.length > 0 && (
-          <div>
-            <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-              <svg
-                className="w-5 h-5 text-green-600 dark:text-green-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
+      <dl className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
+        {RATINGS.map((item) => {
+          const value = ai[item.key];
+          return (
+            <div
+              key={item.key}
+              className="rounded-lg bg-gray-50 px-3 py-2.5 dark:bg-gray-900/40"
+            >
+              <dt className="text-xs text-gray-500 dark:text-gray-400">
+                {item.label}
+              </dt>
+              <dd
+                className={`mt-0.5 text-sm font-semibold capitalize ${ratingTextClass(value)}`}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              Strengths
-            </h3>
-            <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
-              {ai.strengths.map((strength, idx) => (
-                <li key={idx}>{strength}</li>
-              ))}
-            </ul>
-          </div>
-        )}
+                {value}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
 
-        {ai.concerns && ai.concerns.length > 0 && (
-          <div>
-            <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-              <svg
-                className="w-5 h-5 text-yellow-600 dark:text-yellow-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-              Concerns
-            </h3>
-            <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
-              {ai.concerns.map((concern, idx) => (
-                <li key={idx}>{concern}</li>
-              ))}
-            </ul>
-          </div>
-        )}
+      {(strengths.length > 0 || concerns.length > 0) && (
+        <div
+          className={`mt-5 grid gap-5 ${
+            strengths.length > 0 && concerns.length > 0
+              ? "md:grid-cols-2"
+              : ""
+          }`}
+        >
+          {strengths.length > 0 && (
+            <section>
+              <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                <svg
+                  className="h-4 w-4 text-green-600 dark:text-green-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                Strengths
+              </h3>
+              <ul className="space-y-1.5 text-sm text-gray-700 dark:text-gray-300">
+                {strengths.map((strength, index) => (
+                  <li key={`${index}-${strength}`} className="flex gap-2">
+                    <span
+                      className="mt-2 h-1 w-1 shrink-0 rounded-full bg-green-500"
+                      aria-hidden="true"
+                    />
+                    <span>{strength}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
-        {ai.reasoning && (
-          <div>
-            <h3 className="font-semibold text-lg mb-2">Reasoning</h3>
-            <p className="text-gray-700 dark:text-gray-300">{ai.reasoning}</p>
-          </div>
-        )}
+          {concerns.length > 0 && (
+            <section>
+              <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                <svg
+                  className="h-4 w-4 text-yellow-600 dark:text-yellow-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+                Concerns
+              </h3>
+              <ul className="space-y-1.5 text-sm text-gray-700 dark:text-gray-300">
+                {concerns.map((concern, index) => (
+                  <li key={`${index}-${concern}`} className="flex gap-2">
+                    <span
+                      className="mt-2 h-1 w-1 shrink-0 rounded-full bg-amber-500"
+                      aria-hidden="true"
+                    />
+                    <span>{concern}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+      )}
+
       </div>
     </div>
   );
+}
+
+function isPlaceholderNote(value: string): boolean {
+  return /^(none|n\/a|no concerns?|nothing notable)\.?$/i.test(value);
 }
