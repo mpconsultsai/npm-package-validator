@@ -2,7 +2,6 @@
 
 import { useState, useCallback } from "react";
 import { formatDaysSinceRelease } from "@/lib/utils/format";
-import { GitHubIcon } from "@/components/BrandIcons";
 import { describeLicense } from "@/lib/license-info";
 import { MetricsCard } from "./MetricsCard";
 import { OpenSSFScorecardStrip } from "./OpenSSFScorecardStrip";
@@ -62,14 +61,6 @@ interface PackageInfoCardProps {
     moderate?: number;
     low?: number;
   } | null;
-}
-
-function githubRepoUrl(repository?: string): string | null {
-  if (!repository) return null;
-  const match = repository.match(/github\.com[:/]([^/]+)\/([^/\s#?]+)/i);
-  if (!match) return null;
-  const repo = match[2].replace(/\.git$/i, "");
-  return `https://github.com/${match[1]}/${repo}`;
 }
 
 function formatDependents(count: number): string {
@@ -192,7 +183,6 @@ export function PackageInfoCard({
         {keywordBadges}
       </div>
     ) : null;
-  const githubUrl = githubRepoUrl(packageInfo.repository);
   const licenseInfo = describeLicense(packageInfo.license);
   const nodeEngine = packageInfo.engines?.node?.trim() || null;
   const npmEngine = packageInfo.engines?.npm?.trim() || null;
@@ -207,7 +197,7 @@ export function PackageInfoCard({
       <div
         role="radiogroup"
         aria-label="Package details"
-        className="flex gap-5 mb-4 border-b border-gray-200 dark:border-gray-600"
+        className="mb-4 flex gap-5 border-b border-gray-200 dark:border-gray-600"
       >
         {(
           [
@@ -648,17 +638,6 @@ export function PackageInfoCard({
                 </svg>
                 View on {registryName}
               </a>
-              {githubUrl && (
-                <a
-                  href={githubUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline"
-                >
-                  <GitHubIcon className="w-4 h-4 shrink-0" />
-                  View on GitHub
-                </a>
-              )}
             </div>
           </div>
         </>

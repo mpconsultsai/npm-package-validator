@@ -495,7 +495,7 @@ function stripReasoningOverlap(
   const out = kept.join(" ").trim();
   if (out) return out;
   if (concerns.length > 0) {
-    return "Recommendation follows from the concerns listed above.";
+    return "The recommendation below is based on the concerns in this review.";
   }
   return reasoning.trim();
 }

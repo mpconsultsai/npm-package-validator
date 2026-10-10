@@ -11,6 +11,7 @@ import {
   type SetStateAction,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { HeaderGithubProvider } from "@/components/header-github";
 import { InfoCards } from "@/components/InfoCards";
 import { PageHeader } from "@/components/PageHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -80,6 +81,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <SearchLoadingContext.Provider value={setSearchLoading}>
+      <HeaderGithubProvider>
       <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
         <div className="container mx-auto px-3 sm:px-4 pt-4 pb-3 sm:pt-8 sm:pb-10">
           <div className="max-w-4xl mx-auto">
@@ -118,6 +120,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </main>
+      </HeaderGithubProvider>
     </SearchLoadingContext.Provider>
   );
 }

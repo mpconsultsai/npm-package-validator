@@ -20,6 +20,13 @@ export function githubProjectIdFromUrl(repository: string): string | null {
   return null;
 }
 
+/** Public GitHub repository page, or null when the value is not a GitHub repo. */
+export function githubWebUrl(repository?: string | null): string | null {
+  if (!repository) return null;
+  const projectId = githubProjectIdFromUrl(repository);
+  return projectId ? `https://${projectId}` : null;
+}
+
 export function encodeDepsDevProjectId(projectId: string): string {
   return encodeURIComponent(projectId);
 }

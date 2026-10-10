@@ -10,6 +10,7 @@ import { setEcosystemPreference } from "@/lib/ecosystem-pref";
 import { fetchJson, friendlyFetchError } from "@/lib/fetch-client";
 import { apiPaths } from "@/lib/api/paths";
 import { useShellSearchLoading } from "@/components/AppShell";
+import { usePackageGithubLink } from "@/components/header-github";
 import { InfoCards } from "@/components/InfoCards";
 import { WatchToggle } from "@/components/Watchlist";
 import { useWatchlistActions } from "@/lib/use-watchlist";
@@ -140,6 +141,7 @@ function PackagePageContent({
   const [aiLoading, setAiLoading] = useState(false);
   const [analysisData, setAnalysisData] =
     useState<ClientAnalysisResponse | null>(null);
+  usePackageGithubLink(analysisData?.packageInfo?.repository);
   const [error, setError] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [versionToCheck, setVersionToCheck] = useState("");
