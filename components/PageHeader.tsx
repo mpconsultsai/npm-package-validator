@@ -6,6 +6,7 @@ import { AppLogo } from "@/components/AppLogo";
 import { GitHubIcon } from "@/components/BrandIcons";
 import { useHeaderGithubUrl } from "@/components/header-github";
 import { SITE_NAME, SITE_STRAPLINE } from "@/lib/site-brand";
+import { siteGithubUrl } from "@/lib/site-github";
 import { smoothNavigate } from "@/lib/smooth-navigate";
 
 interface PageHeaderProps {
@@ -15,7 +16,7 @@ interface PageHeaderProps {
 
 export function PageHeader({ showHomeLink = false }: PageHeaderProps) {
   const router = useRouter();
-  const githubUrl = useHeaderGithubUrl();
+  const githubUrl = useHeaderGithubUrl() ?? siteGithubUrl();
 
   return (
     <header className="mb-4 sm:mb-6 overflow-visible pb-0.5">

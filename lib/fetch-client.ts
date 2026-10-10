@@ -93,7 +93,22 @@ export async function fetchJson<T = unknown>(
       const response = await fetch(url, { ...init, signal: mergedSignal });
       clearTimeout(timeoutId);
 
-      const data = (await response.json()) as T;
+      let data: T;
+      try {
+        data = (await response.json()) as T;
+      } catch {
+        if (RETRYABLE_STATUS.has(response.status) && attempt < retries) {
+          await sleep(retryDelayMs * 2 ** attempt, signal);
+          continue;
+        }
+        if (RETRYABLE_STATUS.has(response.status)) {
+          throw new Error(
+            "pkglens is offline or still starting. Try again in a moment.",
+          );
+        }
+        throw new Error("The server returned an unexpected response.");
+      }
+
       const retryable = RETRYABLE_STATUS.has(response.status);
 
       if (!response.ok && retryable && attempt < retries) {

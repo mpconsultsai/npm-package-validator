@@ -236,7 +236,7 @@ export function SimilarPackagesCard({
     };
 
     void Promise.all(missing.slice(0, COMPARE_CAP).map(loadOne));
-  }, [selectedKey]);
+  }, [selectedKey, ecosystem]);
 
   const toggle = (name: string) => {
     setSelected((prev) => {

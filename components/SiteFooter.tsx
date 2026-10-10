@@ -1,17 +1,7 @@
 import { SITE_NAME } from "@/lib/site-brand";
 
-const DEFAULT_GITHUB_REPO = "mpconsultsai/pkglens";
-
-function githubUrl(): string | null {
-  const slug =
-    process.env.NEXT_PUBLIC_GITHUB_REPO?.trim() || DEFAULT_GITHUB_REPO;
-  if (!slug || slug.includes(" ")) return null;
-  return `https://github.com/${slug.replace(/^\/+|\/+$/g, "")}`;
-}
-
 export function SiteFooter() {
   const year = new Date().getFullYear();
-  const github = githubUrl();
   const contact = process.env.NEXT_PUBLIC_CONTACT_EMAIL?.trim();
 
   return (
@@ -27,29 +17,16 @@ export function SiteFooter() {
           for rate limiting and reliability. Registry and AI APIs may impose
           their own limits.
         </p>
-        <nav
-          aria-label="Footer"
-          className="flex flex-wrap gap-x-4 gap-y-1 text-sm"
-        >
-          {github && (
-            <a
-              href={github}
-              className="text-blue-600 underline underline-offset-2 dark:text-blue-400"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              GitHub
-            </a>
-          )}
-          {contact && (
+        {contact && (
+          <nav aria-label="Footer" className="text-sm">
             <a
               href={`mailto:${contact}`}
               className="text-blue-600 underline underline-offset-2 dark:text-blue-400"
             >
               Contact
             </a>
-          )}
-        </nav>
+          </nav>
+        )}
         <p className="text-[11px] text-gray-400 dark:text-gray-500">
           © {year} {SITE_NAME}. All rights reserved.
         </p>
